@@ -136,7 +136,8 @@ INSERT INTO users (username, email, password_hash, first_name, last_name, is_ver
 ('sports_gear', 'sports@example.com', 'hash5', 'Sports', 'Gear', TRUE),
 ('camera_kingdom', 'camera@example.com', 'hash6', 'Camera', 'Kingdom', TRUE),
 ('gaming_masters', 'gaming@example.com', 'hash7', 'Gaming', 'Masters', TRUE),
-('furniture_palace', 'furniture@example.com', 'hash8', 'Furniture', 'Palace', TRUE)
+('furniture_palace', 'furniture@example.com', 'hash8', 'Furniture', 'Palace', TRUE),
+('muhamadd', 'muhamadd@example.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Muha', 'Mad', TRUE)
 ON CONFLICT DO NOTHING;--handle logic do nothing for same thing & for double click problem
 
 -- Seed sample products
@@ -148,7 +149,8 @@ INSERT INTO listings (seller_id, title, description, category, price, original_p
 (5, 'Mountain Bike - Trek Marlin', 'Trek Marlin mountain bike with 21-speed gears. Excellent for trails and casual riding.', 'Sports', 950, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop', 'Sports Gear', 4.5, 67, TRUE, FALSE, 'active'),
 (6, 'Canon EOS 5D Mark IV', 'Professional DSLR camera with 30.4MP full-frame sensor. Like new condition.', 'Electronics', 2200, 2800, 'Sentosa', 'https://images.unsplash.com/photo-1606986628025-35d57e735ae0?w=400&h=300&fit=crop', 'Camera Kingdom', 4.9, 178, FALSE, TRUE, 'active'),
 (7, 'Gaming PC - RTX 3080', 'High-end gaming PC with RTX 3080, i9 processor, 32GB RAM. Runs all games at ultra settings.', 'Electronics', 4500, NULL, 'Cyberjaya', 'https://images.unsplash.com/photo-1587829191301-dc798b83add3?w=400&h=300&fit=crop', 'Gaming Masters', 4.8, 124, TRUE, TRUE, 'active'),
-(8, 'Leather Office Chair', 'Ergonomic leather office chair in black. Perfect for long working hours.', 'Furniture', 450, NULL, 'Mid Valley', 'https://images.unsplash.com/photo-1578500494198-246f612d03b3?w=400&h=300&fit=crop', 'Furniture Palace', 4.4, 56, FALSE, FALSE, 'active')
+(8, 'Leather Office Chair', 'Ergonomic leather office chair in black. Perfect for long working hours.', 'Furniture', 450, NULL, 'Mid Valley', 'https://images.unsplash.com/photo-1578500494198-246f612d03b3?w=400&h=300&fit=crop', 'Furniture Palace', 4.4, 56, FALSE, FALSE, 'active'),
+(9, 'Racket', 'Can smash', 'Sports', 150, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=400&h=300&fit=crop', 'Sport Master', 4.4, 56, TRUE, TRUE, 'active')
 ON CONFLICT DO NOTHING;
 
 -- Seed basic dummy data for analytics
