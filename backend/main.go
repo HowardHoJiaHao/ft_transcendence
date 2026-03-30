@@ -153,12 +153,12 @@ func getProducts(c echo.Context, db *sql.DB) error {
 	var args []interface{}
 
 	if category != "" && category != "All" {
-		query += " AND category = ?"
+		query += fmt.Sprintf(" AND category = $%d", len(args)+1)
 		args = append(args, category)
 	}
 
 	if search != "" {
-		query += " AND title LIKE ?"
+		query += fmt.Sprintf(" AND title LIKE $%d", len(args)+1)
 		args = append(args, "%"+search+"%")
 	}
 
@@ -175,7 +175,7 @@ func getProducts(c echo.Context, db *sql.DB) error {
 		query += " ORDER BY is_featured DESC, id DESC"
 	}
 
-	query += " LIMIT ? OFFSET ?"
+	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
 	args = append(args, limitInt, offsetInt)
 
 	rows, err := db.Query(query, args...)
@@ -224,7 +224,7 @@ func getProducts(c echo.Context, db *sql.DB) error {
 func getProductByID(c echo.Context, db *sql.DB) error {
 	id := c.Param("id")
 
-	query := "SELECT id, title, price, original_price, image, category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE id = ?"
+	query := "SELECT id, title, price, original_price, image, category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE id = $1"
 
 	var product Product
 	err := db.QueryRow(query, id).Scan(

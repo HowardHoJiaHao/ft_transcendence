@@ -1,13 +1,13 @@
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(255) UNIQUE NOT NULL,
+    id SERIAL PRIMARY KEY, --primary key means the official address of row w/ characteristics of unique and cannot be NULL
+    username VARCHAR(255) UNIQUE NOT NULL, --not null means columns are mandatory
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(255),
     last_name VARCHAR(255),
-    avatar_url VARCHAR(255),
-    bio TEXT,
+    avatar_url VARCHAR(255), --link to the avatar
+    bio TEXT, 
     is_verified BOOLEAN DEFAULT FALSE,
     two_factor_enabled BOOLEAN DEFAULT FALSE,
     oauth_id VARCHAR(255),
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Create products/listings table
 CREATE TABLE IF NOT EXISTS listings (
-    id SERIAL PRIMARY KEY,
+    id SERIAL PRIMARY KEY, 
     seller_id INT NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS listings (
     views_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
-    FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE --if user deletes, product is deleted too
 ); 
 
 -- Create listing_images table
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS listing_images (
     id SERIAL PRIMARY KEY,
     listing_id INT NOT NULL,
     image_url VARCHAR(255) NOT NULL,
-    is_primary BOOLEAN DEFAULT FALSE,
+    is_primary BOOLEAN DEFAULT FALSE, --the primary image to be shown first
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
 ); 
@@ -137,7 +137,7 @@ INSERT INTO users (username, email, password_hash, first_name, last_name, is_ver
 ('camera_kingdom', 'camera@example.com', 'hash6', 'Camera', 'Kingdom', TRUE),
 ('gaming_masters', 'gaming@example.com', 'hash7', 'Gaming', 'Masters', TRUE),
 ('furniture_palace', 'furniture@example.com', 'hash8', 'Furniture', 'Palace', TRUE)
-ON CONFLICT DO NOTHING;
+ON CONFLICT DO NOTHING;--handle logic do nothing for same thing & for double click problem
 
 -- Seed sample products
 INSERT INTO listings (seller_id, title, description, category, price, original_price, location, image, seller_name, rating, reviews, is_new, is_featured, status) VALUES
@@ -161,7 +161,7 @@ INSERT INTO analytics_events (user_id, event_type, event_data) VALUES
 (6, 'order_placed', '{"listing_id":1,"quantity":1}'),
 (7, 'order_status_updated', '{"order_id":1,"status":"shipped"}'),
 (8, 'review_submitted', '{"listing_id":1,"rating":5}')
-ON CONFLICT DO NOTHING;
+ON CONFLICT DO NOTHING; 
 
 -- Create analytics table
 CREATE TABLE IF NOT EXISTS analytics (

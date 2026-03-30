@@ -49,7 +49,7 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 	var bio sql.NullString
 	var avatarURL sql.NullString
 	err := r.db.QueryRow(
-		"SELECT id, username, email, first_name, last_name, avatar_url, bio, created_at FROM users WHERE id = ?",
+		"SELECT id, username, email, first_name, last_name, avatar_url, bio, created_at FROM users WHERE id = $1",
 		id,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &avatarURL, &bio, &user.CreatedAt)
 	
@@ -64,7 +64,7 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 
 func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
 	_, err := r.db.Exec(
-		"UPDATE users SET first_name = ?, last_name = ?, bio = ?, avatar_url = ? WHERE id = ?",
+		"UPDATE users SET first_name = $1, last_name = $2, bio = $3, avatar_url = $4 WHERE id = $5",
 		req.FirstName, req.LastName, req.Bio, req.AvatarURL, id,
 	)
 	return err
@@ -75,7 +75,7 @@ func (r *Repository) GetFriends(userID int) ([]Friend, error) {
 		SELECT u.id, u.username, u.avatar_url, f.created_at 
 		FROM friendships f
 		JOIN users u ON f.friend_id = u.id
-		WHERE f.user_id = ?
+		WHERE f.user_id = $1
 		ORDER BY f.created_at DESC
 	`, userID)
 	if err != nil {
@@ -103,19 +103,19 @@ func (r *Repository) GetFriends(userID int) ([]Friend, error) {
 func (r *Repository) AddFriend(userID, friendID int) error {
 	// Check if friend exists
 	var exists int
-	err := r.db.QueryRow("SELECT id FROM users WHERE id = ?", friendID).Scan(&exists)
+	err := r.db.QueryRow("SELECT id FROM users WHERE id = $1", friendID).Scan(&exists)
 	if err != nil {
 		return fmt.Errorf("friend user does not exist")
 	}
 
-	_, err = r.db.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES (?, ?)", userID, friendID)
+	_, err = r.db.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", userID, friendID)
 	// Bi-directional for simplicity
-	_, err = r.db.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES (?, ?)", friendID, userID)
+	_, err = r.db.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", friendID, userID)
 	return err
 }
 
 func (r *Repository) RemoveFriend(userID, friendID int) error {
-	_, err := r.db.Exec("DELETE FROM friendships WHERE user_id = ? AND friend_id = ?", userID, friendID)
-	_, err = r.db.Exec("DELETE FROM friendships WHERE user_id = ? AND friend_id = ?", friendID, userID)
+	_, err := r.db.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", userID, friendID)
+	_, err = r.db.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", friendID, userID)
 	return err
 }
