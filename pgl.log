@@ -1,0 +1,180 @@
+transcendence-postgres  | The files belonging to this database system will be owned by user "postgres".
+transcendence-postgres  | This user must also own the server process.
+transcendence-postgres  | 
+transcendence-postgres  | The database cluster will be initialized with locale "en_US.utf8".
+transcendence-postgres  | The default database encoding has accordingly been set to "UTF8".
+transcendence-postgres  | The default text search configuration will be set to "english".
+transcendence-postgres  | 
+transcendence-postgres  | Data page checksums are disabled.
+transcendence-postgres  | 
+transcendence-postgres  | fixing permissions on existing directory /var/lib/postgresql/data ... ok
+transcendence-postgres  | creating subdirectories ... ok
+transcendence-postgres  | selecting dynamic shared memory implementation ... posix
+transcendence-postgres  | selecting default max_connections ... 100
+transcendence-postgres  | selecting default shared_buffers ... 128MB
+transcendence-postgres  | selecting default time zone ... Etc/UTC
+transcendence-postgres  | creating configuration files ... ok
+transcendence-postgres  | running bootstrap script ... ok
+transcendence-postgres  | performing post-bootstrap initialization ... ok
+transcendence-postgres  | syncing data to disk ... ok
+transcendence-postgres  | 
+transcendence-postgres  | 
+transcendence-postgres  | Success. You can now start the database server using:
+transcendence-postgres  | 
+transcendence-postgres  |     pg_ctl -D /var/lib/postgresql/data -l logfile start
+transcendence-postgres  | 
+transcendence-postgres  | initdb: warning: enabling "trust" authentication for local connections
+transcendence-postgres  | initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+transcendence-postgres  | waiting for server to start....2026-03-27 06:55:49.097 UTC [48] LOG:  starting PostgreSQL 15.17 (Debian 15.17-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+transcendence-postgres  | 2026-03-27 06:55:49.098 UTC [48] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+transcendence-postgres  | 2026-03-27 06:55:49.104 UTC [51] LOG:  database system was shut down at 2026-03-27 06:55:48 UTC
+transcendence-postgres  | 2026-03-27 06:55:49.109 UTC [48] LOG:  database system is ready to accept connections
+transcendence-postgres  |  done
+transcendence-postgres  | server started
+transcendence-postgres  | CREATE DATABASE
+transcendence-postgres  | 
+transcendence-postgres  | 
+transcendence-postgres  | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/init.sql
+transcendence-postgres  | 2026-03-27 06:55:49.306 UTC [61] ERROR:  syntax error at or near "CREATE" at character 590
+transcendence-postgres  | 2026-03-27 06:55:49.306 UTC [61] STATEMENT:  CREATE TABLE IF NOT EXISTS users (
+transcendence-postgres  | 	    id SERIAL PRIMARY KEY,
+transcendence-postgres  | 	    username VARCHAR(255) UNIQUE NOT NULL,
+transcendence-postgres  | 	    email VARCHAR(255) UNIQUE NOT NULL,
+transcendence-postgres  | 	    password_hash VARCHAR(255) NOT NULL,
+transcendence-postgres  | 	    first_name VARCHAR(255),
+transcendence-postgres  | 	    last_name VARCHAR(255),
+transcendence-postgres  | 	    avatar_url VARCHAR(255),
+transcendence-postgres  | 	    bio TEXT,
+transcendence-postgres  | 	    is_verified BOOLEAN DEFAULT FALSE,
+transcendence-postgres  | 	    two_factor_enabled BOOLEAN DEFAULT FALSE,
+transcendence-postgres  | 	    oauth_id VARCHAR(255),
+transcendence-postgres  | 	    oauth_provider VARCHAR(50),
+transcendence-postgres  | psql:/docker-entrypoint-initdb.d/init.sql:140: ERROR:  syntax error at or near "CREATE"
+transcendence-postgres  | LINE 19: CREATE TABLE IF NOT EXISTS listings (
+transcendence-postgres  |          ^
+transcendence-postgres  | 	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+transcendence-postgres  | 	    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
+transcendence-postgres  | 	) 
+transcendence-postgres  | 	
+transcendence-postgres  | 	-- Create products/listings table
+transcendence-postgres  | 	CREATE TABLE IF NOT EXISTS listings (
+transcendence-postgres  | 	    id SERIAL PRIMARY KEY,
+transcendence-postgres  | 	    seller_id INT NOT NULL,
+transcendence-postgres  | 	    title VARCHAR(255) NOT NULL,
+transcendence-postgres  | 	    description TEXT,
+transcendence-postgres  | 	    category VARCHAR(100),
+transcendence-postgres  | 	    price DECIMAL(10, 2) NOT NULL,
+transcendence-postgres  | 	    original_price DECIMAL(10, 2),
+transcendence-postgres  | 	    currency VARCHAR(10) DEFAULT 'RM',
+transcendence-postgres  | 	    location VARCHAR(100),
+transcendence-postgres  | 	    image VARCHAR(255),
+transcendence-postgres  | 	    seller_name VARCHAR(255),
+transcendence-postgres  | 	    rating DECIMAL(3, 1) DEFAULT 4.5,
+transcendence-postgres  | 	    reviews INT DEFAULT 0,
+transcendence-postgres  | 	    is_new BOOLEAN DEFAULT FALSE,
+transcendence-postgres  | 	    is_featured BOOLEAN DEFAULT FALSE,
+transcendence-postgres  | 	    status ENUM('active', 'sold', 'archived') DEFAULT 'active',
+transcendence-postgres  | 	    views_count INT DEFAULT 0,
+transcendence-postgres  | 	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+transcendence-postgres  | 	    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
+transcendence-postgres  | 	    FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE
+transcendence-postgres  | 	) 
+transcendence-postgres  | 	
+transcendence-postgres  | 	-- Create listing_images table
+transcendence-postgres  | 	CREATE TABLE IF NOT EXISTS listing_images (
+transcendence-postgres  | 	    id SERIAL PRIMARY KEY,
+transcendence-postgres  | 	    listing_id INT NOT NULL,
+transcendence-postgres  | 	    image_url VARCHAR(255) NOT NULL,
+transcendence-postgres  | 	    is_primary BOOLEAN DEFAULT FALSE,
+transcendence-postgres  | 	    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+transcendence-postgres  | 	    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
+transcendence-postgres  | 	) 
+transcendence-postgres  | 	
+transcendence-postgres  | 	-- Create messages table
+transcendence-postgres  | 	CREATE TABLE IF NOT EXISTS messages (
+transcendence-postgres  | 	    id SERIAL PRIMARY KEY,
+transcendence-postgres  | 	    sender_id INT NOT NULL,
+transcendence-postgres  | 	    receiver_id INT NOT NULL,
+transcendence-postgres  | 	    content TEXT NOT NULL,
+transcendence-postgres  | 	    is_read BOOLEAN DEFAULT FALSE,
+transcendence-postgres  | 	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+transcendence-postgres  | 	    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+transcendence-postgres  | 	    FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
+transcendence-postgres  | 	) 
+transcendence-postgres  | 	
+transcendence-postgres  | 	-- Create reviews table
+transcendence-postgres  | 	CREATE TABLE IF NOT EXISTS reviews (
+transcendence-postgres  | 	    id SERIAL PRIMARY KEY,
+transcendence-postgres  | 	    reviewer_id INT NOT NULL,
+transcendence-postgres  | 	    reviewee_id INT NOT NULL,
+transcendence-postgres  | 	    listing_id INT,
+transcendence-postgres  | 	    rating INT CHECK (rating >= 1 AND rating <= 5),
+transcendence-postgres  | 	    comment TEXT,
+transcendence-postgres  | 	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+transcendence-postgres  | 	    FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE,
+transcendence-postgres  | 	    FOREIGN KEY (reviewee_id) REFERENCES users(id) ON DELETE CASCADE,
+transcendence-postgres  | 	    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL
+transcendence-postgres  | 	) 
+transcendence-postgres  | 	
+transcendence-postgres  | 	-- Create orders table
+transcendence-postgres  | 	CREATE TABLE IF NOT EXISTS orders (
+transcendence-postgres  | 	    id SERIAL PRIMARY KEY,
+transcendence-postgres  | 	    buyer_id INT NOT NULL,
+transcendence-postgres  | 	    seller_id INT NOT NULL,
+transcendence-postgres  | 	    listing_id INT NOT NULL,
+transcendence-postgres  | 	    quantity INT DEFAULT 1,
+transcendence-postgres  | 	    total_price DECIMAL(10, 2) NOT NULL,
+transcendence-postgres  | 	    status ENUM('pending', 'completed', 'cancelled', 'refunded') DEFAULT 'pending',
+transcendence-postgres  | 	    payment_method VARCHAR(50),
+transcendence-postgres  | 	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+transcendence-postgres  | 	    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
+transcendence-postgres  | 	    FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
+transcendence-postgres  | 	    FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
+transcendence-postgres  | 	    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
+transcendence-postgres  | 	) 
+transcendence-postgres  | 	
+transcendence-postgres  | 	-- Create API keys table for authentication
+transcendence-postgres  | 	CREATE TABLE IF NOT EXISTS api_keys (
+transcendence-postgres  | 	    id SERIAL PRIMARY KEY,
+transcendence-postgres  | 	    user_id INT NOT NULL,
+transcendence-postgres  | 	    key_hash VARCHAR(255) UNIQUE NOT NULL,
+transcendence-postgres  | 	    name VARCHAR(255),
+transcendence-postgres  | 	    is_active BOOLEAN DEFAULT TRUE,
+transcendence-postgres  | 	    rate_limit INT DEFAULT 100,
+transcendence-postgres  | 	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+transcendence-postgres  | 	    last_used_at TIMESTAMP,
+transcendence-postgres  | 	    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+transcendence-postgres  | 	) 
+transcendence-postgres  | 	
+transcendence-postgres  | 	-- Create analytics table
+transcendence-postgres  | 	CREATE TABLE IF NOT EXISTS analytics_events (
+transcendence-postgres  | 	    id SERIAL PRIMARY KEY,
+transcendence-postgres  | 	    user_id INT,
+transcendence-postgres  | 	    event_type VARCHAR(50) NOT NULL,
+transcendence-postgres  | 	    event_data JSON,
+transcendence-postgres  | 	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+transcendence-postgres  | 	    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+transcendence-postgres  | 	) 
+transcendence-postgres  | 	
+transcendence-postgres  | 	-- Create friendships table
+transcendence-postgres  | 	CREATE TABLE IF NOT EXISTS friendships (
+transcendence-postgres  | 	    id SERIAL PRIMARY KEY,
+transcendence-postgres  | 	    user_id1 INT NOT NULL,
+transcendence-postgres  | 	    user_id2 INT NOT NULL,
+transcendence-postgres  | 	    status ENUM('pending', 'accepted', 'blocked') DEFAULT 'pending',
+transcendence-postgres  | 	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+transcendence-postgres  | 	    FOREIGN KEY (user_id1) REFERENCES users(id) ON DELETE CASCADE,
+transcendence-postgres  | 	    FOREIGN KEY (user_id2) REFERENCES users(id) ON DELETE CASCADE
+transcendence-postgres  | 	) 
+transcendence-postgres  | 	
+transcendence-postgres  | 	-- Seed sample users
+transcendence-postgres  | 	INSERT INTO users (username, email, password_hash, first_name, last_name, is_verified) VALUES
+transcendence-postgres  | 	('ahmad_store', 'ahmad@example.com', 'hash1', 'Ahmad', 'Store', TRUE),
+transcendence-postgres  | 	('tech_hub', 'tech@example.com', 'hash2', 'Tech', 'Hub', TRUE),
+transcendence-postgres  | 	('audio_pro', 'audio@example.com', 'hash3', 'Audio', 'Pro', TRUE),
+transcendence-postgres  | 	('home_decor', 'home@example.com', 'hash4', 'Home', 'Decor', TRUE),
+transcendence-postgres  | 	('sports_gear', 'sports@example.com', 'hash5', 'Sports', 'Gear', TRUE),
+transcendence-postgres  | 	('camera_kingdom', 'camera@example.com', 'hash6', 'Camera', 'Kingdom', TRUE),
+transcendence-postgres  | 	('gaming_masters', 'gaming@example.com', 'hash7', 'Gaming', 'Masters', TRUE),
+transcendence-postgres  | 	('furniture_palace', 'furniture@example.com', 'hash8', 'Furniture', 'Palace', TRUE)
+transcendence-postgres  | 	ON CONFLICT DO NOTHING;

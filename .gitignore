@@ -1,0 +1,21 @@
+.env
+.env.local
+.DS_Store
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Docker
+docker-compose.override.yml
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db

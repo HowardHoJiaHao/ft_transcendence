@@ -1,0 +1,66 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15
+    container_name: transcendence-postgres
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
+      POSTGRES_DB: ${DB_NAME:-transcendence}
+      POSTGRES_USER: ${DB_USER:-transcendence}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - transcendence-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+
+  # Go Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: transcendence-backend
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-transcendence}
+      DB_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
+      DB_NAME: ${DB_NAME:-transcendence}
+      SERVER_PORT: 8080
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - transcendence-network
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: transcendence-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+      NODE_ENV: ${NODE_ENV:-development}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - transcendence-network
+
+volumes:
+  postgres_data:
+
+networks:
+  transcendence-network:
+    driver: bridge
