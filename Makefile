@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs logs-backend logs-frontend logs-db ps clean shell-backend shell-frontend shell-db db-connect db-migrate health-check setup
+.PHONY: help build up down restart logs logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check setup
 
 help:
 	@echo "Transcendence Marketplace - Available Commands"
@@ -13,6 +13,7 @@ help:
 	@echo "make logs-db            - View database logs"
 	@echo "make ps                 - Show running containers"
 	@echo "make clean              - Stop and remove all containers & volumes"
+	@echo "make reset              - Full reset: clean, build, up, migrate"
 	@echo "make shell-backend      - Access backend container shell"
 	@echo "make shell-frontend     - Access frontend container shell"
 	@echo "make shell-db           - Access database container shell"
@@ -47,8 +48,7 @@ ps:
 	docker compose ps
 
 clean:
-	docker compose down -v
-	docker compose rmi -f $$(docker images | grep transcendence | awk '{print $$3}') || true
+	docker compose down -v --rmi local
 
 shell-backend:
 	docker compose exec backend sh
@@ -76,3 +76,6 @@ setup: build up
 	@echo "Frontend:  http://localhost:3000"
 	@echo "Backend:   http://localhost:8080"
 	@echo "Database:  localhost:5432"
+
+reset: clean build up db-migrate
+	@echo "resetted"

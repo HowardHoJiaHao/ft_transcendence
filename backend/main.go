@@ -120,7 +120,9 @@ type Product struct {
 	Price         float64 `json:"price"`
 	OriginalPrice *float64 `json:"originalPrice,omitempty"`
 	Image         string  `json:"image"`
-	Category      string  `json:"category"`
+	WeightCategory string  `json:"weightCategory"`
+	FlexibilityCategory string  `json:"flexibilityCategory"`
+	BalanceCategory string  `json:"balanceCategory"`
 	Location      string  `json:"location"`
 	Seller        string  `json:"seller"`
 	Rating        float64 `json:"rating"`
@@ -132,7 +134,13 @@ type Product struct {
 
 // getProducts - fetch all products with optional filters
 func getProducts(c echo.Context, db *sql.DB) error {
-	category := c.QueryParam("category")
+	weightCategory := c.QueryParam("weightCategory")
+	if weightCategory == "" {
+		// Backward compatibility for old frontend query key.
+		weightCategory = c.QueryParam("weight_category")
+	}
+	flexibilityCategory := c.QueryParam("flexibilityCategory")
+	balanceCategory := c.QueryParam("balanceCategory")
 	search := c.QueryParam("search")
 	sortBy := c.QueryParam("sort")
 	limit := c.QueryParam("limit")
@@ -148,13 +156,23 @@ func getProducts(c echo.Context, db *sql.DB) error {
 	limitInt, _ := strconv.Atoi(limit)
 	offsetInt, _ := strconv.Atoi(offset)
 
-	query := "SELECT id, title, price, original_price, image, category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE 1=1"
+	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE 1=1"
 
 	var args []interface{}
 
-	if category != "" && category != "All" {
-		query += fmt.Sprintf(" AND category = $%d", len(args)+1)
-		args = append(args, category)
+	if weightCategory != "" && weightCategory != "All" {
+		query += fmt.Sprintf(" AND weight_category = $%d", len(args)+1)
+		args = append(args, weightCategory)
+	}
+
+	if flexibilityCategory != "" && flexibilityCategory != "All" {
+		query += fmt.Sprintf(" AND flexibility_category = $%d", len(args)+1)
+		args = append(args, flexibilityCategory)
+	}
+
+	if balanceCategory != "" && balanceCategory != "All" {
+		query += fmt.Sprintf(" AND balance_category = $%d", len(args)+1)
+		args = append(args, balanceCategory)
 	}
 
 	if search != "" {
@@ -194,7 +212,9 @@ func getProducts(c echo.Context, db *sql.DB) error {
 			&product.Price,
 			&product.OriginalPrice,
 			&product.Image,
-			&product.Category,
+			&product.WeightCategory,
+			&product.FlexibilityCategory,
+			&product.BalanceCategory,
 			&product.Location,
 			&product.Seller,
 			&product.Rating,
@@ -224,7 +244,7 @@ func getProducts(c echo.Context, db *sql.DB) error {
 func getProductByID(c echo.Context, db *sql.DB) error {
 	id := c.Param("id")
 
-	query := "SELECT id, title, price, original_price, image, category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE id = $1"
+	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE id = $1"
 
 	var product Product
 	err := db.QueryRow(query, id).Scan(
@@ -233,7 +253,9 @@ func getProductByID(c echo.Context, db *sql.DB) error {
 		&product.Price,
 		&product.OriginalPrice,
 		&product.Image,
-		&product.Category,
+		&product.WeightCategory,
+		&product.FlexibilityCategory,
+		&product.BalanceCategory,
 		&product.Location,
 		&product.Seller,
 		&product.Rating,

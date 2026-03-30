@@ -12,7 +12,9 @@ interface Product
   price: number;
   originalPrice?: number;
   image: string;
-  category: string;
+  weightCategory: string;
+  flexibilityCategory: string;
+  balanceCategory: string;
   location: string;
   seller: string;
   rating: number;
@@ -21,20 +23,38 @@ interface Product
   isFeatured: boolean;
 }
 
-const CATEGORIES = [
+const WEIGHT_CATEGORIES = [
   'All',
-  'Electronics',
-  'Furniture',
-  'Fashion',
-  'Sports',
-  'Books',
-  'Vehicles',
+  '1U',
+  '2U',
+  '3U',
+  '4U',
+  '5U',
+  '6U',
+  '7U',
+  '8U',
+];
+
+const FLEXIBILITY_CATEGORIES = [
+  'All',
+  'Stiff Shaft',
+  'Medium Flex',
+  'High Flexibility',
+];
+
+const BALANCE_CATEGORIES = [
+  'All',
+  'Head Heavy',
+  'Even Balance',
+  'Head Light',
 ];
 
 export default function Home() {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedWeightCategory, setSelectedWeightCategory] = useState('All');
+  const [selectedFlexibilityCategory, setSelectedFlexibilityCategory] = useState('All');
+  const [selectedBalanceCategory, setSelectedBalanceCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('featured');
   const [products, setProducts] = useState<Product[]>([]);
@@ -47,9 +67,15 @@ export default function Home() {
       try {
         setLoading(true);
         const query = new URLSearchParams();
-        if (selectedCategory !== 'All') {
-          query.append('category', selectedCategory);
+        if (selectedWeightCategory !== 'All') {
+          query.append('weightCategory', selectedWeightCategory);
         }
+        if (selectedFlexibilityCategory !== 'All') {
+          query.append('flexibilityCategory', selectedFlexibilityCategory);
+        }
+		if (selectedBalanceCategory !== 'All') {
+			query.append('balanceCategory', selectedBalanceCategory);
+		}
         if (searchQuery) {
           query.append('search', searchQuery);
         }
@@ -70,7 +96,9 @@ export default function Home() {
           price: parseFloat(p.price),
           originalPrice: p.originalPrice ? parseFloat(p.originalPrice) : undefined,
           image: p.image,
-          category: p.category,
+          weightCategory: p.weightCategory,
+          flexibilityCategory: p.flexibilityCategory,
+		  balanceCategory: p.balanceCategory,
           location: p.location,
           seller: p.seller,
           rating: parseFloat(p.rating),
@@ -90,7 +118,7 @@ export default function Home() {
     };
 
     fetchProducts();
-  }, [selectedCategory, searchQuery, sortBy]);
+  }, [selectedWeightCategory, selectedFlexibilityCategory, selectedBalanceCategory, searchQuery, sortBy]);
 
   return (
     <main className={styles.main}>
@@ -128,20 +156,51 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Categories */}
+          {/* Weight Categories */}
           <div className={styles.categoriesNav}>
-            {CATEGORIES.map((category) => (
+            {WEIGHT_CATEGORIES.map((category) => (
               <button
                 key={category}
                 className={`${styles.categoryBtn} ${
-                  selectedCategory === category ? styles.active : ''
+                  selectedWeightCategory === category ? styles.active : ''
                 }`}
-                onClick={() => setSelectedCategory(category)}
+                onClick={() => setSelectedWeightCategory(category)}
               >
                 {category}
               </button>
             ))}
           </div>
+
+          {/* Flexibility Categories */}
+          <div className={styles.categoriesNav}>
+            {FLEXIBILITY_CATEGORIES.map((category) => (
+              <button
+                key={category}
+                className={`${styles.categoryBtn} ${
+                  selectedFlexibilityCategory === category ? styles.active : ''
+                }`}
+                onClick={() => setSelectedFlexibilityCategory(category)}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
+          {/* Balance Categories */}
+          <div className={styles.categoriesNav}>
+            {BALANCE_CATEGORIES.map((category) => (
+              <button
+                key={category}
+                className={`${styles.categoryBtn} ${
+                  selectedBalanceCategory === category ? styles.active : ''
+                }`}
+                onClick={() => setSelectedBalanceCategory(category)}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
         </div>
       </header>
 
@@ -297,7 +356,9 @@ export default function Home() {
                   className="btn btn-secondary"
                   onClick={() => {
                     setSearchQuery('');
-                    setSelectedCategory('All');
+                    setSelectedWeightCategory('All');
+                    setSelectedFlexibilityCategory('All');
+					setSelectedBalanceCategory('All');
                   }}
                 >
                   Clear Filters
