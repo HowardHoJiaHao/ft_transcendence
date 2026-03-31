@@ -3,6 +3,7 @@ package user
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +14,8 @@ import (
 type Handler struct {
 	repo *Repository
 }
+
+const maxAvatarSize = 2 * 1024 * 1024 // 2MB
 
 func NewHandler(db *sql.DB) *Handler {
 	return &Handler{repo: NewRepository(db)}
@@ -138,4 +141,64 @@ func (h *Handler) RemoveFriend(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to remove friend"})
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "Friend removed"})
+}
+
+func (h *Handler) UploadAvatar(c echo.Context) error {
+	userID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid user id"})
+	}
+
+	fileHeader, err := c.FormFile("avatar")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "avatar file is required (multipart/form-data)"})
+	}
+
+	if fileHeader.Size <= 0 || fileHeader.Size > maxAvatarSize {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "avatar must be > 0 and <= 2MB"})
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot open uploaded file"})
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot read uploaded file"})
+	}
+
+	detected := http.DetectContentType(data)
+	allowed := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/webp": true,
+	}
+	if !allowed[detected] {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "only jpeg/png/webp allowed"})
+	}
+
+	if err := h.repo.UpdateUserAvatarBinary(userID, data, detected); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to save avatar"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "avatar uploaded"})
+}
+
+func (h *Handler) GetAvatar(c echo.Context) error {
+	userID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid user id"})
+	}
+
+	data, mimeType, err := h.repo.GetUserAvatarBinary(userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "avatar not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to fetch avatar"})
+	}
+
+	return c.Blob(http.StatusOK, mimeType, data)
 }

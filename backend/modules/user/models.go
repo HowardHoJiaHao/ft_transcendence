@@ -3,18 +3,19 @@ package user
 import "time"
 
 type User struct {
-	ID        int       `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	FirstName string    `json:"firstName"`
-	LastName  string    `json:"lastName"`
-	AvatarURL string    `json:"avatar,omitempty"` //omitempty = only need to sent when it is  not empty
-	AvatarMime *string   `json:"avatarMimeType,omitempty"`
-	Bio       string    `json:"bio"`
-	IsOnline  bool      `json:"onlineStatus"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID           int       `json:"id"`
+	Username     string    `json:"username"`
+	Email        string    `json:"email"`
+	FirstName    string    `json:"firstName"`
+	LastName     string    `json:"lastName"`
+	AvatarURL    *string   `json:"avatar,omitempty"`
+	AvatarMime   *string   `json:"avatarMimeType,omitempty"`
+	Bio          string    `json:"bio"`
+	IsOnline     bool      `json:"onlineStatus"`
+	CreatedAt    time.Time `json:"createdAt"`
+	HasAvatarBin bool      `json:"hasAvatarBinary,omitempty"`
 
-	AvatarData[]byte `json':"-"`
+	AvatarData []byte `json:"-"`
 }
 
 type RegisterRequest struct {
@@ -36,16 +37,16 @@ type LoginResponse struct {
 }
 
 type UpdateProfileRequest struct {
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
-	Bio       string `json:"bio"`
-	AvatarURL string `json:"avatar"`
+	FirstName string  `json:"firstName"`
+	LastName  string  `json:"lastName"`
+	Bio       string  `json:"bio"`
+	AvatarURL *string `json:"avatar"`
 }
 
 type Friend struct {
 	ID        int       `json:"id"`
 	Username  string    `json:"username"`
-	AvatarURL string    `json:"avatar"`
+	AvatarURL *string   `json:"avatar,omitempty"`
 	IsOnline  bool      `json:"onlineStatus"`
 	AddedAt   time.Time `json:"addedAt"`
 }

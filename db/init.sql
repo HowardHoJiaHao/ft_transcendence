@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
     first_name VARCHAR(255),
     last_name VARCHAR(255),
     avatar_url VARCHAR(255), --link to the avatar
-	avatar_data BYTEA
-	avatar_mime_type VARCHAR(50)
+    avatar_data BYTEA,
+    avatar_mime_type VARCHAR(50),
     bio TEXT, 
     is_verified BOOLEAN DEFAULT FALSE,
     two_factor_enabled BOOLEAN DEFAULT FALSE,
@@ -16,13 +16,14 @@ CREATE TABLE IF NOT EXISTS users (
     oauth_provider VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-	CONSTRAINT users_avatar_source_check CHECK (
-		avatar_data IS NOT NULL
-		OR (avatar_url IS NOT NULL AND btrim(avatar_url)<> '')
-	),
-	CONSTRAINT users_avatar_mime_check CHECK (
-avatar_data IS NULL
-OR (avatar_mime_type IS NOT NULL AND btrim(avatar_mime_type) <> '')
+    CONSTRAINT users_avatar_source_check CHECK (
+        avatar_data IS NOT NULL
+        OR (avatar_url IS NOT NULL AND btrim(avatar_url) <> '')
+    ),
+    CONSTRAINT users_avatar_mime_check CHECK (
+        avatar_data IS NULL
+        OR (avatar_mime_type IS NOT NULL AND btrim(avatar_mime_type) <> '')
+    )
 ); 
 
 -- Create products/listings table
@@ -56,19 +57,19 @@ CREATE TABLE IF NOT EXISTS listing_images (
     id SERIAL PRIMARY KEY,
     listing_id INT NOT NULL,
     image_url VARCHAR(255),
-	image_data BYTEA
-	mime_type VARCHAR(50)
+    image_data BYTEA,
+    mime_type VARCHAR(50),
     is_primary BOOLEAN DEFAULT FALSE, --the primary image to be shown first
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
-	CONSTRAINT listing_images_source_check CHECK (
-		image_data IS NOT NULL
-		OR (image_url IS NOT NULL and btrim(image_url) <> '')
-	)
-	CONSTRAINT listing_image_mime_check CHECK(
-		image_data IS NULL
-		OR (mime_type IS NOT NULL AND btrim(mime_type) <> '')
-	)
+    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE,
+    CONSTRAINT listing_images_source_check CHECK (
+        image_data IS NOT NULL
+        OR (image_url IS NOT NULL AND btrim(image_url) <> '')
+    ),
+    CONSTRAINT listing_image_mime_check CHECK (
+        image_data IS NULL
+        OR (mime_type IS NOT NULL AND btrim(mime_type) <> '')
+    )
 );
 
 -- Create messages table
@@ -149,16 +150,16 @@ CREATE TABLE IF NOT EXISTS friendships (
 ); 
 
 -- Seed sample users
-INSERT INTO users (username, email, password_hash, first_name, last_name, is_verified) VALUES
-('ahmad_store', 'ahmad@example.com', 'hash1', 'Ahmad', 'Store', TRUE),
-('tech_hub', 'tech@example.com', 'hash2', 'Tech', 'Hub', TRUE),
-('audio_pro', 'audio@example.com', 'hash3', 'Audio', 'Pro', TRUE),
-('home_decor', 'home@example.com', 'hash4', 'Home', 'Decor', TRUE),
-('sports_gear', 'sports@example.com', 'hash5', 'Sports', 'Gear', TRUE),
-('camera_kingdom', 'camera@example.com', 'hash6', 'Camera', 'Kingdom', TRUE),
-('gaming_masters', 'gaming@example.com', 'hash7', 'Gaming', 'Masters', TRUE),
-('furniture_palace', 'furniture@example.com', 'hash8', 'Furniture', 'Palace', TRUE),
-('muhamadd', 'muhamadd@example.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Muha', 'Mad', TRUE)
+INSERT INTO users (username, email, password_hash, first_name, last_name, avatar_url, is_verified) VALUES
+('ahmad_store', 'ahmad@example.com', 'hash1', 'Ahmad', 'Store', 'https://ui-avatars.com/api/?name=Ahmad+Store', TRUE),
+('tech_hub', 'tech@example.com', 'hash2', 'Tech', 'Hub', 'https://ui-avatars.com/api/?name=Tech+Hub', TRUE),
+('audio_pro', 'audio@example.com', 'hash3', 'Audio', 'Pro', 'https://ui-avatars.com/api/?name=Audio+Pro', TRUE),
+('home_decor', 'home@example.com', 'hash4', 'Home', 'Decor', 'https://ui-avatars.com/api/?name=Home+Decor', TRUE),
+('sports_gear', 'sports@example.com', 'hash5', 'Sports', 'Gear', 'https://ui-avatars.com/api/?name=Sports+Gear', TRUE),
+('camera_kingdom', 'camera@example.com', 'hash6', 'Camera', 'Kingdom', 'https://ui-avatars.com/api/?name=Camera+Kingdom', TRUE),
+('gaming_masters', 'gaming@example.com', 'hash7', 'Gaming', 'Masters', 'https://ui-avatars.com/api/?name=Gaming+Masters', TRUE),
+('furniture_palace', 'furniture@example.com', 'hash8', 'Furniture', 'Palace', 'https://ui-avatars.com/api/?name=Furniture+Palace', TRUE),
+('muhamadd', 'muhamadd@example.com', 'hash9', 'Muha', 'Mad', 'https://ui-avatars.com/api/?name=Muha+Mad', TRUE)
 ON CONFLICT DO NOTHING;--handle logic do nothing for same thing & for double click problem
 
 -- Seed sample products

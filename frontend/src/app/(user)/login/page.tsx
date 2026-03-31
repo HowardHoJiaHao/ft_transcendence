@@ -6,6 +6,7 @@ import styles from './login.module.css';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRegister, setIsRegister] = useState(false);
   const { login } = useAuth();
@@ -20,12 +21,19 @@ export default function LoginPage() {
       const res = await fetch(endpoint, { //use fetch to get response from fetch sending http request. wait for server reply
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify(
+          isRegister
+            ? { username, email, password, firstName: username, lastName: '' }
+            : { email, password },
+        )
       });
       const data = await res.json(); //read and parse the response body. wait for body parsing
       if (res.ok)
 	  {
-        login(data);
+        if (data?.token) {
+          localStorage.setItem('token', data.token);
+        }
+        login(data?.user ?? data);
         router.push('/'); //navigate user to route homepage
       } 
 	  else
@@ -42,14 +50,25 @@ export default function LoginPage() {
     <div className={styles.container}>
       <form onSubmit={handleSubmit} className={styles.form}>
         <h2>{isRegister ? 'Register' : 'Login'}</h2>
-        <input 
-          type="text" 
-          placeholder="Username" 
-          value={username} 
-          onChange={(e) => setUsername(e.target.value)} 
-          required 
-          className={styles.input}
-        />
+        {isRegister ? (
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+            className={styles.input}
+          />
+        ) : (
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className={styles.input}
+          />
+        )}
         <input 
           type="password"  //typed chars are masked
           placeholder="Password"  //only "password" text shown when input empty. so that field is known as place to write password
@@ -59,12 +78,14 @@ export default function LoginPage() {
           className={styles.input}
         />
         {isRegister && (
-            <input 
-                type="email" 
-                placeholder="Email address" 
-                required 
-                className={styles.input}
-            />
+          <input
+            type="email"
+            placeholder="Email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className={styles.input}
+          />
         )}
         <button type="submit" className={styles.button}>
           {isRegister ? 'Sign Up' : 'Sign In'}

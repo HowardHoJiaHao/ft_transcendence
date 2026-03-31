@@ -5,7 +5,8 @@ type User = {
   id: number;
   username: string;
   email: string;
-  avatar_url?: string; //? means it can be missing
+  avatar?: string; //? means it can be missing
+  avatar_url?: string;
   status: string;
 };
 
