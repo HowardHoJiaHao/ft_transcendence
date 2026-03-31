@@ -25,6 +25,9 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.GET("/users/:id", h.GetProfile)
 	e.PUT("/users/:id", h.UpdateProfile)
 	
+	e.POST("/users/:id/avatar", h.UploadAvatar)
+	e.GET("/users/:id/avatar", h.GetAvatar)
+
 	e.GET("/users/:id/friends", h.GetFriends)
 	e.POST("/users/:id/friends/:friend_id", h.AddFriend)
 	e.DELETE("/users/:id/friends/:friend_id", h.RemoveFriend)

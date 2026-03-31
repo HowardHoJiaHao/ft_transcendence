@@ -8,10 +8,13 @@ type User struct {
 	Email     string    `json:"email"`
 	FirstName string    `json:"firstName"`
 	LastName  string    `json:"lastName"`
-	AvatarURL string    `json:"avatar"`
+	AvatarURL string    `json:"avatar,omitempty"` //omitempty = only need to sent when it is  not empty
+	AvatarMime *string   `json:"avatarMimeType,omitempty"`
 	Bio       string    `json:"bio"`
 	IsOnline  bool      `json:"onlineStatus"`
 	CreatedAt time.Time `json:"createdAt"`
+
+	AvatarData[]byte `json':"-"`
 }
 
 type RegisterRequest struct {

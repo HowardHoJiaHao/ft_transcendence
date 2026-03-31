@@ -7,13 +7,22 @@ CREATE TABLE IF NOT EXISTS users (
     first_name VARCHAR(255),
     last_name VARCHAR(255),
     avatar_url VARCHAR(255), --link to the avatar
+	avatar_data BYTEA
+	avatar_mime_type VARCHAR(50)
     bio TEXT, 
     is_verified BOOLEAN DEFAULT FALSE,
     two_factor_enabled BOOLEAN DEFAULT FALSE,
     oauth_id VARCHAR(255),
     oauth_provider VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT users_avatar_source_check CHECK (
+		avatar_data IS NOT NULL
+		OR (avatar_url IS NOT NULL AND btrim(avatar_url)<> '')
+	),
+	CONSTRAINT users_avatar_mime_check CHECK (
+avatar_data IS NULL
+OR (avatar_mime_type IS NOT NULL AND btrim(avatar_mime_type) <> '')
 ); 
 
 -- Create products/listings table
@@ -46,11 +55,21 @@ CREATE TABLE IF NOT EXISTS listings (
 CREATE TABLE IF NOT EXISTS listing_images (
     id SERIAL PRIMARY KEY,
     listing_id INT NOT NULL,
-    image_url VARCHAR(255) NOT NULL,
+    image_url VARCHAR(255),
+	image_data BYTEA
+	mime_type VARCHAR(50)
     is_primary BOOLEAN DEFAULT FALSE, --the primary image to be shown first
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
-); 
+	CONSTRAINT listing_images_source_check CHECK (
+		image_data IS NOT NULL
+		OR (image_url IS NOT NULL and btrim(image_url) <> '')
+	)
+	CONSTRAINT listing_image_mime_check CHECK(
+		image_data IS NULL
+		OR (mime_type IS NOT NULL AND btrim(mime_type) <> '')
+	)
+);
 
 -- Create messages table
 CREATE TABLE IF NOT EXISTS messages (
