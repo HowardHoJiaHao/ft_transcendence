@@ -26,14 +26,16 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: transcendence-backend
+    env_file:
+      - .env
     environment:
       DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-transcendence}
-      DB_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
-      DB_NAME: ${DB_NAME:-transcendence}
-      SERVER_PORT: 8080
-      ENVIRONMENT: ${ENVIRONMENT:-development}
+      # DB_PORT: 5432
+      # DB_USER: ${DB_USER:-transcendence}
+      # DB_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
+      # DB_NAME: ${DB_NAME:-transcendence}
+      # SERVER_PORT: 8080
+      # ENVIRONMENT: ${ENVIRONMENT:-development}
     ports:
       - "8080:8080"
     depends_on:
