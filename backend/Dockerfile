@@ -11,12 +11,13 @@ COPY go.mod go.sum ./
 # Copy source code first
 COPY . .
 
-# Build the application with -mod=mod to allow downloading during build
+# Build the application with -mod=mod to allow downloading during build. GOOS=linux ensure output works on Linux
 RUN CGO_ENABLED=1 GOOS=linux go build -mod=mod -a -installsuffix cgo -o main .
 
 # Final stage
 FROM alpine:3.18
 
+# add ca-certificates allow adding ssl certidicates
 RUN apk --no-cache add ca-certificates postgresql-client
 
 WORKDIR /app

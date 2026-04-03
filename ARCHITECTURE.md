@@ -160,26 +160,26 @@ Browser (Frontend)
 │                        HOST MACHINE                             │
 │                                                                 │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │              Docker Network Bridge                          │ │
+│  │              Docker Network Bridge                         │ │
 │  │       (transcendence-network)                              │ │
 │  │                                                            │ │
-│  │  Frontend Container     Backend Container   DB Container  │ │
-│  │  ┌──────────────────┐   ┌──────────────┐   ┌────────────┐ │ │
-│  │  │   Next.js:3000   │   │ Go:8080      │   │MySQL:3306  │ │ │
-│  │  │                  │   │              │   │            │ │ │
-│  │  │  Hostname: front ┼──►│ http://back  │   │host: db    │ │ │
-│  │  │                  │   │              │   │            │ │ │
-│  │  └──────────────────┘   │ MySQL via    │   │            │ │ │
-│  │           ▲              │ tcp(db:3306) ►   │            │ │ │
-│  │           │              │              │   │            │ │ │
-│  │           │              └──────────────┘   └────────────┘ │ │
+│  │  Frontend Container     Backend Container   DB Container   │ │
+│  │  ┌──────────────────┐   ┌──────────────┐   ┌────────────┐  │ │
+│  │  │   Next.js:3000   │   │ Go:8080      │   │MySQL:3306  │  │ │
+│  │  │                  │   │              │   │            │  │ │
+│  │  │  Hostname: front ┼──►│ http://back  │   │host: db    │  │ │
+│  │  │                  │   │              │   │            │  │ │
+│  │  └──────────────────┘   │ MySQL via    │   │            │  │ │
+│  │           ▲             │ tcp(db:3306) ►   │            │  │ │
+│  │           │             │              │   │            │  │ │
+│  │           │             └──────────────┘   └────────────┘  │ │
 │  │           │                    ▲                           │ │
 │  │           └────────────────────┘                           │ │
 │  │                                                            │ │
 │  │              Port Mappings (Host)                          │ │
-│  │  3000:3000  ◄─ Frontend                                   │ │
-│  │  8080:8080  ◄─ Backend                                    │ │
-│  │  3306:3306  ◄─ Database                                   │ │
+│  │  3000:3000  ◄─ Frontend                                    │ │
+│  │  8080:8080  ◄─ Backend                                     │ │
+│  │  3306:3306  ◄─ Database                                    │ │
 │  │                                                            │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                 │

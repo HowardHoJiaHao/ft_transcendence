@@ -3,21 +3,16 @@ package user
 import (
 	"database/sql"
 	"fmt"
-	"io"
-	"net/http"
-	"strconv"
-	"strings"
-
-	"github.com/labstack/echo/v4"
 )
 
+//type is a definition cmd. every time want to create a new thing that hasnt existed
 type Handler struct {
 	repo *Repository
 }
 
-const maxAvatarSize = 2 * 1024 * 1024 // 2MB
+const maxAvatarSize = 2 * 1024 * 1024 //2MB
 
-func NewHandler(db *sql.DB) *Handler {
+func NewHandler (db *sql.DB) *Handler {
 	return &Handler{repo: NewRepository(db)}
 }
 
@@ -27,7 +22,7 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.GET("/me", h.GetCurrentUser)
 	e.GET("/users/:id", h.GetProfile)
 	e.PUT("/users/:id", h.UpdateProfile)
-	
+
 	e.POST("/users/:id/avatar", h.UploadAvatar)
 	e.GET("/users/:id/avatar", h.GetAvatar)
 
@@ -36,6 +31,7 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.DELETE("/users/:id/friends/:friend_id", h.RemoveFriend)
 }
 
+//bind read request from JSON, identify field in json matching our struct, convert type
 func (h *Handler) Register(c echo.Context) error {
 	var req RegisterRequest
 	if err := c.Bind(&req); err != nil {
@@ -56,9 +52,10 @@ func (h *Handler) Register(c echo.Context) error {
 	return c.JSON(http.StatusCreated, LoginResponse{Token: token, User: *user})
 }
 
-func (h *Handler) Login(c echo.Context) error {
+//bind read request from JSON, identify field in json matching our struct content, convert type
+func (h *handler) Login(c echo.Context) error {
 	var req LoginRequest
-	if err := c.Bind(&req); err != nil {
+	if err := c.Bind(&req) {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
 	}
 
@@ -68,45 +65,42 @@ func (h *Handler) Login(c echo.Context) error {
 	}
 
 	token := fmt.Sprintf("token_%d", user.ID)
-	return c.JSON(http.StatusOK, LoginResponse{Token: token, User: *user})
+	return c.JSON(http.StatusOK, LoginRespose(Token: token, User: *user))
 }
 
-func (h *Handler) GetCurrentUser(c echo.Context) error {
+func (h *handler) GetCurrentUser(c echo.Context) error {
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer token_") {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error:" "Unauthorized"})
 	}
 
 	idStr := strings.TrimPrefix(authHeader, "Bearer token_")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
-	}
-
-	user, err := h.repo.GetUserByID(id)
-	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
+		return c.JSON(http.StatusNotFound, map[string]string {"error": "User not found"})
 	}
 	return c.JSON(http.StatusOK, user)
 }
 
 func (h *Handler) GetProfile(c echo.Context) error {
-	id, _ := strconv.Atoi(c.Param("id"))
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid id format"})
+	}
+
 	user, err := h.repo.GetUserByID(id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
+		return c.JSON (http.StatusNotFound, map[string]string{"error": "User not found"})
 	}
-	return c.JSON(http.StatusOK, user)
 }
 
 func (h *Handler) UpdateProfile(c echo.Context) error {
-	id, _ := strconv.Atoi(c.Param("id"))
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid id format"})
+	}
 	var req UpdateProfileRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
-	}
-
-	if err := h.repo.UpdateUserProfile(id, req); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update profile"})
 	}
 
@@ -115,7 +109,11 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 }
 
 func (h *Handler) GetFriends(c echo.Context) error {
-	id, _ := strconv.Atoi(c.Param("id"))
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid id format"})
+	}
+
 	friends, err := h.repo.GetFriends(id)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch friends"})
@@ -124,26 +122,38 @@ func (h *Handler) GetFriends(c echo.Context) error {
 }
 
 func (h *Handler) AddFriend(c echo.Context) error {
-	id, _ := strconv.Atoi(c.Param("id"))
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid id format"})
+	}
 	friendID, _ := strconv.Atoi(c.Param("friend_id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid friend id format"})
+	}
 
 	if err := h.repo.AddFriend(id, friendID); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error})
 	}
 	return c.JSON(http.StatusCreated, map[string]string{"message": "Friend added"})
-}
+ }
 
-func (h *Handler) RemoveFriend(c echo.Context) error {
-	id, _ := strconv.Atoi(c.Param("id"))
+ func (h *Handler) RemoveFriend(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid id format"})
+	}
 	friendID, _ := strconv.Atoi(c.Param("friend_id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid friend id format"})
+	}
 
 	if err := h.repo.RemoveFriend(id, friendID); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to remove friend"})
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "Friend removed"})
-}
+ }
 
-func (h *Handler) UploadAvatar(c echo.Context) error {
+func (h *Handler) UploadAvatar (c echo.Context) error {
 	userID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid user id"})
@@ -160,7 +170,7 @@ func (h *Handler) UploadAvatar(c echo.Context) error {
 
 	file, err := fileHeader.Open()
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot open uploaded file"})
+		return c.JSON(http.StatusBadRequest.map[string]string{"error": " cannot open uploaded file"})
 	}
 	defer file.Close()
 
@@ -169,10 +179,10 @@ func (h *Handler) UploadAvatar(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot read uploaded file"})
 	}
 
-	detected := http.DetectContentType(data)
+	detected := http.DetectContentType(data) // a better way to check data type rather than the extension only. every file type (.img/.jpg/ .exe) has their own binary that unique for the first 50
 	allowed := map[string]bool{
 		"image/jpeg": true,
-		"image/png":  true,
+		"image/png": true,
 		"image/webp": true,
 	}
 	if !allowed[detected] {
@@ -182,7 +192,6 @@ func (h *Handler) UploadAvatar(c echo.Context) error {
 	if err := h.repo.UpdateUserAvatarBinary(userID, data, detected); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to save avatar"})
 	}
-
 	return c.JSON(http.StatusOK, map[string]string{"message": "avatar uploaded"})
 }
 
@@ -200,5 +209,5 @@ func (h *Handler) GetAvatar(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to fetch avatar"})
 	}
 
-	return c.Blob(http.StatusOK, mimeType, data)
+	return c.Blob(http.StatusOK, mimetype, data) //blob send data as rawslice of bytes directly to the user browser as a file/data stream. media unlike test cannot be send as JSON
 }
