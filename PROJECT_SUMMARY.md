@@ -88,15 +88,15 @@ Database:  localhost:3306
 ## 🎯 What's Included
 
 ### Frontend Stack
-- ✅ Next.js 14 (latest)
-- ✅ React 18 with TypeScript
+- ✅ Next.js 14           . Next.js 15 but end in 6 months
+- ✅ React 18 with TypeScript            .React 19
 - ✅ Axios for API calls
 - ✅ ESLint + TypeScript support
 - ✅ Hot reload development
 - ✅ Production build config
 
 ### Backend Stack
-- ✅ Go 1.21
+- ✅ Go 1.21              . Go 1.25
 - ✅ Echo framework (high-performance)
 - ✅ MySQL driver
 - ✅ CORS middleware
@@ -105,19 +105,7 @@ Database:  localhost:3306
 - ✅ Health check endpoints
 
 ### Database Stack
-- ✅ MySQL 8.0
-- ✅ 8 pre-configured tables:
-  - users (authentication, profiles)
-  - listings (marketplace items)
-  - listing_images (product images)
-  - messages (user communication)
-  - reviews (ratings & feedback)
-  - orders (transactions)
-  - api_keys (authentication)
-  - analytics_events (tracking)
-- ✅ Foreign key relationships
-- ✅ Indexes for performance
-- ✅ Full-text search ready
+- ✅ PosgresSQL 15.0      . Posgres 17
 
 ### DevOps & Tools
 - ✅ Docker Compose orchestration

@@ -10,32 +10,27 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/posgreql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - transcendence-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}"] 
+      #CMD-SHELL. run the following cmd in shell. it return 0 if it is accepting conn and nonzero if not accepting anything. -U is user -d is database
       timeout: 20s
       retries: 10
       interval: 10s
 
-  # Go Backend
+# Go 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: ./backend #folder where code lives
+      dockerfile: Dockerfile #default is Dockerfile.this one just explicit
     container_name: transcendence-backend
     env_file:
       - .env
-    environment:
+    environment: #if define in .env and in environment. .environment wins
       DB_HOST: db
-      # DB_PORT: 5432
-      # DB_USER: ${DB_USER:-transcendence}
-      # DB_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
-      # DB_NAME: ${DB_NAME:-transcendence}
-      # SERVER_PORT: 8080
-      # ENVIRONMENT: ${ENVIRONMENT:-development}
     ports:
       - "8080:8080"
     depends_on:
@@ -44,17 +39,17 @@ services:
     networks:
       - transcendence-network
 
-  # Next.js Frontend
+# NextJS
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: transcendence-frontend
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
-      NODE_ENV: ${NODE_ENV:-development}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080} #tells where backend working at
+      NODE_ENV: ${NODE_ENV:-development} #mode where every logging is given, not prioritizing speed and code minification
     ports:
-      - "3000:3000"
+      - "3000:3000" #left side is host port and right side is container port. host port right in browser. container port where application is listening
     depends_on:
       - backend
     networks:
@@ -65,4 +60,4 @@ volumes:
 
 networks:
   transcendence-network:
-    driver: bridge
+    driver:bridge

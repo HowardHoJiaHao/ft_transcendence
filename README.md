@@ -65,8 +65,8 @@ open http://localhost:3000
 - **Main File**: `main.go`
 - **Uses**: Echo framework + MySQL driver
 
-### Database (MySQL)
-- **Port**: 3306
+### Database (PosgresSQL)
+- **Port**: 5432
 - **Default User**: `transcendence`
 - **Default Password**: `transcendence_pass`
 - **Default Database**: `transcendence`
