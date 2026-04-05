@@ -4,18 +4,18 @@ import (
 	"log" //logging errors and important events
 	"os" //provide platform independent interface
 
-	"github.com/joho/godotenv"
+	//"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4" //echo main framework
 	"github.com/labstack/echo/v4/middleware" //middleware parts
 	"transcendence/modules/user" //local module
 )
 
 func main() {
-	//load .env file
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file") //logs info, print str, and exit
-	}
+	//load .env file if no env loaded by docker. since we already use dockercompose to upload things from .env file to env. we only take from the existing env
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatalf("Error loading .env file") //logs info, print str, and exit
+	// }
 
 	//initialize database
 	db,err := initDB()

@@ -88,15 +88,15 @@ Database:  localhost:3306
 ## 🎯 What's Included
 
 ### Frontend Stack
-- ✅ Next.js 14           . Next.js 15 but end in 6 months
-- ✅ React 18 with TypeScript            .React 19
-- ✅ Axios for API calls
-- ✅ ESLint + TypeScript support
+- ✅ Next.js 15.5.14. Node 22.22.2
+- ✅ React 18.3.1 with TypeScript
+- ✅ Axios 1.12.2 for API calls
+- ✅ ESLint 9.39.4 + TypeScript support
 - ✅ Hot reload development
 - ✅ Production build config
 
 ### Backend Stack
-- ✅ Go 1.21              . Go 1.25
+- ✅ Go 1.25.8
 - ✅ Echo framework (high-performance)
 - ✅ MySQL driver
 - ✅ CORS middleware
