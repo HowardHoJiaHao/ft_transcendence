@@ -23,6 +23,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "next.config.js"],
+  "include": ["src", "next.config.js", "../rubbish/AuthContext-Copy.tsx"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

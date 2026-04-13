@@ -8,6 +8,7 @@ import (
 	
 	//go standard rule is to separate std library and external. but not necessary
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
 type Product struct {
@@ -28,7 +29,13 @@ type Product struct {
 	Description         string   `json:"description"`
 }
 
-func getProducts(c echo.Context, db *sql.DB) error {
+func getProducts(c echo.Context, gormDB *gorm.DB) error {
+
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Database connection error"})
+	}
+
 	weightCategory := c.QueryParam("weightCategory")
 	flexibilityCategory := c.QueryParam("flexibilityCategory")
 	balanceCategory := c.QueryParam("balanceCategory")
@@ -85,7 +92,7 @@ func getProducts(c echo.Context, db *sql.DB) error {
 	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
 	args = append(args, limitInt, offsetInt)
 
-	rows, err := db.Query(query, args...) //rows is connection to table data. ... is a spread operator. it unpacks the slice to an individual things. w/o ... you have to write one by one. instead of passing slice you pass "heavy", "light"
+	rows, err := sqlDB.Query(query, args...) //rows is connection to table data. ... is a spread operator. it unpacks the slice to an individual things. w/o ... you have to write one by one. instead of passing slice you pass "heavy", "light"
 	if err != nil {
 		log.Printf("Error querying products: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to fetch products"})
@@ -138,7 +145,12 @@ func scanProducts(rows *sql.Rows) ([]Product, error) {
 	return products, nil
 }
 
-func getProductByID(c echo.Context, db *sql.DB) error {
+func getProductByID(c echo.Context, gormDB *gorm.DB) error {
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Database connection error"})
+	}
+
 	//check the id is even and id or not
 	idParam := c.Param("id")
 	id, err := strconv.Atoi(idParam)
@@ -149,7 +161,7 @@ func getProductByID(c echo.Context, db *sql.DB) error {
 	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE id = $1"
 
 	var product Product
-	err = db.QueryRow(query, id).Scan(
+	err = sqlDB.QueryRow(query, id).Scan(
 		&product.ID,
 		&product.Title,
 		&product.Price,

@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_mime_type VARCHAR(50),
     bio TEXT, 
     is_verified BOOLEAN DEFAULT FALSE,
-    two_factor_enabled BOOLEAN DEFAULT FALSE,
+    requires_2fa BOOLEAN DEFAULT FALSE,
     oauth_id VARCHAR(255),
     oauth_provider VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

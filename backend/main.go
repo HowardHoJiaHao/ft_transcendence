@@ -18,12 +18,14 @@ func main() {
 	// }
 
 	//initialize database
-	db,err := initDB()
+	gormDB, cleanup, err := initDB()
 	if (err != nil) {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
-	defer db.Close() //run the line before exiting fx
 
+	defer cleanup() //run the line before exiting fx
+
+	
 	//create echo instance
 	e := echo.New()
 
@@ -41,12 +43,15 @@ func main() {
 	v1.GET("/status", statusHandler)
 
 	// Product routes
-	e.GET("/api/v1/products", func(c echo.Context) error { return getProducts(c, db)})
+	e.GET("/api/v1/products", func(c echo.Context) error { return getProducts(c, gormDB) })
 
-	e.GET("/api/v1/products/:id", func(c echo.Context) error { return getProductByID(c, db) })
+	e.GET("/api/v1/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
 
 	//User Module initialization
-	userHandler := user.NewHandler(db)
+	userHandler, err := user.NewHandler(gormDB)
+	if err != nil {
+		log.Fatalf("Failed to initialize user handler: %v", err)
+	}
 	userHandler.RegisterRoutes(v1)
 
 	//start server

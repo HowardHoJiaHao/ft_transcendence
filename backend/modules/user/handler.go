@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm" //orm
 )
 
 type Handler struct {
@@ -17,13 +18,22 @@ type Handler struct {
 
 const maxAvatarSize = 2 * 1024 * 1024 //2MB
 
-func NewHandler(db *sql.DB) *Handler {
-	return &Handler{repo: NewRepository(db)}
+func NewHandler(gormDB *gorm.DB) (*Handler, error) {
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Handler{
+		repo: NewRepository(sqlDB, gormDB),
+	}, nil
 }
 
 func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.POST("/auth/register", h.Register)
 	e.POST("/auth/login", h.Login)
+	e.POST("/auth/verify-otp", h.Verify2FA)
+	e.POST("/auth/resend-otp", h.ResendOtp)
 	e.GET("/me", h.GetCurrentUser)
 	e.GET("/users/:id", h.GetProfile)
 	e.PUT("/users/:id", h.UpdateProfile)
@@ -52,8 +62,8 @@ func (h *Handler) Register(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Error fetching created user"})
 	}
 
-	token := fmt.Sprintf("token_%d", id)
-	return c.JSON(http.StatusCreated, LoginResponse{Token: token, User: *user})
+	// token := fmt.Sprintf("token_%d", id)
+	return c.JSON(http.StatusCreated, map[string]interface{}{"message" : "Register successful! Please login", "user" : user})
 }
 
 func (h *Handler) Login(c echo.Context) error {
@@ -67,8 +77,65 @@ func (h *Handler) Login(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid credentials"})
 	}
 
+	if (!user.Requires2FA) {
+		token := fmt.Sprintf("token_%d", user.ID)
+		return c.JSON(http.StatusOK, LoginResponse{Token: token, User: *user})
+	}
+
+	tempToken, err := h.get2FA(req.Email); 
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "OTP failed to send"})
+	}
+
+	return c.JSON(http.StatusAccepted, LoginResponse{TempToken: tempToken, NeedOtp: true})
+
+	// token := fmt.Sprintf("token_%d", user.ID)
+	// return c.JSON(http.StatusOK, LoginResponse{Token: token, User: *user})
+}
+
+func (h *Handler) Verify2FA(c echo.Context) error {
+	var otpReq OTPrequest
+	if err := c.Bind(&otpReq); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid OTP request payload"})
+	}
+	if strings.TrimSpace(otpReq.TempToken) == "" || strings.TrimSpace(otpReq.OtpCode) == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tempToken and otpCode are required"})
+	}
+
+	email, err := h.repo.VerifyOTPAndConsume(otpReq.TempToken, otpReq.OtpCode)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid or expired OTP"})
+	}
+
+	user, err := h.repo.GetUserByEmail(email)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to load user"})
+	}
+
 	token := fmt.Sprintf("token_%d", user.ID)
 	return c.JSON(http.StatusOK, LoginResponse{Token: token, User: *user})
+
+}
+
+func (h *Handler) ResendOtp(c echo.Context) error {
+	var req ResendOtpRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid OTP request"})
+	}
+	if strings.TrimSpace(req.Email) == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "email is required"})
+	}
+
+	_, err := h.repo.GetUserByEmail(req.Email)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "User not found"})
+	}
+
+	tempToken, err := h.get2FA(req.Email) 
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "OTP failed to send"})
+	}
+	return c.JSON(http.StatusAccepted, map[string]string{"tempToken": tempToken, "message": "OTP resent"})
 }
 
 func (h *Handler) GetCurrentUser(c echo.Context) error {

@@ -1,5 +1,10 @@
-'use client';
+'use client'; //means that it is for browser. it must be interactive
 import React, { createContext, useContext, useState, useEffect } from 'react';
+
+//createContext. create an antenna that can allow component connected to it using anything inside it w/o having to pass through parent and child
+//useContext. allow component to join the antenna
+//useState. how a react component remembers things. it stores two things a variable and a setter and set 1 thing. [variable, setter] = useState('intialvalueofvariable')
+//useEffect. is a component autopilot. fetching data (when page load automatically take user list), subscriptions (listen whenever user click outside menu), synchronization (whenever variables change, store it)
 
 type User = {
   id: number;
@@ -7,50 +12,54 @@ type User = {
   email: string;
   avatar?: string; //? means it can be missing
   avatar_url?: string;
-  status: string;
+  status: string;	
 };
 
 interface AuthContextType {
-  user: User | null; // user can be typeuser or null
-  login: (userData: User) => void; //contains a login function that accept user data and void to indicate it returns nothing
-  logout: () => void; // a function with no parameter and no return
+	user: User | null;
+	login: (userData: User) => void;
+	logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined); //<> what can live inside context. the initialization of values
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+//in javascript every function is private to a file. by declaring export it can be accessed by other files too
+export function AuthProvider({ children }: { children: React.ReactNode }) //by putting  { children } it defines whatever i put inside the <AuthProvider>  .... <AuthProvider> is a child. { children: React} the child be can be any react component
+{
+	const [user, setUser] = useState<User | null>(null); //typescript version <User | null> means can only hold these two types. null is the initial value
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-  }, []);
+	//			RUN WHEN IT LOADS
+	useEffect(() =>
+	{
+		const storedUser = localStorage.getItem('user') //goes to browser storage and see is there a string labeled user
+		if (storedUser)
+			setUser(JSON.parse(storedUser)); //translate string into live javascript object
+	}, []); //run the code exactly
 
-  const login = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData)); //persist user in local storage so login survives page refresh
-  };
+	const login = (userData: User) =>
+	{
+		setUser(userData); //put user data in state variable
+		localStorage.setItem('user', JSON.stringify(userData)); //store in local storage. label user and text in json format instead of typescript object
+	};
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user'); //removes saved user from local storage
-  };
+	const logout = () => 
+	{
+		setUser(null);
+		localStorage.removeItem('user'); //removes saved user from website storage
+	};
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout }}> 
-      {children}
-    </AuthContext.Provider>
-  ); //renders context and passes user, login, logout to descendants
+	return (
+		<AuthContext.Provider value={{ user, login, logout}}>
+			{children}
+		</AuthContext.Provider>
+	) //renders context and passes user, login, logout to descendants
 } //renders child components inside provider
- 
 
-export function useAuth() { //define and export a custom hook to access the auth context
-  const context = useContext(AuthContext); //reads current context value from nearest authcontext.provider
-  if (context === undefined) //check if hooks used outside provider
-  {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+//define and export a custom hook to access the auth context
+export function useAuth()
+{
+	const context = useContext(AuthContext); //red current context value from authContext.Provider
+	if (context === undefined)
+		throw new Error('useAuth must be used within an AuthProvider')
+	return context;
 }

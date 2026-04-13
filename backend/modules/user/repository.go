@@ -4,22 +4,25 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"gorm.io/gorm"
 )
 
 type Repository struct {
-	db *sql.DB
+	db     *sql.DB
+	gormDB *gorm.DB
 }
 
-func NewRepository(db *sql.DB) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *sql.DB, gormDB *gorm.DB) *Repository {
+	return &Repository{db: db, gormDB: gormDB}
 }
 
 func (r *Repository) CreateUser(req RegisterRequest) (int64, error) {
 	avatar := "https://ui-avatars.com/api/?name=" + req.FirstName + "+" + req.LastName
 	var id int64
 	err := r.db.QueryRow(
-		"INSERT INTO users (username, email, password_hash, first_name, last_name, avatar_url, is_verified) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
-		req.Username, req.Email, req.Password, req.FirstName, req.LastName, avatar, true,
+		"INSERT INTO users (username, email, password_hash, first_name, last_name, avatar_url, is_verified, requires_2fa) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
+		req.Username, req.Email, req.Password, req.FirstName, req.LastName, avatar, true, true,
 	).Scan(&id)
 	if err != nil {
 		return 0, err
@@ -34,9 +37,9 @@ func (r *Repository) GetUserByEmailAndPassword(email, password string) (*User, e
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.db.QueryRow(
-		"SELECT id, username, email, first_name, last_name, avatar_url, avatar_data, avatar_mime_type, bio, created_at FROM users WHERE email = $1 AND password_hash = $2",
+		"SELECT id, username, email, first_name, last_name, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1 AND password_hash = $2",
 		email, password,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &avatarURL, &avatarData, &avatarMime, &bio, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
 
 	if err != nil {
 		return nil, err
@@ -64,9 +67,9 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.db.QueryRow(
-		"SELECT id, username, email, first_name, last_name, avatar_url, avatar_data, avatar_mime_type, bio, created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, first_name, last_name, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE id = $1",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &avatarURL, &avatarData, &avatarMime, &bio, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
 
 	if err != nil {
 		return nil, err
@@ -84,6 +87,37 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 		user.AvatarURL = &avatarURL.String
 	}
 	user.IsOnline = true // For demo
+	return &user, nil
+}
+
+func (r *Repository) GetUserByEmail(email string) (*User, error) {
+	var user User
+	var bio sql.NullString
+	var avatarURL sql.NullString
+	var avatarMime sql.NullString
+	var avatarData []byte
+	err := r.db.QueryRow(
+		"SELECT id, username, email, first_name, last_name, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1",
+		email,
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
+
+	if err != nil {
+		return nil, err
+	}
+	user.Bio = bio.String
+	if avatarMime.Valid {
+		user.AvatarMime = &avatarMime.String
+	}
+	user.AvatarData = avatarData
+	user.HasAvatarBin = len(avatarData) > 0
+	if user.HasAvatarBin {
+		avatarPath := fmt.Sprintf("/api/v1/users/%d/avatar", user.ID)
+		user.AvatarURL = &avatarPath
+	} else if avatarURL.Valid {
+		user.AvatarURL = &avatarURL.String
+	}
+	user.IsOnline = true // For demo
+	//user.Requires2FA = true // For demo
 	return &user, nil
 }
 

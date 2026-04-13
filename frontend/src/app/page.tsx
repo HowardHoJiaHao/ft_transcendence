@@ -49,7 +49,8 @@ const BALANCE_CATEGORIES = [
   'Head Light',
 ];
 
-export default function Home() {
+export default function Home()
+{
   const router = useRouter();
   const { user, logout } = useAuth();
   const [selectedWeightCategory, setSelectedWeightCategory] = useState('All');
@@ -57,12 +58,13 @@ export default function Home() {
   const [selectedBalanceCategory, setSelectedBalanceCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('featured');
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]); //declare a product array. declare the array is empty
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch products from API
-  useEffect(() => {
+  useEffect(() =>
+	{
     const fetchProducts = async () => {
       try {
         setLoading(true);

@@ -7,12 +7,16 @@ RUN apk add --no-cache git gcc musl-dev
 
 # Copy go mod files
 COPY go.mod go.sum ./
+# test
+RUN go mod download
 
 # Copy source code first
 COPY . .
+# test
+RUN CGO_ENABLED=1 GOOS=linux go build -mod=readonly -a -installsuffix cgo -o main .
 
 # Build the application with -mod=mod to allow downloading during build. GOOS=linux ensure output works on Linux
-RUN CGO_ENABLED=1 GOOS=linux go build -mod=mod -a -installsuffix cgo -o main .
+# RUN CGO_ENABLED=1 GOOS=linux go build -mod=mod -a -installsuffix cgo -o main .
 
 # Final stage
 FROM alpine:3.18

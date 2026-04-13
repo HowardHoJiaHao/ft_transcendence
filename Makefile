@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check setup
+.PHONY: help build up down restart logs logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check setup setup-backend
 
 help:
 	@echo "Transcendence Marketplace - Available Commands"
@@ -19,6 +19,7 @@ help:
 	@echo "make shell-db           - Access database container shell"
 	@echo "make db-connect         - Connect to PostgreSQL database"
 	@echo "make db-migrate         - Run database migrations"
+	@echo "make setup-backend      - build up backend"
 
 build:
 	docker compose build
@@ -76,6 +77,14 @@ setup: build up
 	@echo "Frontend:  http://localhost:3000"
 	@echo "Backend:   http://localhost:8080"
 	@echo "Database:  localhost:5432"
+
+setup-backend:
+	docker compose build backend db
+	docker compose up -d db backend
+
+setup-frontend:
+	docker compose build frontend
+	docker compose up -d frontend
 
 reset: clean build up db-migrate
 	@echo "resetted"
