@@ -19,7 +19,7 @@ export default function ProfilePage()
 {
 	const router = useRouter();
 	const { user:ctxUser, logout } = useAuth();
-	const [user, setUser] = useState<UserProfile | null>(ctxUser ?? null);
+	const [user, setUser] = useState<UserProfile | null>(ctxUser as UserProfile | null);
 	const [loading, setLoading] = useState(!ctxUser);
 	const [error, setError] = useState<string | null>(null);
 
@@ -32,7 +32,7 @@ export default function ProfilePage()
 			try
 			{
 				const token = localStorage.getItem('token') ?? '';
-				const res = await fetch ('http://localhost:8080/me', {
+				const res = await fetch('http://localhost:8080/api/v1/me', {
 					headers: {
 						Authorization: token ? `Bearer ${token}` : '',
 					},
@@ -81,7 +81,7 @@ export default function ProfilePage()
 
 	const rowStyle: React.CSSProperties = { display: 'flex', gap: 12, alignItems: 'center', margin: '10px 0' };
 	const labelStyle: React.CSSProperties = { width: 140, fontWeight: 600 };
-	const mainStyle: React.CSSProperties = { width: 140, fontWeight: 600 };
+	const mainStyle: React.CSSProperties = { minHeight: '100vh', display: 'flex', flexDirection: 'column' };
 	const headerStyle: React.CSSProperties = {
 		background: 'white',
 		borderBottom: '1px solid var(--border)',
@@ -89,19 +89,19 @@ export default function ProfilePage()
 		position: 'sticky',
 		top: 0,
 		zIndex: 1000,
-		padding: '16px-0'
+		padding: '16px 0'
 	};
 	const headerTopStyle: React.CSSProperties = {
 		display: 'flex',
 		justifyContent: 'space-between',
-		alignItems: 'çenter',
+		alignItems: 'center',
 		marginBottom: 8,
 		gap: 12,
 		flexWrap: 'wrap',
 	};
-	const logoStyle: React.CSSProperties = { fontSize: 24, fontWeight: 700, color: 'var(--prmary)', margin: 0 };
+	const logoStyle: React.CSSProperties = { fontSize: 24, fontWeight: 700, color: 'var(--primary)', margin: 0 };
 	const headerActionsStyle: React.CSSProperties = { display: 'flex', gap:  12 };
-	const cardStyle: React.CSSProperties {
+	const cardStyle: React.CSSProperties = {
 		background: 'white',
 		borderRadius: 8,
 		boxShadow: 'var(--shadow)',
@@ -115,9 +115,9 @@ export default function ProfilePage()
 		padding: '40px 0 20px',
 		marginTop: 40
 	};
-	const footerGridStyle: React.CSSProperties {
+	const footerGridStyle: React.CSSProperties = {
 		display: 'grid',
-		gridTemplateColumn: 'repeat(auto-fit, minmax(180px, 1fr))',
+		gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
 		gap: 30,
 		marginBottom: 30,
 	};
@@ -132,12 +132,10 @@ export default function ProfilePage()
 
 	return (
 		<main style={mainStyle}>
-			</>
-		<main style={mainStyle}>
 			<header style={headerStyle}>
 				<div className="container">
 					<div style={headerTopStyle}>
-						<h1 style={logoStyle}>🛍️ Transcendence</h1>
+						<h1 style={logoStyle}>💀 TransMarket</h1>
 						<div style={headerActionsStyle}>
 							<button className="btn btn-secondary btn-sm" onClick={() => router.push('/')}>Home</button>
 							<button className="btn btn-secondary btn-sm" onClick={() => router.push('/friends')}>Friends</button>
