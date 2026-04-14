@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/modules/user/components/AuthContext';
+import SearchBar  from '@/components/SearchBar/SearchBar';
 
 interface UserProfile {
 	id: number;
@@ -19,9 +20,14 @@ export default function ProfilePage()
 {
 	const router = useRouter();
 	const { user:ctxUser, logout } = useAuth();
+	const [searchQuery, setSearchQuery] = useState('');
 	const [user, setUser] = useState<UserProfile | null>(ctxUser as UserProfile | null);
 	const [loading, setLoading] = useState(!ctxUser);
 	const [error, setError] = useState<string | null>(null);
+
+	const handleSearch = () => {
+		router.push(`/?search=${encodeURIComponent(searchQuery)}`);
+	};
 
 	useEffect(() => {
 		if (user) return;
@@ -109,26 +115,6 @@ export default function ProfilePage()
 		maxWidth: 760,
 		margin: '24px auto',
 	};
-	const footerStyle: React.CSSProperties = {
-		background: 'var(--dark)',
-		color: 'white',
-		padding: '40px 0 20px',
-		marginTop: 40
-	};
-	const footerGridStyle: React.CSSProperties = {
-		display: 'grid',
-		gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-		gap: 30,
-		marginBottom: 30,
-	};
-	const footerBottomStyle: React.CSSProperties = {
-		textAlign: 'center',
-		paddingTop: 20,
-		borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-		color: '#aaa',
-		fontSize: 14,
-	};
-	const footerLinkStyle: React.CSSProperties = { color: '#aaa', textDecoration: 'none' };
 
 	return (
 		<main style={mainStyle}>
@@ -136,6 +122,7 @@ export default function ProfilePage()
 				<div className="container">
 					<div style={headerTopStyle}>
 						<h1 style={logoStyle}>💀 TransMarket</h1>
+						<SearchBar value={searchQuery} onChange={setSearchQuery} onSubmit={handleSearch} />
 						<div style={headerActionsStyle}>
 							<button className="btn btn-secondary btn-sm" onClick={() => router.push('/')}>Home</button>
 							<button className="btn btn-secondary btn-sm" onClick={() => router.push('/friends')}>Friends</button>
@@ -176,47 +163,6 @@ export default function ProfilePage()
 				</div>
 			</div>
 
-			<footer style={footerStyle}>
-				<div className="container">
-					<div style={footerGridStyle}>
-						<div>
-							<h4>About Us</h4>
-							<ul>
-								<li><a style={footerLinkStyle} href="#">About Transcendence</a></li>
-								<li><a style={footerLinkStyle} href="#">Contact Us</a></li>
-								<li><a style={footerLinkStyle} href="#">Blog</a></li>
-							</ul>
-						</div>
-						<div>
-							<h4>Support</h4>
-							<ul>
-								<li><a style={footerLinkStyle} href="#">Help Center</a></li>
-								<li><a style={footerLinkStyle} href="#">Safety Tips</a></li>
-								<li><a style={footerLinkStyle} href="#">Report Item</a></li>
-							</ul>
-						</div>
-						<div>
-							<h4>Community</h4>
-							<ul>
-								<li><a style={footerLinkStyle} href="#">Terms &amp; Conditions</a></li>
-								<li><a style={footerLinkStyle} href="#">Privacy Policy</a></li>
-								<li><a style={footerLinkStyle} href="#">Careers</a></li>
-							</ul>
-						</div>
-						<div>
-							<h4>Follow Us</h4>
-							<div style={{ display: 'flex', gap: 12, flexDirection: 'column' }}>
-								<a style={footerLinkStyle} href="#">Facebook</a>
-								<a style={footerLinkStyle} href="#">Instagram</a>
-								<a style={footerLinkStyle} href="#">Twitter</a>
-							</div>
-						</div>
-					</div>
-					<div style={footerBottomStyle}>
-						<p>&copy; 2024 Transcendence Marketplace. All rights reserved.</p>
-					</div>
-				</div>
-			</footer>
 		</main>
 	)
 }

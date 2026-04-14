@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'; //std react hook for managing local
 import { useRouter } from 'next/navigation'; //programmatic navigation
 import { useAuth } from '@/modules/user/components/AuthContext'; //import hook to access global authentication data
 import styles from './page.module.css'; //import CSS module for scope styling
+import Header from '@/components/Header/Header';
 
 interface Product
 {
@@ -56,40 +57,47 @@ export default function Home()
   const [selectedWeightCategory, setSelectedWeightCategory] = useState('All');
   const [selectedFlexibilityCategory, setSelectedFlexibilityCategory] = useState('All');
   const [selectedBalanceCategory, setSelectedBalanceCategory] = useState('All');
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('featured');
   const [products, setProducts] = useState<Product[]>([]); //declare a product array. declare the array is empty
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const handleSearch = () => {
+    setSearchQuery(searchInput);
+  }
+
   // Fetch products from API
+  //new URLSearchParams(window.location.search) gives search query and get('search') gives value of search key.
   useEffect(() =>
 	{
+    const urlSearch = typeof window === 'undefined'
+                ? null : new URLSearchParams(window.location.search).get('search'); //if the search comes from url (other page), get they word from the key search
+    const currentSearch = urlSearch ?? searchQuery; //if empty, means it dont come from url, use the searchQuery
+    if (urlSearch && urlSearch !== searchQuery) //if both exist but different, means it come from url, update searchQuery following url
+      setSearchQuery(urlSearch);
+
     const fetchProducts = async () => {
       try {
         setLoading(true);
         const query = new URLSearchParams();
-        if (selectedWeightCategory !== 'All') {
+        if (selectedWeightCategory !== 'All')
           query.append('weightCategory', selectedWeightCategory);
-        }
-        if (selectedFlexibilityCategory !== 'All') {
+        if (selectedFlexibilityCategory !== 'All')
           query.append('flexibilityCategory', selectedFlexibilityCategory);
-        }
-		if (selectedBalanceCategory !== 'All') {
-			query.append('balanceCategory', selectedBalanceCategory);
-		}
-        if (searchQuery) {
-          query.append('search', searchQuery);
-        }
+		    if (selectedBalanceCategory !== 'All')
+			  query.append('balanceCategory', selectedBalanceCategory);
+        if (currentSearch)
+          query.append('search', currentSearch);
         query.append('sort', sortBy);
 
         const response = await fetch(
           `http://localhost:8080/api/v1/products?${query}`
         );
 
-        if (!response.ok) {
+        if (!response.ok)
           throw new Error('Failed to fetch products');
-        }
 
         const data = await response.json();
         const mappedProducts = data.products.map((p: any) => ({ //for every single data call everything for a while then take the p and turn it into object below
@@ -125,86 +133,11 @@ export default function Home()
   return (
     <main className={styles.main}>
       {/* Header */}
-      <header className={styles.header}>
-        <div className="container">
-          <div className={styles.headerTop}>
-            <h1 className={styles.logo}>🛍️ Transcendence</h1>
-            <div className={styles.headerActions}>
-              {user ? (
-                <>
-                  <span className={styles.welcomeText}>Hi, {user.username}</span>
-                  <button className="btn btn-secondary btn-sm" onClick={() => router.push('/profile')}>Profile</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => router.push('/friends')}>Friends</button>
-                  <button className="btn btn-secondary btn-sm" onClick={logout}>Logout</button>
-                </>
-              ) : (
-                <button className="btn btn-secondary btn-sm" onClick={() => router.push('/login')}>Login</button>
-              )}
-              <button className="btn btn-primary btn-sm">Sell Now</button>
-            </div>
-          </div>
-
-          {/* Search Bar */}
-          <div className={styles.searchContainer}>
-            <div className={styles.searchBox}>
-              <input
-                type="text"
-                placeholder="Search listings, items, sellers..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={styles.searchInput}
-              />
-              <button className="btn btn-primary">Search</button>
-            </div>
-          </div>
-
-          {/* Weight Categories */}
-          <div className={styles.categoriesNav}>
-            {WEIGHT_CATEGORIES.map((category) => (
-              <button
-                key={category}
-                className={`${styles.categoryBtn} ${
-                  selectedWeightCategory === category ? styles.active : ''
-                }`}
-                onClick={() => setSelectedWeightCategory(category)}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-
-          {/* Flexibility Categories */}
-          <div className={styles.categoriesNav}>
-            {FLEXIBILITY_CATEGORIES.map((category) => (
-              <button
-                key={category}
-                className={`${styles.categoryBtn} ${
-                  selectedFlexibilityCategory === category ? styles.active : ''
-                }`}
-                onClick={() => setSelectedFlexibilityCategory(category)}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-
-          {/* Balance Categories */}
-          <div className={styles.categoriesNav}>
-            {BALANCE_CATEGORIES.map((category) => (
-              <button
-                key={category}
-                className={`${styles.categoryBtn} ${
-                  selectedBalanceCategory === category ? styles.active : ''
-                }`}
-                onClick={() => setSelectedBalanceCategory(category)}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-
-        </div>
-      </header>
+      <Header
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        onSearchSubmit={handleSearch}
+      />
 
       {/* Main Content */}
       <div className="container">
@@ -370,49 +303,6 @@ export default function Home()
           </div>
         </div>
       </div>
-
-      {/* Footer */}
-      <footer className={styles.footer}>
-        <div className="container">
-          <div className={styles.footerGrid}>
-            <div className={styles.footerCol}>
-              <h4>About Us</h4>
-              <ul>
-                <li><a href="#">About Transcendence</a></li>
-                <li><a href="#">Contact Us</a></li>
-                <li><a href="#">Blog</a></li>
-              </ul>
-            </div>
-            <div className={styles.footerCol}>
-              <h4>Support</h4>
-              <ul>
-                <li><a href="#">Help Center</a></li>
-                <li><a href="#">Safety Tips</a></li>
-                <li><a href="#">Report Item</a></li>
-              </ul>
-            </div>
-            <div className={styles.footerCol}>
-              <h4>Community</h4>
-              <ul>
-                <li><a href="#">Terms & Conditions</a></li>
-                <li><a href="#">Privacy Policy</a></li>
-                <li><a href="#">Careers</a></li>
-              </ul>
-            </div>
-            <div className={styles.footerCol}>
-              <h4>Follow Us</h4>
-              <div className={styles.socialLinks}>
-                <a href="#">Facebook</a>
-                <a href="#">Instagram</a>
-                <a href="#">Twitter</a>
-              </div>
-            </div>
-          </div>
-          <div className={styles.footerBottom}>
-            <p>&copy; 2024 Transcendence Marketplace. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
     </main>
   );
 }
