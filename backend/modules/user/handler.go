@@ -36,7 +36,7 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.POST("/auth/resend-otp", h.ResendOtp)
 	e.GET("/me", h.GetCurrentUser)
 	e.GET("/users/:id", h.GetProfile)
-	e.PUT("/users/:id", h.UpdateProfile)
+	e.PUT("/users/update", h.UpdateProfile)
 
 	e.POST("/users/:id/avatar", h.UploadAvatar)
 	e.GET("/users/:id/avatar", h.GetAvatar)
@@ -54,7 +54,7 @@ func (h *Handler) Register(c echo.Context) error {
 
 	id, err := h.repo.CreateUser(req)
 	if err != nil {
-		return c.JSON(http.StatusConflict, map[string]string{"error": "User with this email or username already exists"})
+		return c.JSON(http.StatusConflict, map[string]string{"error": "User with this email or username already exists/Input error"})
 	}
 
 	user, err := h.repo.GetUserByID(int(id))
@@ -171,16 +171,24 @@ func (h *Handler) GetProfile(c echo.Context) error {
 }
 
 func (h *Handler) UpdateProfile(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid id format"})
+	authHeader := c.Request().Header.Get("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer token_") {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
 	}
+
+	idStr := strings.TrimPrefix(authHeader, "Bearer token_")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
+	}
+
 	var req UpdateProfileRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
 	}
 
 	if err := h.repo.UpdateUserProfile(id, req); err != nil {
+		fmt.Printf("Error update: %s\n", err) //debug
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update profile"})
 	}
 

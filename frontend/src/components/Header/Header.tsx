@@ -21,7 +21,7 @@ export default function Header({
      <header className={styles.header}>
         <div className="container">
           <div className={styles.headerTop}>
-            <h1 className={styles.logo}> 💀 TransMarket</h1>
+            <h1 className={styles.logo}> 🏸 RacquetDiction 💉</h1>
             <SearchBar value={searchValue} onChange={onSearchChange} onSubmit={onSearchSubmit} />
             <div className={styles.headerActions}>
               {user ? (

@@ -21,10 +21,11 @@ func (r *Repository) CreateUser(req RegisterRequest) (int64, error) {
 	avatar := "https://ui-avatars.com/api/?name=" + req.FirstName + "+" + req.LastName
 	var id int64
 	err := r.db.QueryRow(
-		"INSERT INTO users (username, email, password_hash, first_name, last_name, avatar_url, is_verified, requires_2fa) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
-		req.Username, req.Email, req.Password, req.FirstName, req.LastName, avatar, true, true,
+		"INSERT INTO users (username, email, password_hash, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, is_verified, requires_2fa) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
+		req.Username, req.Email, req.Password, req.FirstName, req.LastName, req.PhoneNo, req.DateOfBirth, req.Gender, avatar, true, true,
 	).Scan(&id)
 	if err != nil {
+		fmt.Printf("\nCreate user error\n")
 		return 0, err
 	}
 	return id, nil
@@ -32,9 +33,8 @@ func (r *Repository) CreateUser(req RegisterRequest) (int64, error) {
 
 func (r *Repository) GetUserByEmailAndPassword(email, password string) (*User, error) {
 	var user User
-	var bio sql.NullString
-	var avatarURL sql.NullString
-	var avatarMime sql.NullString
+	var bio, avatarURL, avatarMime sql.NullString /*phone_no, gender*/
+	// var dob sql.NullTime
 	var avatarData []byte
 	err := r.db.QueryRow(
 		"SELECT id, username, email, first_name, last_name, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1 AND password_hash = $2",
@@ -42,6 +42,7 @@ func (r *Repository) GetUserByEmailAndPassword(email, password string) (*User, e
 	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
 
 	if err != nil {
+		fmt.Printf("\nError Getusebyemailandpassword\n")
 		return nil, err
 	}
 	user.Bio = bio.String
@@ -125,8 +126,8 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 //in this case we ignore the sql result
 func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
 	_, err := r.db.Exec(
-		"UPDATE users SET first_name = $1, last_name = $2, bio = $3, avatar_url = $4 WHERE id = $5",
-		req.FirstName, req.LastName, req.Bio, req.AvatarURL, id,
+		"UPDATE users SET first_name = $1, last_name = $2, bio = $3, date_of_birth = $4, gender = $5, avatar_url = $6 WHERE id = $7",
+		req.FirstName, req.LastName, req.Bio, req.DateOfBirth, req.Gender, req.AvatarURL, id,
 	)
 	return err
 }

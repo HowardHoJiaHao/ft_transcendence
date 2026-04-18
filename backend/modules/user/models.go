@@ -12,6 +12,9 @@ type User struct {
 	Email        string    `json:"email"`
 	FirstName    string    `json:"firstName"`
 	LastName     string    `json:"lastName"`
+	PhoneNo      string    `json:"phoneNo"`
+	DateOfBirth  time.Time `json:"dateOfBirth"`
+	Gender       string    `json:"gender"`
 	AvatarURL    *string   `json:"avatar,omitempty"`
 	AvatarMime   *string   `json:"avatarMimeType,omitempty"`
 	Bio          string    `json:"bio"`
@@ -24,11 +27,14 @@ type User struct {
 }
 
 type RegisterRequest struct {
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
+	Username     string     `json:"username"`
+	Email        string     `json:"email"`
+	Password     string     `json:"password"`
+	FirstName    string     `json:"firstName"`
+	LastName     string     `json:"lastName"`
+	PhoneNo      *string    `json:"phoneNo"`
+	DateOfBirth  *time.Time `json:"dateOfBirth"`
+	Gender       *string    `json:"gender"`
 }
 
 type LoginRequest struct {
@@ -44,10 +50,12 @@ type LoginResponse struct {
 }
 
 type UpdateProfileRequest struct {
-	FirstName string  `json:"firstName"`
-	LastName  string  `json:"lastName"`
-	Bio       string  `json:"bio"`
-	AvatarURL *string `json:"avatar"`
+	FirstName    string     `json:"firstName"`
+	LastName     string     `json:"lastName"`
+	Bio          string     `json:"bio"`
+	DateOfBirth  *time.Time `json:"dateOfBirth"`
+	Gender       *string    `json:"gender"`
+	AvatarURL    *string    `json:"avatar"`
 }
 
 type Friend struct {

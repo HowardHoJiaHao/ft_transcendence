@@ -4,8 +4,11 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(255) UNIQUE NOT NULL, --not null means columns are mandatory
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    first_name VARCHAR(255),
-    last_name VARCHAR(255),
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
+	phone_no VARCHAR(30),
+	date_of_birth DATE,
+	gender VARCHAR(10) CHECK (gender IN ('Male', 'Female')),
     avatar_url VARCHAR(255), --link to the avatar
     avatar_data BYTEA,
     avatar_mime_type VARCHAR(50),
@@ -15,15 +18,15 @@ CREATE TABLE IF NOT EXISTS users (
     oauth_id VARCHAR(255),
     oauth_provider VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT users_avatar_source_check CHECK (
-        avatar_data IS NOT NULL
-        OR (avatar_url IS NOT NULL AND btrim(avatar_url) <> '')
-    ),
-    CONSTRAINT users_avatar_mime_check CHECK (
-        avatar_data IS NULL
-        OR (avatar_mime_type IS NOT NULL AND btrim(avatar_mime_type) <> '')
-    )
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP--,
+    -- CONSTRAINT users_avatar_source_check CHECK (
+    --     avatar_data IS NOT NULL
+    --     OR (avatar_url IS NOT NULL AND btrim(avatar_url) <> '')
+    -- ),
+    -- CONSTRAINT users_avatar_mime_check CHECK (
+    --     avatar_data IS NULL
+    --     OR (avatar_mime_type IS NOT NULL AND btrim(avatar_mime_type) <> '')
+    -- )
 ); 
 
 -- Create products/listings table

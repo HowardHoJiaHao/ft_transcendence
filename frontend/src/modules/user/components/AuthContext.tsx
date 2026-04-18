@@ -10,6 +10,11 @@ type User = {
   id: number;
   username: string;
   email: string;
+  firstName: string;
+  lastName: string;
+  phoneNo?: string;
+  gender?: string;
+  dateOfBirth?: string;
   avatar?: string; //? means it can be missing
   avatar_url?: string;
   status: string;	
