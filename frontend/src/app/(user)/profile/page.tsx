@@ -15,6 +15,7 @@ interface UserProfile {
 	phoneNo?: string;
 	gender?: string;
 	dateOfBirth?: string;
+	avatarUrl?: string;
 }
 
 export default function ProfilePage()
@@ -290,16 +291,21 @@ export default function ProfilePage()
 	}
 	return (
 		<main style={mainStyle}>
-	  	<Header
-			searchValue={searchQuery}
-			onSearchChange={setSearchQuery}
-			onSearchSubmit={handleSearch}
-	 	 />
+			<Header
+				searchValue={searchQuery}
+				onSearchChange={setSearchQuery}
+				onSearchSubmit={handleSearch}
+			/>
 
 			<div className="container" style={{ flex: 1 }}>
 				<div style={cardStyle}>
 					<h1>My profile</h1>
 					<p>Manage and protect your account</p>
+
+					<div className={styles.avatarContainer}>
+						<img src={user.avatarUrl || '/default-avatar.png'} alt="Profile Avatar" className={styles.avatarImg} />
+						<div> <button type="button" className="btn btn-secondary btn-sm" onClick={() => {}}>Change Avatar</button> </div>
+					</div>
 
 					<div style={rowStyle}><div style={labelStyle}>Username</div><div style={staticStyle}>{user.username}</div></div>
 
