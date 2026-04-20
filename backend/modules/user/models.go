@@ -56,6 +56,8 @@ type UpdateProfileRequest struct {
 	DateOfBirth  *time.Time `json:"dateOfBirth"`
 	Gender       *string    `json:"gender"`
 	AvatarURL    *string    `json:"avatar"`
+	Email        *string    `json:"email"`
+	PhoneNo      *string    `json:"phoneNo"`
 }
 
 type Friend struct {

@@ -1,12 +1,13 @@
-/* .container {
+.otpContainer {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: calc(100vh - 80px); /* Subtract navbar height */
-  /*background-color: #fafafa;
-} */
+  min-height: calc(100vh - 80px);
+  padding: 24px 16px;
+  background-color: #fafafa;
+}
 
-/* .form {
+.otpForm {
   background: white;
   padding: 2.5rem;
   border-radius: 8px;
@@ -18,11 +19,22 @@
   gap: 1rem;
 }
 
-.form h2 {
+.otpForm h2 {
   text-align: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   color: #333;
-} */
+}
+
+.otpPurpose {
+  text-align: center;
+  margin: 0;
+  color: #666;
+}
+
+.otpActions {
+  display: flex;
+  gap: 8px;
+}
 
 .input {
   padding: 0.75rem;
@@ -42,20 +54,17 @@
   cursor: pointer;
   margin-top: 1rem;
 }
-/* 
+
 .button:hover {
   background-color: #d32f2f;
 }
 
-.toggle {
-  text-align: center;
-  color: #666;
-  font-size: 0.9rem;
-  cursor: pointer;
-  margin-top: 1rem;
+.button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
-.toggle:hover {
-  text-decoration: underline;
-  color: #333;
-} */
+.otpActions .button {
+  flex: 1;
+  margin-top: 0;
+}

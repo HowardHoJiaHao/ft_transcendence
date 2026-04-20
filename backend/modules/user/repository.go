@@ -37,9 +37,9 @@ func (r *Repository) GetUserByEmailAndPassword(email, password string) (*User, e
 	// var dob sql.NullTime
 	var avatarData []byte
 	err := r.db.QueryRow(
-		"SELECT id, username, email, first_name, last_name, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1 AND password_hash = $2",
+		"SELECT id, username, email, first_name, last_name, avatar_url, phone_no, date_of_birth, gender, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1 AND password_hash = $2",
 		email, password,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
 
 	if err != nil {
 		fmt.Printf("\nError Getusebyemailandpassword\n")
@@ -68,9 +68,9 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.db.QueryRow(
-		"SELECT id, username, email, first_name, last_name, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE id = $1",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
 
 	if err != nil {
 		return nil, err
@@ -98,9 +98,9 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.db.QueryRow(
-		"SELECT id, username, email, first_name, last_name, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1",
+		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1",
 		email,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
 
 	if err != nil {
 		return nil, err
@@ -125,11 +125,16 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 //use r.db.exec when you dont care the information once you execute.use queryrow if you want to know some variables after you exec
 //in this case we ignore the sql result
 func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
-	_, err := r.db.Exec(
-		"UPDATE users SET first_name = $1, last_name = $2, bio = $3, date_of_birth = $4, gender = $5, avatar_url = $6 WHERE id = $7",
-		req.FirstName, req.LastName, req.Bio, req.DateOfBirth, req.Gender, req.AvatarURL, id,
-	)
-	return err
+	// _, err := r.db.Exec(
+	// 	"UPDATE users SET first_name = $1, last_name = $2, bio = $3, date_of_birth = $4, gender = $5, avatar_url = $6 WHERE id = $7",
+	// 	req.FirstName, req.LastName, req.Bio, req.DateOfBirth, req.Gender, req.AvatarURL, id,
+	// )
+	// err := r.db.Model(user).Updates(req).Error
+	user, err := r.GetUserByID(id)
+	if (err != nil) {
+		return fmt.Errorf("Failed to fetch id in UpdateUserProfile")
+	}
+	return r.gormDB.Model(user).Updates(req).Error
 }
 
 func (r *Repository) UpdateUserAvatarBinary(userID int, data []byte, mime string) error {
