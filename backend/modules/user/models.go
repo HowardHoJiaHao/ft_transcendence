@@ -12,9 +12,9 @@ type User struct {
 	Email        string    `json:"email"`
 	FirstName    string    `json:"firstName"`
 	LastName     string    `json:"lastName"`
-	PhoneNo      string    `json:"phoneNo"`
-	DateOfBirth  time.Time `json:"dateOfBirth"`
-	Gender       string    `json:"gender"`
+	PhoneNo      *string    `json:"phoneNo"`
+	DateOfBirth  *time.Time `json:"dateOfBirth"`
+	Gender       *string    `json:"gender"`
 	AvatarURL    *string   `json:"avatar,omitempty"`
 	AvatarMime   *string   `json:"avatarMimeType,omitempty"`
 	Bio          string    `json:"bio"`

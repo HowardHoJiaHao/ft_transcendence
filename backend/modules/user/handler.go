@@ -188,7 +188,6 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 	}
 
 	if err := h.repo.UpdateUserProfile(id, req); err != nil {
-		fmt.Printf("Error update: %s\n", err) //debug
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update profile"})
 	}
 

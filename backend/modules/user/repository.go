@@ -73,6 +73,7 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
 
 	if err != nil {
+		fmt.Printf("Scan error\n")
 		return nil, err
 	}
 	user.Bio = bio.String
