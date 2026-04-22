@@ -54,6 +54,9 @@ func main() {
 	}
 	userHandler.RegisterRoutes(v1)
 
+	// serve static files (avatars) from ./static mapped to /static URL
+	e.Static("/static", "static")
+
 	//start server
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
