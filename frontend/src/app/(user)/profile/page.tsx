@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/modules/user/components/AuthContext';
+import { useToast } from '@/components/Toast/ToastContext';
 import Header from '@/components/Header/Header';
 import styles from './profile.module.css'
 
@@ -22,6 +23,7 @@ export default function ProfilePage()
 {
 	const router = useRouter();
 	const { user:ctxUser, logout, updateUser } = useAuth();
+	const { showToast } = useToast();
 	const [user, setUser] = useState<UserProfile | null>(ctxUser ?? null);
 	const [loading, setLoading] = useState(!ctxUser);
 	const [error, setError] = useState<string | null>(null);
@@ -32,7 +34,6 @@ export default function ProfilePage()
 		gender: ctxUser?.gender ?? '',
 		dateOfBirth: ctxUser?.dateOfBirth ?? '',
 	});
-	const [msg, setMsg] = useState({ text: '', type: ''});
 
 	//OTP Handling
 	const [showOtp, setShowOtp] = useState(false);
@@ -40,12 +41,6 @@ export default function ProfilePage()
 	const [tempToken, setTempToken] = useState('');
 	const [resendCd, setResendCd] = useState(0);
 	const [changeTarget, setChangeTarget] = useState<'email' | 'phoneNo' | null>(null);
-
-	const showNotification = (text: string, type: 'success' | 'error') =>
-	{
-		setMsg({ text, type });
-		setTimeout(() => setMsg({ text: '', type: '' }), 2000);
-	};
 
 	useEffect(() => 
 	{
@@ -63,7 +58,7 @@ export default function ProfilePage()
 
 		if (!ctxUser?.email.trim())
 		{
-			showNotification('Email is required to resend OTP', 'error');
+			showToast('Email is required to resend OTP', 'error');
 			return false;
 		}
 
@@ -80,21 +75,21 @@ export default function ProfilePage()
 			if (res.ok)
 			{
 				if (!data.tempToken) {
-					showNotification('Resend succeeded but no tempToken returned. Please try login again.', 'error');
+					showToast('Resend succeeded but no tempToken returned. Please try login again.', 'error');
 					return false;
 				}
 				setTempToken(data.tempToken);
 				setResendCd(60);
-				showNotification(data.message ?? 'OTP resent', 'success');
+				showToast(data.message ?? 'OTP resent', 'success');
 				return true;
 			}
-			showNotification(data.error ?? 'Failed to resend OTP', 'error');
+			showToast(data.error ?? 'Failed to resend OTP', 'error');
 			return false;
 		}
 		catch(err)
 		{
 			console.error(err)
-			showNotification('Network error', 'error');
+			showToast('Network error', 'error');
 			return false;
 		}
 	};
@@ -114,7 +109,7 @@ export default function ProfilePage()
 		try
 		{
 			if (!tempToken.trim() || !otpCode.trim()) {
-				showNotification('tempToken and otpCode are required. Please request a new OTP and enter the code.', 'error');
+				showToast('tempToken and otpCode are required. Please request a new OTP and enter the code.', 'error');
 				return;
 			}
 			const res = await fetch('http://localhost:8080/api/v1/auth/verify-otp', 
@@ -135,20 +130,20 @@ export default function ProfilePage()
 				{
 					setShowOtp(false);
 					setOtpCode('');
-					showNotification('OTP verified', 'success');
+					showToast('OTP verified', 'success');
 					router.push(changeTarget === 'email' ? '/profile/change-email' : '/profile/change-phoneNo')
 				}
 			}
 			else
 			{
 				setOtpCode('');
-				showNotification(data.error, 'error');
+				showToast(data.error, 'error');
 			}
 		}
 		catch (err)
 		{
 			console.error(err); //prints error in browser dev console
-			showNotification('Network error', 'error');
+			showToast('Network error', 'error');
 		}
 	};
 
@@ -228,7 +223,7 @@ export default function ProfilePage()
 	const handleChangeAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		if (!user)
 		{
-			showNotification('User not loaded','error'); 
+			showToast('User not loaded','error'); 
 			return;
 		}
 		const file = e.target.files?.[0];
@@ -236,7 +231,7 @@ export default function ProfilePage()
 			return ;
 		if (file.size > 2 * 1024 * 1024)
 		{
-			showNotification('File is too large (max 2MB)', 'error');
+			showToast('File is too large (max 2MB)', 'error');
 			return ;
 		}
 
@@ -260,17 +255,17 @@ export default function ProfilePage()
 				setUser(prev => prev ? {...prev, avatarUrl: newAvatarUrl } : null);
 				// Update auth context so avatar reflects everywhere in the app
 				updateUser({ avatarUrl: newAvatarUrl });
-				setMsg({ text: 'Avatar updated succesfully', type: 'success' }); //success printing
+				showToast('Avatar updated succesfully', 'success');
 			}
 			else
 			{
-				setMsg({ text: 'Failed to upload avatar', type: 'error'});
+				showToast('Failed to upload avatar', 'error');
 			}
 		}
 		catch (err)
 		{
 			console.error(err);
-			setMsg({ text: 'Error uploading file', type: 'error' })
+			showToast('Error uploading file', 'error');
 		}
 	};
 
@@ -292,18 +287,18 @@ export default function ProfilePage()
 			});
 			if (res.ok)
 			{
-				showNotification('Profile successfully updated', 'success');
+				showToast('Profile successfully updated', 'success');
 				const updated = await res.json();
 				setUser(updated);
 			}
 			else
 			{
-				showNotification('Failed to update profile', 'error');
+				showToast('Failed to update profile', 'error');
 			}
 		}
 		catch (err)
 		{
-			showNotification('Connection error. is the server running?', 'error');
+			showToast('Connection error. is the server running?', 'error');
 		}
 	}
 	if (loading) return <div style={{ padding: 24 }}>Loading profile...</div>;
@@ -359,8 +354,6 @@ export default function ProfilePage()
 				<div className={styles.card}>
 					<h1>My profile</h1>
 					<p>Manage and protect your account</p>
-
-					{msg.text && (<div className={msg.type === 'success' ? styles.successMsg : styles.errorMsg}>{msg.text}</div>)}
 					<div className={styles.avatarContainer}>
 						<img src={user.avatarUrl ? `${API_BASE}${user.avatarUrl}` : '/default-avatar.png'} alt="Profile Avatar" className={styles.avatarImg} />
 						<div>
@@ -385,7 +378,7 @@ export default function ProfilePage()
 						<div className={styles.static}>{user.gender}</div>
 						<label className={styles.radioLabel}><input type="radio" name="gender" value="Male" checked={inputData.gender === 'Male'} onChange={handleChange}/>Male</label>
 						<label className={styles.radioLabel}><input type="radio" name="gender" value="Female" checked={inputData.gender === 'Female'} onChange={handleChange}/>Female</label>
-						<label className={styles.radioLabel}><input type="radio" name="gender" value="PreferNotToTell" checked={false} onChange={() => { showNotification('🏳️‍🌈🏳️‍🌈🏳️‍🌈 ARE YOU GAY?', 'success'); }}/>Prefer not to tell</label>
+						<label className={styles.radioLabel}><input type="radio" name="gender" value="PreferNotToTell" checked={false} onChange={() => { showToast('🏳️‍🌈🏳️‍🌈🏳️‍🌈 ARE YOU GAY?', 'success'); }}/>Prefer not to tell</label>
 						<button type="button" className="btn btn-secondary btn-sm" onClick={() => setInputData((prev) => ({ ...prev, gender: ''}))}>Clear</button>
 					</div></div>
 
