@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/modules/user/components/AuthContext';
+import { useToast } from '@/components/Toast/ToastContext';
 import { useRouter } from 'next/navigation';
 import styles from './login.module.css';
 
@@ -15,6 +16,7 @@ export default function LoginPage ()
 	const [tempToken, setTempToken] = useState('');
 	const [resendCd, setResendCd] = useState(0)
 	const { login } = useAuth(); //only take login from useauth()
+	const { showToast } = useToast();
 	const router = useRouter(); //so when instead of calling userRouter() call router only
 
 	//useEffect accepts 2 parameter. 1. anonymous fx 2. dependency array - makes useEffect keeps watching it, everytime it changes it redo 
@@ -34,7 +36,7 @@ export default function LoginPage ()
 
 		if (!email.trim())
 		{
-			alert('Email is required to resend OTP');
+			showToast('Email is required to resend OTP', 'error');
 			return ;
 		}
 
@@ -51,20 +53,20 @@ export default function LoginPage ()
 			if (res.ok)
 			{
 				if (!data.tempToken) {
-					alert('Resend succeeded but no tempToken returned. Please try login again.');
+					showToast('Resend succeeded but no tempToken returned. Please try login again.', 'error');
 					return;
 				}
 				setTempToken(data.tempToken);
 				setResendCd(60);
-				alert(data.message ?? 'OTP resent');
+				showToast(data.message ?? 'OTP resent', 'success');
 				return ;
 			}
-			alert(data.error ?? 'Failed to resend OTP');
+			showToast(data.error ?? 'Failed to resend OTP', 'error');
 		}
 		catch(err)
 		{
 			console.error(err)
-			alert('Network error')
+			showToast('Network error', 'error');
 		}
 	};
 
@@ -79,7 +81,7 @@ export default function LoginPage ()
 			if (showOtp)
 			{
 				if (!tempToken.trim() || !otpCode.trim()) {
-					alert('tempToken and otpCode are required. Please request a new OTP and enter the code.');
+					showToast('tempToken and otpCode are required. Please request a new OTP and enter the code.', 'error');
 					return;
 				}
 				res = await fetch('http://localhost:8080/api/v1/auth/verify-otp', 
@@ -113,7 +115,7 @@ export default function LoginPage ()
 				else if (isRegister && !showOtp)
 				{
 					setIsRegister(false); setShowOtp(false); setTempToken(''); setOtpCode(''); setPassword('');
-					alert(data?.message ?? 'Registration successful. Please login.');
+					showToast(data?.message ?? 'Registration successful. Please login.', 'success');
 				}
 				else
 				{
@@ -125,7 +127,7 @@ export default function LoginPage ()
 			}
 			else
 			{
-				alert(data.error); //shows a popup error returned by backend
+				showToast(data.error, 'error'); //shows a popup error returned by backend
 				if (showOtp)
 					setOtpCode('');
 			}
@@ -133,7 +135,7 @@ export default function LoginPage ()
 		catch (err)
 		{
 			console.error(err); //prints error in browser dev console
-			alert('Network error'); //shows alert for user
+			showToast('Network error', 'error'); //shows alert for user
 		}
 	};
 
