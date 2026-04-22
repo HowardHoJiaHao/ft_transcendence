@@ -15,8 +15,7 @@ type User = {
   phoneNo?: string;
   gender?: string;
   dateOfBirth?: string;
-  avatar?: string; //? means it can be missing
-  avatar_url?: string;
+  avatarUrl?: string;
   status: string;	
 };
 
@@ -24,6 +23,7 @@ interface AuthContextType {
 	user: User | null;
 	login: (userData: User) => void;
 	logout: () => void;
+	updateUser: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined); //<> what can live inside context. the initialization of values
@@ -53,8 +53,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) //by p
 		localStorage.removeItem('user'); //removes saved user from website storage
 	};
 
+	const updateUser = (updates: Partial<User>) => {
+		setUser(prev => {
+			if (!prev) return prev;
+			const updated = { ...prev, ...updates };
+			localStorage.setItem('user', JSON.stringify(updated));
+			return updated;
+		});
+	};
+
 	return (
-		<AuthContext.Provider value={{ user, login, logout}}>
+		<AuthContext.Provider value={{ user, login, logout, updateUser}}>
 			{children}
 		</AuthContext.Provider>
 	) //renders context and passes user, login, logout to descendants
