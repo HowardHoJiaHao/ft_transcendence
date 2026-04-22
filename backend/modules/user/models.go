@@ -15,7 +15,7 @@ type User struct {
 	PhoneNo      *string    `json:"phoneNo"`
 	DateOfBirth  *time.Time `json:"dateOfBirth"`
 	Gender       *string    `json:"gender"`
-	AvatarURL    *string   `json:"avatar,omitempty"`
+	AvatarURL    *string   `json:"avatarUrl,omitempty"`
 	AvatarMime   *string   `json:"avatarMimeType,omitempty"`
 	Bio          string    `json:"bio"`
 	IsOnline     bool      `json:"onlineStatus"`

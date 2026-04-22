@@ -21,7 +21,7 @@ interface UserProfile {
 export default function ProfilePage()
 {
 	const router = useRouter();
-	const { user:ctxUser, logout } = useAuth();
+	const { user:ctxUser, logout, updateUser } = useAuth();
 	const [user, setUser] = useState<UserProfile | null>(ctxUser ?? null);
 	const [loading, setLoading] = useState(!ctxUser);
 	const [error, setError] = useState<string | null>(null);
@@ -254,7 +254,12 @@ export default function ProfilePage()
 			if (res.ok)
 			{
 				const data = await res.json();
-				setUser(prev => prev ? {...prev, avatarUrl: data.avatarUrl } : null);
+				// Add cache busting timestamp to force browser to reload the new image
+				const cacheBuster = `?t=${Date.now()}`;
+				const newAvatarUrl = data.avatarUrl + cacheBuster;
+				setUser(prev => prev ? {...prev, avatarUrl: newAvatarUrl } : null);
+				// Update auth context so avatar reflects everywhere in the app
+				updateUser({ avatarUrl: newAvatarUrl });
 				setMsg({ text: 'Avatar updated succesfully', type: 'success' }); //success printing
 			}
 			else

@@ -280,7 +280,7 @@ func (h *Handler) UploadAvatar(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "only jpeg/png/webp allowed"})
 	}
 
-	storageDir := "avatar"
+	storageDir := "static/avatars"
 	if err := os.MkdirAll(storageDir, 0755); err != nil { //return nothing if folder already created
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error":"failed to create storage dir"})
 	}

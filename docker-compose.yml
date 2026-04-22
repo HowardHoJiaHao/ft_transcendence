@@ -35,14 +35,13 @@ services:
       - "8080:8080"
     volumes:
       - ./uploads:/app/uploads
+      - ./avatar:/app/avatar
+      - ./static/avatars:/app/static/avatars
     depends_on:
       db:
         condition: service_healthy
     networks:
       - transcendence-network
-    volumes:
-      - ./avatar:/app/avatar
-      - ./static/avatars:/app/static/avatars
 
 # NextJS
   frontend:

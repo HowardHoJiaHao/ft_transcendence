@@ -51,11 +51,11 @@ func (r *Repository) GetUserByEmailAndPassword(email, password string) (*User, e
 	}
 	user.AvatarData = avatarData
 	user.HasAvatarBin = len(avatarData) > 0
-	if user.HasAvatarBin {
+	if avatarURL.Valid {
+		user.AvatarURL = &avatarURL.String
+	} else if user.HasAvatarBin {
 		avatarPath := fmt.Sprintf("/api/v1/users/%d/avatar", user.ID)
 		user.AvatarURL = &avatarPath
-	} else if avatarURL.Valid {
-		user.AvatarURL = &avatarURL.String
 	}
 	user.IsOnline = true // For demo
 	return &user, nil
@@ -82,11 +82,11 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 	}
 	user.AvatarData = avatarData
 	user.HasAvatarBin = len(avatarData) > 0
-	if user.HasAvatarBin {
+	if avatarURL.Valid {
+		user.AvatarURL = &avatarURL.String
+	} else if user.HasAvatarBin {
 		avatarPath := fmt.Sprintf("/api/v1/users/%d/avatar", user.ID)
 		user.AvatarURL = &avatarPath
-	} else if avatarURL.Valid {
-		user.AvatarURL = &avatarURL.String
 	}
 	user.IsOnline = true // For demo
 	return &user, nil
@@ -112,11 +112,11 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 	}
 	user.AvatarData = avatarData
 	user.HasAvatarBin = len(avatarData) > 0
-	if user.HasAvatarBin {
+	if avatarURL.Valid {
+		user.AvatarURL = &avatarURL.String
+	} else if user.HasAvatarBin {
 		avatarPath := fmt.Sprintf("/api/v1/users/%d/avatar", user.ID)
 		user.AvatarURL = &avatarPath
-	} else if avatarURL.Valid {
-		user.AvatarURL = &avatarURL.String
 	}
 	user.IsOnline = true // For demo
 	//user.Requires2FA = true // For demo

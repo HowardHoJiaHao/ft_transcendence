@@ -29,6 +29,9 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/main .
 
+# Create static/avatars directory so volume mount works properly
+RUN mkdir -p /app/static/avatars
+
 EXPOSE 8080
 
 CMD ["./main"]
