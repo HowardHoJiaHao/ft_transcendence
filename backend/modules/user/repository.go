@@ -138,10 +138,10 @@ func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
 	return r.gormDB.Model(user).Updates(req).Error
 }
 
-func (r *Repository) UpdateUserAvatarBinary(userID int, data []byte, mime string) error {
+func (r *Repository) UpdateUserAvatarUrl(userID int, publicUrl string, mime string) error {
 	_, err := r.db.Exec(
-		"UPDATE users SET avatar_data = $1, avatar_mime_type = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
-		data, mime, userID,
+		"UPDATE users SET avatar_url = $1, avatar_mime_type = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
+		publicUrl, mime, userID,
 	)
 	return err
 }

@@ -10,6 +10,8 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm" //orm
+    "os"       // Fixes: undefined os tmp
+    "path"     // Fixes: undefined path tmp
 )
 
 type Handler struct {
@@ -38,7 +40,7 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.GET("/users/:id", h.GetProfile)
 	e.PUT("/users/update", h.UpdateProfile)
 
-	e.POST("/users/:id/avatar", h.UploadAvatar)
+	e.POST("/users/:id/upload-avatar", h.UploadAvatar)
 	e.GET("/users/:id/avatar", h.GetAvatar)
 
 	e.GET("/users/:id/friends", h.GetFriends)
@@ -241,6 +243,7 @@ func (h *Handler) RemoveFriend(c echo.Context) error {
 }
 
 func (h *Handler) UploadAvatar(c echo.Context) error {
+	fmt.Printf("in upload avatar\n") //debug
 	userID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid user id"})
@@ -267,19 +270,37 @@ func (h *Handler) UploadAvatar(c echo.Context) error {
 	}
 
 	detected := http.DetectContentType(data) // a better way to check data type rather than the extension only. every file type (.img/.jpg/ .exe) has their own binary that unique for the first 50
-	allowed := map[string]bool{
-		"image/jpeg": true,
-		"image/png": true,
-		"image/webp": true,
+	mimeToExt := map[string]string{
+		"image/jpeg": "jpeg",
+		"image/png": "png",
+		"image/webp": "webp",
 	}
-	if !allowed[detected] {
+	ext, ok := mimeToExt[detected]
+	if !ok{
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "only jpeg/png/webp allowed"})
 	}
 
-	if err := h.repo.UpdateUserAvatarBinary(userID, data, detected); err != nil {
+	storageDir := "avatar"
+	if err := os.MkdirAll(storageDir, 0755); err != nil { //return nothing if folder already created
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error":"failed to create storage dir"})
+	}
+
+	filename := fmt.Sprintf("avatar=%d.%s", userID, ext)
+	fullpath := path.Join(storageDir, filename)
+	fmt.Printf("full path: %s\n", fullpath) //debug
+
+	if err := os.WriteFile(fullpath, data, 0644); err != nil {
+		fmt.Printf("write file error\n") //debug
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error":"failed to save avatar file"})
+	}
+
+	publicUrl := fmt.Sprintf("/static/avatars/%s", filename)
+
+	if err := h.repo.UpdateUserAvatarUrl(userID, publicUrl, detected); err != nil {
+		fmt.Printf("update avatar error\n") //debug
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to save avatar"})
 	}
-	return c.JSON(http.StatusOK, map[string]string{"message": "avatar uploaded"})
+	return c.JSON(http.StatusOK, map[string]string{"message": "avatar uploaded", "avatarUrl": publicUrl})
 }
 
 func (h *Handler) GetAvatar(c echo.Context) error {

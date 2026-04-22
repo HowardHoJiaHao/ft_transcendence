@@ -40,6 +40,9 @@ services:
         condition: service_healthy
     networks:
       - transcendence-network
+    volumes:
+      - ./avatar:/app/avatar
+      - ./static/avatars:/app/static/avatars
 
 # NextJS
   frontend:
