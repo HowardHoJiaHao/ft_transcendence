@@ -3,15 +3,12 @@ package user
 import (
 	"database/sql"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm" //orm
-    "os"       // Fixes: undefined os tmp
-    "path"     // Fixes: undefined path tmp
 )
 
 type Handler struct {
@@ -243,7 +240,6 @@ func (h *Handler) RemoveFriend(c echo.Context) error {
 }
 
 func (h *Handler) UploadAvatar(c echo.Context) error {
-	fmt.Printf("in upload avatar\n") //debug
 	userID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid user id"})
@@ -254,47 +250,10 @@ func (h *Handler) UploadAvatar(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "avatar file is required (multipart/form-data)"})
 	}
 
-	if fileHeader.Size <= 0 || fileHeader.Size > maxAvatarSize {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "avatar must be > 0 and <= 2MB"})
-	}
-
-	file, err := fileHeader.Open()
+	publicUrl, detected, err := SaveAvatar(userID, fileHeader, maxAvatarSize)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot open uploaded file"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	defer file.Close()
-
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot read uploaded file"})
-	}
-
-	detected := http.DetectContentType(data) // a better way to check data type rather than the extension only. every file type (.img/.jpg/ .exe) has their own binary that unique for the first 50
-	mimeToExt := map[string]string{
-		"image/jpeg": "jpeg",
-		"image/png": "png",
-		"image/webp": "webp",
-	}
-	ext, ok := mimeToExt[detected]
-	if !ok{
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "only jpeg/png/webp allowed"})
-	}
-
-	storageDir := "static/avatars"
-	if err := os.MkdirAll(storageDir, 0755); err != nil { //return nothing if folder already created
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error":"failed to create storage dir"})
-	}
-
-	filename := fmt.Sprintf("avatar=%d.%s", userID, ext)
-	fullpath := path.Join(storageDir, filename)
-	fmt.Printf("full path: %s\n", fullpath) //debug
-
-	if err := os.WriteFile(fullpath, data, 0644); err != nil {
-		fmt.Printf("write file error\n") //debug
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error":"failed to save avatar file"})
-	}
-
-	publicUrl := fmt.Sprintf("/static/avatars/%s", filename)
 
 	if err := h.repo.UpdateUserAvatarUrl(userID, publicUrl, detected); err != nil {
 		fmt.Printf("update avatar error\n") //debug
@@ -319,3 +278,47 @@ func (h *Handler) GetAvatar(c echo.Context) error {
 
 	return c.Blob(http.StatusOK, mimeType, data) //blob send data as rawslice of bytes directly to the user browser as a file/data stream. media unlike test cannot be send as JSON
 }
+
+	//uploadavatar snippet
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// if fileHeader.Size <= 0 || fileHeader.Size > maxAvatarSize {
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": "avatar must be > 0 and <= 2MB"})
+	// }
+
+	// file, err := fileHeader.Open()
+	// if err != nil {
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot open uploaded file"})
+	// }
+	// defer file.Close()
+
+	// data, err := io.ReadAll(file)
+	// if err != nil {
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot read uploaded file"})
+	// }
+
+	// detected := http.DetectContentType(data) // a better way to check data type rather than the extension only. every file type (.img/.jpg/ .exe) has their own binary that unique for the first 50
+	// mimeToExt := map[string]string{
+	// 	"image/jpeg": "jpeg",
+	// 	"image/png": "png",
+	// 	"image/webp": "webp",
+	// }
+	// ext, ok := mimeToExt[detected]
+	// if !ok{
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": "only jpeg/png/webp allowed"})
+	// }
+
+	// storageDir := "static/avatars"
+	// if err := os.MkdirAll(storageDir, 0755); err != nil { //return nothing if folder already created
+	// 	return c.JSON(http.StatusInternalServerError, map[string]string{"error":"failed to create storage dir"})
+	// }
+
+	// filename := fmt.Sprintf("avatar=%d.%s", userID, ext)
+	// fullpath := path.Join(storageDir, filename)
+
+	// if err := os.WriteFile(fullpath, data, 0644); err != nil {
+	// 	fmt.Printf("write file error\n") //debug
+	// 	return c.JSON(http.StatusInternalServerError, map[string]string{"error":"failed to save avatar file"})
+	// }
+
+	// publicUrl := fmt.Sprintf("/static/avatars/%s", filename)
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
