@@ -107,8 +107,10 @@
   border-radius: 8px;
   box-shadow: var(--shadow);
   height: fit-content;
-  position: sticky;
   top: 100px;
+  /* position: sticky; */
+  /*max-height: calc(100vh - 120px);
+  overflow-y: auto; */
 }
 
 .filterSection {
@@ -146,7 +148,14 @@
   gap: 8px;
 }
 
-.filterOptions label {
+.weightFilterOptions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.filterOptions label,
+.weightFilterOptions label {
   display: flex;
   align-items: center;
   cursor: pointer;
@@ -154,9 +163,38 @@
   gap: 8px;
 }
 
-.filterOptions input[type='checkbox'] {
+.filterOptions input[type='checkbox'],
+.weightFilterOptions input[type='checkbox'] {
   width: 16px;
   height: 16px;
+  cursor: pointer;
+}
+
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.range-inputs input {
+  width: 80px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  outline: none;
+}
+
+.range-inputs input:focus {
+  border-color: #ee4d2d; /* Shopee Orange */
+}
+
+#applyFilter {
+  margin-top: 10px;
+  width: 100%;
+  background-color: #ee4d2d;
+  color: white;
+  border: none;
+  padding: 10px;
   cursor: pointer;
 }
 

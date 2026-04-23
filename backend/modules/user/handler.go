@@ -134,7 +134,7 @@ func (h *Handler) ResendOtp(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "OTP failed to send"})
 	}
-	return c.JSON(http.StatusAccepted, map[string]string{"tempToken": tempToken, "message": "OTP resent"})
+	return c.JSON(http.StatusAccepted, map[string]string{"tempToken": tempToken, "message": "OTP sent"})
 }
 
 func (h *Handler) GetCurrentUser(c echo.Context) error {

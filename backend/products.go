@@ -36,9 +36,9 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
 
-	weightCategory := c.QueryParam("weightCategory")
-	flexibilityCategory := c.QueryParam("flexibilityCategory")
-	balanceCategory := c.QueryParam("balanceCategory")
+	weightCategory := c.QueryParams()["weightCategory"]
+	flexibilityCategory := c.QueryParams()["flexibilityCategory"]
+	balanceCategory := c.QueryParams()["balanceCategory"]
 	search := c.QueryParam("search")
 	sortBy := c.QueryParam("sort")
 	limit := c.QueryParam("limit")
@@ -59,17 +59,41 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	
 	//the concept of sql injection is it want the full line with 1=1 OR as command. but by doing our parameterized way it separate commands and data. firslt, when it separate it doesnt take the full sentence as command. secondly, we already specify that 1=1 OR is a data and dont take it as command which translate to always true
 	//so make query string(maybe) and args slice
-	if weightCategory != "" && weightCategory != "All" {
-		query += fmt.Sprintf(" AND weight_category = $%d", len(args)+1)
-		args = append(args, weightCategory)
+	if len(weightCategory) > 0 {
+		startPos := len(args) + 1
+		placeholders := ""
+		for i := range weightCategory {
+			if i > 0 {
+				placeholders += ", "
+			}
+			placeholders += fmt.Sprintf("$%d", startPos + i)
+			args = append(args, weightCategory[i])
+		}
+		query += " AND weight_category IN (" + placeholders + ")"
 	}
-	if flexibilityCategory != "" && flexibilityCategory != "All" {
-		query += fmt.Sprintf(" AND flexibility_category = $%d", len(args)+1)
-		args = append(args, flexibilityCategory)
+	if len(flexibilityCategory) > 0 {
+		startPos := len(args) + 1
+		placeholders := ""
+		for i := range flexibilityCategory {
+			if i > 0 {
+				placeholders += ", "
+			}
+			placeholders += fmt.Sprintf("$%d", startPos + i)
+			args = append(args, flexibilityCategory[i])
+		}
+		query += " AND flexibility_category IN (" + placeholders + ")"
 	}
-	if balanceCategory != "" && balanceCategory != "All" {
-		query += fmt.Sprintf(" AND balance_category = $%d", len(args)+1)
-		args = append(args, balanceCategory)
+	if len(balanceCategory) > 0 {
+		startPos := len(args) + 1
+		placeholders := ""
+		for i := range balanceCategory {
+			if i > 0 {
+				placeholders += ", "
+			}
+			placeholders += fmt.Sprintf("$%d", startPos + i)
+			args = append(args, balanceCategory[i])
+		}
+		query += " AND balance_category IN (" + placeholders + ")"
 	}
 	if search != "" {
 		query += fmt.Sprintf(" AND title ILIKE $%d", len(args)+1)
