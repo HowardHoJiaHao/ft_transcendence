@@ -95,10 +95,6 @@ export default function UserPage()
 			setLoading(true);
 			setError(null);
 
-			// DEBUG: Log what you actually received
-      		console.log('Seller data received:', seller) //debug
-      		console.log('Seller ID:', seller.id, 'Type:', typeof seller.id) //debug
-      		// Also show in toast temporarily for debugging
       		showToast(`Seller ID: ${seller.id} (type: ${typeof seller.id})`, 'info') //debug
 
 			const res = await fetch( `http://localhost:8080/api/v1/products?sellerId=${seller.id}`);
