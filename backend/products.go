@@ -21,7 +21,9 @@ type Product struct {
 	FlexibilityCategory string   `json:"flexibilityCategory"`
 	BalanceCategory     string   `json:"balanceCategory"`
 	Location            string   `json:"location"`
-	Seller              string   `json:"seller"`
+	SellerId            int      `json:"sellerId"`
+	SellerName          string   `json:"sellerName"`
+	SellerAvatar        string   `json:"sellerAvatar"`
 	Rating              float64  `json:"rating"`
 	Reviews             int      `json:"reviews"`
 	IsNew               bool     `json:"isNew"`
@@ -54,7 +56,7 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	limitInt, _ := strconv.Atoi(limit)
 	offsetInt, _ := strconv.Atoi(offset)
 
-	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE 1=1"
+	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_id, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE 1=1"
 	var args []interface{}
 	
 	//the concept of sql injection is it want the full line with 1=1 OR as command. but by doing our parameterized way it separate commands and data. firslt, when it separate it doesnt take the full sentence as command. secondly, we already specify that 1=1 OR is a data and dont take it as command which translate to always true
@@ -150,7 +152,8 @@ func scanProducts(rows *sql.Rows) ([]Product, error) {
 			&p.FlexibilityCategory,
 			&p.BalanceCategory,
 			&p.Location,
-			&p.Seller,
+			&p.SellerId,
+			&p.SellerName,
 			&p.Rating,
 			&p.Reviews,
 			&p.IsNew,
@@ -182,7 +185,7 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(400, map[string]string{"error": "invalid product id"})
 	}
 
-	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE id = $1"
+	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_id, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE id = $1"
 
 	var product Product
 	err = sqlDB.QueryRow(query, id).Scan(
@@ -195,7 +198,8 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 		&product.FlexibilityCategory,
 		&product.BalanceCategory,
 		&product.Location,
-		&product.Seller,
+		&product.SellerId,
+		&product.SellerName,
 		&product.Rating,
 		&product.Reviews,
 		&product.IsNew,

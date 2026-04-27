@@ -39,7 +39,7 @@ export default function Footer() {
             </div>
           </div>
           <div className={styles.footerBottom}>
-            <p>&copy; 2026 RacquetDiction. All rights reserved.</p>
+            <p>&copy; 2026 RacketDiction. All rights reserved.</p>
           </div>
         </div>
       </footer>

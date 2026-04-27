@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  padding: 0 20px;
 }
 
 .header {
@@ -99,6 +100,11 @@
   gap: 24px;
   margin: 24px 0;
   flex: 1;
+  max-width: 1200px;
+  width: 100%;
+  margin-left: auto;   /* center horizontally */
+  margin-right: auto;
+  padding: 0 20px;     /* same side spacing as .container */
 }
 
 .sidebar {
@@ -140,6 +146,11 @@
   font-size: 12px;
   margin-top: 8px;
   color: var(--secondary);
+  gap: 16px;
+}
+
+.priceInput::placeholder {
+  font-size: 11px;
 }
 
 .filterOptions {
@@ -170,32 +181,32 @@
   cursor: pointer;
 }
 
-.range-inputs {
+.rangeInputs {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.range-inputs input {
-  width: 80px;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  outline: none;
+.rangeInputs input {
+.inputs input {
+  width: 70px;
+  padding: 4px;
+}
 }
 
 .range-inputs input:focus {
   border-color: #ee4d2d; /* Shopee Orange */
 }
 
-#applyFilter {
-  margin-top: 10px;
-  width: 100%;
-  background-color: #ee4d2d;
-  color: white;
-  border: none;
-  padding: 10px;
-  cursor: pointer;
+.applyBtn {
+  padding: 4px 10px;
+}
+
+.separator {
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .productsSection {
@@ -223,7 +234,7 @@
 
 .productsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
 }
 
@@ -407,18 +418,6 @@
   font-size: 14px;
 }
 
-/* Responsive Design */
-@media (max-width: 1024px) {
-  .content {
-    grid-template-columns: 200px 1fr;
-    gap: 16px;
-  }
-
-  .productsGrid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  }
-}
-
 @media (max-width: 768px) {
   .content {
     grid-template-columns: 1fr;
@@ -430,7 +429,7 @@
   }
 
   .productsGrid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .headerTop {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'; //programmatic navigation
 import { useAuth } from '@/modules/user/components/AuthContext'; //import hook to access global authentication data
 import styles from './page.module.css'; //import CSS module for scope styling
 import Header from '@/components/Header/Header';
+import Link from 'next/link';
 
 interface Product
 {
@@ -17,7 +18,8 @@ interface Product
   flexibilityCategory: string;
   balanceCategory: string;
   location: string;
-  seller: string;
+  sellerId: string;
+  sellerName: string;
   rating: number;
   reviews: number;
   isNew: boolean;
@@ -125,7 +127,8 @@ export default function Home()
           flexibilityCategory: p.flexibilityCategory,
 		  balanceCategory: p.balanceCategory,
           location: p.location,
-          seller: p.seller,
+          sellerId: p.sellerId,
+		  sellerName: p.sellerName,
           rating: parseFloat(p.rating),
           reviews: p.reviews,
           isNew: p.isNew,
@@ -155,16 +158,19 @@ export default function Home()
       />
 
       {/* Main Content */}
-      <div className="container">
-        <div className={styles.content}>
+	  <div className={styles.content}>
           {/* Sidebar Filters */}
           <aside className={styles.sidebar}>
-            <div className="filter-container">
+            <div className={styles.filterSection}>
               <h3>Price Range</h3>
-                <input type="number" id="minPrice" placeholder="Min" min="0"/>
-			    <span className="separator">-</span>
-			    <input type="number" id="maxRpice" placeholder="Max" min="0"/>
-                <button id="applyFilter">Apply</button>
+			  	<div className={styles.priceRange}>
+				  <div className={styles.rangeInputs}>
+					<input className={styles.priceInput} type="number" id="minPrice" placeholder="Min" min="0"/>
+					<span className={styles.separator}>-</span>
+					<input className={styles.priceInput} type="number" id="maxPrice" placeholder="Max" min="0"/>
+				  </div>
+                  <button className={styles.applyBtn}>Apply</button>
+				</div>
           </div>
 
 			<div className={styles.filterSection}>
@@ -348,12 +354,13 @@ export default function Home()
                       </div>
 
                       <div className={styles.productSeller}>
-                        <span className={styles.sellerName}>{product.seller}</span>
+                        <span className={styles.sellerName}>{product.sellerName}</span>
                       </div>
-
-                      <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }}>
-                        View Details
-                      </button>
+					  <Link href={`/products/${product.id}`}>
+                        <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} >
+                          View Details
+                        </button>
+					  </Link>
                     </div>
                   </div>
                 ))}
@@ -376,7 +383,6 @@ export default function Home()
             )}
           </div>
         </div>
-      </div>
     </main>
   );
 }
