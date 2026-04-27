@@ -44,6 +44,7 @@ func main() {
 
 	// Product routes
 	e.GET("/api/v1/products", func(c echo.Context) error { return getProducts(c, gormDB) })
+	e.POST("/api/v1/products", func(c echo.Context) error { return createProduct(c, gormDB) })
 
 	e.GET("/api/v1/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
 

@@ -29,6 +29,22 @@ type Product struct {
 	Description         string   `json:"description"`
 }
 
+type CreateProductRequest struct {
+	SellerID            int      `json:"sellerId"`
+	SellerName          string   `json:"sellerName"`
+	Title               string   `json:"title"`
+	Description         string   `json:"description"`
+	WeightCategory      string   `json:"weightCategory"`
+	FlexibilityCategory string   `json:"flexibilityCategory"`
+	BalanceCategory     string   `json:"balanceCategory"`
+	Price               float64  `json:"price"`
+	OriginalPrice       *float64 `json:"originalPrice,omitempty"`
+	Location            string   `json:"location"`
+	Image               string   `json:"image"`
+	IsNew               bool     `json:"isNew"`
+	IsFeatured          bool     `json:"isFeatured"`
+}
+
 func getProducts(c echo.Context, gormDB *gorm.DB) error {
 
 	sqlDB, err := gormDB.DB()
@@ -158,10 +174,111 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(400, map[string]string{"error": "invalid product id"})
 	}
 
+	product, err := fetchProductByID(sqlDB, id)
+	if err == sql.ErrNoRows {
+		return c.JSON(404, map[string]string{"error": "Product not found"})
+	}
+	if err != nil {
+		log.Printf("Error querying product: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to fetch product"})
+	}
+	return c.JSON(200, product)
+}
+
+func createProduct(c echo.Context, gormDB *gorm.DB) error {
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Database connection error"})
+	}
+
+	var req CreateProductRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "Invalid request body"})
+	}
+
+	if req.SellerID <= 0 {
+		return c.JSON(400, map[string]string{"error": "sellerId is required"})
+	}
+	if req.Title == "" {
+		return c.JSON(400, map[string]string{"error": "title is required"})
+	}
+	if req.Price <= 0 {
+		return c.JSON(400, map[string]string{"error": "price must be greater than 0"})
+	}
+	if req.SellerName == "" {
+		req.SellerName = "Unknown Seller"
+	}
+	if req.Image == "" {
+		req.Image = "https://images.unsplash.com/photo-1542144612-1b3641ec3459?w=400&h=300&fit=crop"
+	}
+	if req.Location == "" {
+		req.Location = "Kuala Lumpur"
+	}
+	if req.WeightCategory == "" {
+		req.WeightCategory = "4U"
+	}
+	if req.FlexibilityCategory == "" {
+		req.FlexibilityCategory = "Medium Flex"
+	}
+	if req.BalanceCategory == "" {
+		req.BalanceCategory = "Even Balance"
+	}
+
+	insertQuery := `
+		INSERT INTO listings (
+			seller_id,
+			title,
+			description,
+			weight_category,
+			flexibility_category,
+			balance_category,
+			price,
+			original_price,
+			location,
+			image,
+			seller_name,
+			is_new,
+			is_featured,
+			status
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active')
+		RETURNING id`
+
+	var productID int
+	err = sqlDB.QueryRow(
+		insertQuery,
+		req.SellerID,
+		req.Title,
+		req.Description,
+		req.WeightCategory,
+		req.FlexibilityCategory,
+		req.BalanceCategory,
+		req.Price,
+		req.OriginalPrice,
+		req.Location,
+		req.Image,
+		req.SellerName,
+		req.IsNew,
+		req.IsFeatured,
+	).Scan(&productID)
+	if err != nil {
+		log.Printf("Error creating product: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to create product"})
+	}
+
+	product, err := fetchProductByID(sqlDB, productID)
+	if err != nil {
+		log.Printf("Error fetching created product: %v", err)
+		return c.JSON(500, map[string]string{"error": "Product created, but failed to fetch response"})
+	}
+
+	return c.JSON(201, product)
+}
+
+func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {
 	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE id = $1"
 
 	var product Product
-	err = sqlDB.QueryRow(query, id).Scan(
+	err := sqlDB.QueryRow(query, id).Scan(
 		&product.ID,
 		&product.Title,
 		&product.Price,
@@ -179,12 +296,5 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 		&product.Description,
 	)
 
-	if err == sql.ErrNoRows {
-		return c.JSON(404, map[string]string{"error": "Product not found"})
-	}
-	if err != nil {
-		log.Printf("Error querying product: %v", err)
-		return c.JSON(500, map[string]string{"error": "Failed to fetch product"})
-	}
-	return c.JSON(200, product)
+	return product, err
 }

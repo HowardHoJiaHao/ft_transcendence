@@ -33,7 +33,12 @@ export default function Header({
               ) : (
                 <button className="btn btn-secondary btn-sm" onClick={() => router.push('/login')}>Login</button>
               )}
-              <button className="btn btn-primary btn-sm">Sell Now</button>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => router.push(user ? '/sell' : '/login')}
+              >
+                Sell Now
+              </button>
             </div>
           </div>
         </div>
