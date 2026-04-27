@@ -109,14 +109,14 @@ export default function Home()
           query.append('search', currentSearch);
         query.append('sort', sortBy);
 
-        const response = await fetch(
+        const res = await fetch(
           `http://localhost:8080/api/v1/products?${query}`
         );
 
-        if (!response.ok)
+        if (!res.ok)
           throw new Error('Failed to fetch products');
 
-        const data = await response.json();
+        const data = await res.json();
         const mappedProducts = data.products.map((p: any) => ({ //for every single data call everything for a while then take the p and turn it into object below
           id: p.id,
           title: p.title,

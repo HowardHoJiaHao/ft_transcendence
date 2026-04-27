@@ -45,6 +45,7 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	sortBy := c.QueryParam("sort")
 	limit := c.QueryParam("limit")
 	offset := c.QueryParam("offset")
+	sellerId := c.QueryParam("sellerId")
 
 	if limit == "" {
 		limit = "20"
@@ -100,6 +101,14 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	if search != "" {
 		query += fmt.Sprintf(" AND title ILIKE $%d", len(args)+1)
 		args = append(args, "%"+search+"%")
+	}
+	if sellerId != "" {
+		sellerIdInt, err := strconv.Atoi(sellerId)
+		fmt.Printf("sellerId: %d", sellerIdInt)
+		if err == nil {
+			query += fmt.Sprintf(" AND seller_id = $%d", len(args)+1)
+			args = append(args, sellerIdInt)
+		}
 	}
 
 	//add sorting
