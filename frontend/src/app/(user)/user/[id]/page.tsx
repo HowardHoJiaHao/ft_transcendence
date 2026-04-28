@@ -95,8 +95,6 @@ export default function UserPage()
 			setLoading(true);
 			setError(null);
 
-      		showToast(`Seller ID: ${seller.id} (type: ${typeof seller.id})`, 'info') //debug
-
 			const res = await fetch( `http://localhost:8080/api/v1/products?sellerId=${seller.id}`);
 
 			if (!res.ok)
@@ -154,7 +152,6 @@ export default function UserPage()
 			<div className={styles.onlineStatus}>-Online Status-</div>
 			<div className={styles.shopButtonGroup}>
 			  <button className={styles.button}>Chat Seller</button>
-			  <button className={styles.button}>View Shop</button>
 			</div>
 		  </div>
 		</div>

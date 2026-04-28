@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 import styles from './product.module.css';
 import Header from '@/components/Header/Header'
@@ -109,7 +110,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 				<div className={styles.onlineStatus}>-Online Status-</div>
 				<div className={styles.shopButtonGroup}>
 				  <button className={styles.button}>Chat Seller</button>
-				  <button className={styles.button}>View Shop</button>
+				  	<Link href={`/user/${product.sellerId}`} className={styles.button}>View Shop</Link>
 				</div>
 			  </div>
 
