@@ -2,6 +2,7 @@ package user
 
 import (
 	"time"
+	"fmt"
 
 	"gorm.io/gorm"
 )
@@ -91,4 +92,8 @@ func (OTP) TableName() string {
 
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(&OTP{})
+}
+
+func (u *User) GenerateToken() string {
+    return fmt.Sprintf("token_%d", u.ID)
 }
