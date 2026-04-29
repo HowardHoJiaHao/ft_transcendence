@@ -1,82 +1,752 @@
 .main {
-  min-height: 100vh;
-  background: #f7f7f8;
+    min-height: 100vh;
+    background: #f0f0f0;
 }
 
-.container {
-  padding-top: 24px;
-  padding-bottom: 40px;
+.loadingWrap {
+    padding: 48px;
+    text-align: center;
+    color: #666;
+    font-size: 16px;
 }
 
-.title {
-  margin: 0;
-  font-size: 28px;
-  color: #1f2937;
+/* ── Page layout ── */
+.pageLayout {
+    display: flex;
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 24px 16px 56px;
+    gap: 24px;
+    align-items: flex-start;
 }
 
-.subtitle {
-  margin-top: 8px;
-  color: #6b7280;
+/* ── Sidebar ── */
+.sidebar {
+    width: 260px;
+    flex-shrink: 0;
 }
 
-.form {
-  margin-top: 20px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.sidebarInner {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    top: 24px;
 }
 
-.label {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-weight: 600;
-  color: #374151;
+.sidebarTitle {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+    color: #222;
 }
 
-.input,
+.sidebarSubtitle {
+    font-size: 12px;
+    color: #888;
+    margin: 4px 0 12px;
+}
+
+.progressBar {
+    height: 4px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    margin-bottom: 20px;
+}
+
+.progressFill {
+    height: 100%;
+    background: #22c55e;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+}
+
+.stepList {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.stepItem {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #aaa;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.stepActive {
+    color: #222 !important;
+    font-weight: 600 !important;
+}
+
+.stepDone {
+    color: #22c55e !important;
+    font-weight: 600 !important;
+}
+
+.stepNum {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+    color: #888;
+    transition:
+        background 0.3s,
+        color 0.3s;
+}
+
+.stepActive .stepNum {
+    background: #222;
+    color: white;
+}
+
+.stepDone .stepNum {
+    background: #22c55e;
+    color: white;
+}
+
+.subStepList {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0 0 0 38px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.subStepItem {
+    font-size: 13px;
+    color: #555;
+}
+
+/* ── Content area ── */
+.contentArea {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.topBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 24px;
+}
+
+.backBtn {
+    background: none;
+    border: none;
+    color: #22c55e;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+    letter-spacing: 0.3px;
+}
+
+.backBtn:hover {
+    text-decoration: underline;
+}
+
+.clearAllBtn {
+    background: none;
+    border: none;
+    color: #22c55e;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+    margin-left: auto;
+    letter-spacing: 0.3px;
+}
+
+.clearAllBtn:hover {
+    text-decoration: underline;
+}
+
+/* ── Card ── */
+.card {
+    background: white;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.cardTitle {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: #222;
+}
+
+.cardSubtitle {
+    font-size: 14px;
+    color: #22c55e;
+    margin: 0 0 4px;
+}
+
+.cardNote {
+    font-size: 13px;
+    color: #f59e0b;
+    margin: 0 0 20px;
+}
+
+/* ── Category list ── */
+.categoryList {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 16px 0;
+}
+
+.categoryItem {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    background: white;
+    border: none;
+    border-bottom: 1px solid #e0e0e0;
+    cursor: pointer;
+    font-size: 15px;
+    color: #333;
+    width: 100%;
+    text-align: left;
+    transition: background 0.15s;
+}
+
+.categoryItem:last-child {
+    border-bottom: none;
+}
+.categoryItem:hover {
+    background: #f9f9f9;
+}
+
+.categorySelected {
+    background: #f0fdf4 !important;
+    color: #16a34a;
+    font-weight: 600;
+}
+
+.categoryArrow {
+    color: #bbb;
+    font-size: 18px;
+}
+
+/* ── Step footer ── */
+.stepFooter {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+
+.continueBtn {
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 32px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: background 0.15s;
+}
+
+.continueBtn:hover {
+    background: #1d4ed8;
+}
+.continueBtn:disabled {
+    background: #93c5fd;
+    cursor: not-allowed;
+}
+
+/* ── Drop zone ── */
+.dropZone {
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 18px;
+    text-align: center;
+    cursor: pointer;
+    color: #888;
+    font-size: 14px;
+    margin-bottom: 16px;
+    transition:
+        border-color 0.2s,
+        background 0.2s;
+    user-select: none;
+}
+
+.dropZone:hover {
+    border-color: #2563eb;
+    background: #f0f7ff;
+}
+.dropZoneDragging {
+    border-color: #2563eb;
+    background: #dbeafe;
+}
+
+/* ── Photo grid ── */
+.photoGrid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.photoSlot {
+    aspect-ratio: 1;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    background: #f9f9f9;
+    position: relative;
+    transition: border-color 0.15s;
+}
+
+.photoSlot:hover {
+    border-color: #aaa;
+}
+
+.photoPlaceholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.cameraIcon {
+    font-size: 22px;
+    opacity: 0.5;
+}
+.coverLabel {
+    font-size: 10px;
+    color: #aaa;
+    text-align: center;
+    padding: 0 4px;
+}
+
+.photoThumb {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.photoThumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.removePhotoBtn {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    padding: 0;
+}
+
+.photoCount {
+    text-align: right;
+    font-size: 12px;
+    color: #888;
+    margin: 0;
+}
+
+/* ── Form fields ── */
+.fieldGroup {
+    margin-bottom: 20px;
+}
+
+.fieldLabel {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 10px;
+    color: #222;
+}
+
+.input {
+    width: 100%;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 15px;
+    color: #333;
+    background: white;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.input:focus {
+    border-color: #2563eb;
+}
+
 .textarea {
-  width: 100%;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 14px;
-  font-weight: 400;
-  color: #111827;
-  background: #fff;
+    width: 100%;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 15px;
+    color: #333;
+    background: white;
+    resize: vertical;
+    min-height: 140px;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.15s;
+    font-family: inherit;
 }
 
-.textarea {
-  resize: vertical;
-  min-height: 100px;
+.textarea:focus {
+    border-color: #2563eb;
 }
 
-.grid2 {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+.charCount {
+    text-align: right;
+    font-size: 12px;
+    color: #888;
+    margin: 4px 0 0;
+}
+.charCountSmall {
+    font-size: 11px;
+    color: #aaa;
+    margin: 4px 0 0;
+    line-height: 1.5;
 }
 
-.grid3 {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+/* ── Price input ── */
+.priceInput {
+    display: flex;
+    align-items: center;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    overflow: hidden;
+    transition: border-color 0.15s;
 }
 
-.checkboxRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  color: #374151;
+.priceInput:focus-within {
+    border-color: #2563eb;
 }
 
-@media (max-width: 900px) {
-  .grid2,
-  .grid3 {
-    grid-template-columns: 1fr;
-  }
+.priceCurrency {
+    padding: 12px 14px;
+    background: #f5f5f5;
+    border-right: 1px solid #ccc;
+    font-weight: 600;
+    color: #555;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.priceInput .input {
+    border: none;
+    border-radius: 0;
+    flex: 1;
+}
+.priceInput .input:focus {
+    border: none;
+    outline: none;
+    box-shadow: none;
+}
+
+/* ── Location input ── */
+.locationInput {
+    display: flex;
+    align-items: center;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+}
+
+.locationInput:focus-within {
+    border-color: #2563eb;
+}
+.locationInput .input {
+    border: none;
+    border-radius: 0;
+    flex: 1;
+}
+.locationInput .input:focus {
+    border: none;
+    outline: none;
+    box-shadow: none;
+}
+.searchIcon {
+    padding: 12px 14px;
+    color: #888;
+}
+
+/* ── Condition buttons ── */
+.conditionRow {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.conditionBtn {
+    padding: 8px 20px;
+    border: 1px solid #ccc;
+    border-radius: 20px;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+    transition: all 0.15s;
+}
+
+.conditionBtn:hover {
+    border-color: #555;
+}
+
+.conditionSelected {
+    border-color: #2563eb !important;
+    background: #eff6ff;
+    color: #2563eb;
+    font-weight: 600;
+}
+
+/* ── Spec grid (rackets) ── */
+.specGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.specLabel {
+    display: block;
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.select {
+    width: 100%;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #333;
+    background: white;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.select:focus {
+    border-color: #2563eb;
+}
+
+/* ── Dealing method ── */
+.dealingHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.selectAllBtn {
+    background: none;
+    border: none;
+    color: #22c55e;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+}
+
+.dealingRow {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.dealingBtn {
+    padding: 8px 20px;
+    border: 1px solid #ccc;
+    border-radius: 20px;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+    transition: all 0.15s;
+}
+
+.dealingBtn:hover {
+    border-color: #555;
+}
+
+.dealingSelected {
+    border-color: #f59e0b !important;
+    background: #fffbeb;
+    color: #d97706;
+    font-weight: 600;
+}
+
+/* ── Acknowledgement ── */
+.ackText {
+    font-size: 14px;
+    color: #555;
+    margin: 0 0 16px;
+}
+
+.ackRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    cursor: pointer;
+    padding: 12px 0;
+    border-top: 1px solid #eee;
+}
+
+.ackLabel {
+    font-size: 15px;
+    color: #22c55e;
+    font-style: italic;
+    flex: 1;
+}
+.ackCheckbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* ── Submit ── */
+.submitArea {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.previewBtn {
+    padding: 12px 28px;
+    border: 1px solid #555;
+    background: white;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    color: #333;
+    letter-spacing: 0.5px;
+    transition: background 0.15s;
+}
+
+.previewBtn:hover:not(:disabled) {
+    background: #f5f5f5;
+}
+.previewBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.submitBtn {
+    padding: 12px 28px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: background 0.15s;
+}
+
+.submitBtn:hover:not(:disabled) {
+    background: #1d4ed8;
+}
+.submitBtn:disabled {
+    background: #93c5fd;
+    cursor: not-allowed;
+}
+
+.disclaimer {
+    font-size: 12px;
+    color: #888;
+    text-align: center;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* ── Success screen ── */
+.successContent {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 20px;
+    text-align: center;
+}
+
+.successIcon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+.successTitle {
+    font-size: 28px;
+    font-weight: 700;
+    color: #222;
+    margin: 0 0 8px;
+}
+.successSubtitle {
+    font-size: 16px;
+    color: #666;
+    margin: 0 0 32px;
+}
+
+.successActions {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* ── Responsive ── */
+@media (max-width: 860px) {
+    .pageLayout {
+        flex-direction: column;
+    }
+    .sidebar {
+        width: 100%;
+    }
+    .sidebarInner {
+        position: static;
+    }
+    .photoGrid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .specGrid {
+        grid-template-columns: 1fr;
+    }
 }

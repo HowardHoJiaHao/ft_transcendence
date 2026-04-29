@@ -23,6 +23,10 @@ func initDB() (*gorm.DB, func(), error) {
 		return nil, nil, fmt.Errorf("gorm setup failed: %w", err)
 	}
 
+	if err := runListingsMigration(rawDB); err != nil {
+		return nil, nil, fmt.Errorf("listings migration failed: %w", err)
+	}
+
 	log.Println("Database connected successfully")
 
 	//			CLEANUP FX
@@ -33,6 +37,22 @@ func initDB() (*gorm.DB, func(), error) {
 	}
 
 	return ormDB, cleanup, nil
+}
+
+func runListingsMigration(db *sql.DB) error {
+	migrations := []string{
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'Others'`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS condition VARCHAR(50) DEFAULT 'Second-hand (Used)'`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS dealing_method VARCHAR(100) DEFAULT 'Meet Up'`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20) DEFAULT ''`,
+	}
+	for _, m := range migrations {
+		if _, err := db.Exec(m); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("Listings migration completed")
+	return nil
 }
 
 func setupRaw() (*sql.DB, error) {

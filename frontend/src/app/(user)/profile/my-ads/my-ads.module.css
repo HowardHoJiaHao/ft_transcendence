@@ -1,0 +1,229 @@
+.main {
+  min-height: 100vh;
+  background: #f0f0f0;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px 56px;
+}
+
+.backBtn {
+  background: none;
+  border: none;
+  color: #333;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s;
+}
+
+.backBtn:hover { color: #111; }
+
+.heading {
+  font-size: 26px;
+  font-weight: 700;
+  color: #222;
+  margin: 0 0 16px;
+}
+
+/* ── Card ── */
+.card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+/* ── Tabs ── */
+.tabBar {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.tab {
+  padding: 8px 20px;
+  border-radius: 20px;
+  border: 1px solid #ccc;
+  background: white;
+  font-size: 14px;
+  color: #444;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.tab:hover { border-color: #888; }
+
+.tabActive {
+  background: #fce4ec;
+  border-color: #f48fb1;
+  color: #c2185b;
+  font-weight: 700;
+}
+
+/* ── Empty state ── */
+.emptyState {
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.emptyText {
+  color: #888;
+  font-size: 15px;
+  margin: 0 0 12px;
+  padding: 20px;
+}
+
+.postAdLink {
+  display: inline-block;
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 15px;
+}
+
+.postAdLink:hover { text-decoration: underline; }
+
+/* ── Ad item ── */
+.adItem {
+  display: flex;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+  align-items: flex-start;
+  transition: background 0.1s;
+}
+
+.adItem:last-child { border-bottom: none; }
+.adItem:hover { background: #fafafa; }
+
+.adImageWrap {
+  width: 110px;
+  height: 90px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f0f0f0;
+}
+
+.adImageWrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.adInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.adPrice {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111;
+  margin: 0 0 4px;
+}
+
+.adTitle {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+  text-decoration: none;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adTitle:hover { color: #2563eb; text-decoration: underline; }
+
+.adMeta {
+  font-size: 13px;
+  color: #888;
+  margin: 0 0 3px;
+}
+
+.adViews {
+  font-size: 13px;
+  color: #888;
+  margin: 0 0 10px;
+}
+
+/* ── Ad actions ── */
+.adActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.actionLink {
+  font-size: 14px;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.actionLink:hover { text-decoration: underline; }
+
+.actionDivider { color: #ccc; font-size: 14px; }
+
+.actionDeleteBtn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: #2563eb;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 0;
+}
+
+.actionDeleteBtn:hover { text-decoration: underline; }
+
+/* ── Pagination ── */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: 16px;
+  border-top: 1px solid #eee;
+}
+
+.pageBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  color: #444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s;
+}
+
+.pageBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pageBtn:hover:not(:disabled) { border-color: #888; }
+
+.pageBtnActive {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .adItem { flex-direction: column; }
+  .adImageWrap { width: 100%; height: 200px; }
+}
