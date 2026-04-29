@@ -26,6 +26,8 @@
     flex: 0 0 50%;
     overflow: hidden;
     border-radius: 8px;
+    aspect-ratio: 4 / 5;
+    max-height: 520px;
 }
 
 .imageFrame {
@@ -105,6 +107,8 @@
     flex: 0 0 30%;
     overflow: hidden;
     border-radius: 8px;
+    aspect-ratio: 1 / 1;
+    max-height: 160px;
 }
 
 .shopImage img {
