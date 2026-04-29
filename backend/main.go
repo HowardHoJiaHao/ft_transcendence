@@ -29,7 +29,7 @@ func main() {
 
 	defer cleanup() //run the line before exiting fx
 
-	
+
 	//create echo instance
 	e := echo.New()
 
@@ -48,7 +48,12 @@ func main() {
 
 	// Product routes
 	e.GET("/api/v1/products", func(c echo.Context) error { return getProducts(c, gormDB) })
+	e.POST("/api/v1/products", func(c echo.Context) error { return createProduct(c, gormDB) })
+
 	e.GET("/api/v1/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
+	e.DELETE("/api/v1/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
+	e.PUT("/api/v1/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
+	e.POST("/api/v1/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
 
 	//User Module initialization
 	baseRepo := user.NewRepository(rawDB, gormDB)
@@ -84,13 +89,13 @@ func main() {
 
 func healthCheckHandler(c echo.Context) error { //everytime a user enter /health give type echo.context to c
 	return c.JSON(200, map[string]interface{}{ //use a helper of echo context that take the data and change into json string. gives 200 error status. and declare a map with key(string) and value (can be any type). interface means can be any type
-		"status": "ok", 
+		"status": "ok",
 	})
 }
 
 func statusHandler(c echo.Context) error {
 	return c.JSON(200, map[string]interface{}{
 		"status": "running", //the map element
-		"version": "1.0.0", 
+		"version": "1.0.0",
 	})
 }

@@ -35,6 +35,12 @@ export default function Header({
                 <Link href="/login" className="btn btn-secondary btn-sm">Login</Link>
               )}
               <Link href="/cart" className="btn btn-secondary btn-sm">🛒</Link>
+              <button
+              className="btn btn-primary btn-sm"
+              onClick={() => router.push(user ? '/sell' : '/login')}
+              >
+              Sell Now
+              </button>
             </div>
           </div>
         </div>
