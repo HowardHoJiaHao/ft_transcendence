@@ -12,15 +12,16 @@ import (
 	"transcendence/modules/user"
 )
 
-func initDB() (*gorm.DB, func(), error) {
+func initDB() (*sql.DB, *gorm.DB, func(), error) {
 	rawDB, err := setupRaw()
 	if err != nil {
-		return nil, nil, fmt.Errorf("raw connection failed: %w", err)
+		return nil, nil, nil, fmt.Errorf("raw connection failed: %w", err)
 	}
 
 	ormDB, err := setupGORM(rawDB)
 	if err != nil {
-		return nil, nil, fmt.Errorf("gorm setup failed: %w", err)
+		rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("gorm setup failed: %w", err)
 	}
 
 	if err := runListingsMigration(rawDB); err != nil {
@@ -29,14 +30,12 @@ func initDB() (*gorm.DB, func(), error) {
 
 	log.Println("Database connected successfully")
 
-	//			CLEANUP FX
-	// amazing go feature that can get a hold of the rawdb. when called no need to put rawdb as param
 	cleanup := func() {
 		log.Println("Cleanup: Closing database connections...")
 		_ = rawDB.Close()
 	}
 
-	return ormDB, cleanup, nil
+	return rawDB, ormDB, cleanup, nil
 }
 
 func runListingsMigration(db *sql.DB) error {

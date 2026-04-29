@@ -7,7 +7,11 @@ import (
 	//"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4" //echo main framework
 	"github.com/labstack/echo/v4/middleware" //middleware parts
-	"transcendence/modules/user" //local module
+
+	"transcendence/modules/user"
+    "transcendence/modules/user/auth"
+    "transcendence/modules/user/profile"
+    "transcendence/modules/user/friends"
 )
 
 func main() {
@@ -18,7 +22,7 @@ func main() {
 	// }
 
 	//initialize database
-	gormDB, cleanup, err := initDB()
+	rawDB, gormDB, cleanup, err := initDB()
 	if (err != nil) {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -52,11 +56,23 @@ func main() {
 	e.POST("/api/v1/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
 
 	//User Module initialization
-	userHandler, err := user.NewHandler(gormDB)
-	if err != nil {
-		log.Fatalf("Failed to initialize user handler: %v", err)
-	}
-	userHandler.RegisterRoutes(v1)
+	baseRepo := user.NewRepository(rawDB, gormDB)
+
+	// Initialize Auth module
+	authService := auth.NewService(baseRepo)
+	authHandler := auth.NewHandler(baseRepo, authService)
+
+	// Initialize Profile module
+	profileService := profile.NewService(baseRepo)
+	profileHandler := profile.NewHandler(baseRepo, profileService)
+
+	// Initialize Friends module
+	friendsHandler := friends.NewHandler(baseRepo)
+
+	// Register routes
+	authHandler.RegisterRoutes(v1)
+	profileHandler.RegisterRoutes(v1)
+	friendsHandler.RegisterRoutes(v1)
 
 	// serve static files (avatars) from ./static mapped to /static URL
 	e.Static("/static", "static")

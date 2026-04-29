@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -216,6 +217,42 @@ func (r *Repository) RemoveFriend(userID, friendID int) error {
 	_, err := r.db.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", userID, friendID)
 	_, err = r.db.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", friendID, userID)
 	return err
+}
+
+func (r *Repository) SaveOTP(tempToken, email, otpCode string) error {
+    if r.gormDB == nil {
+        return fmt.Errorf("gorm db is not initialized")
+    }
+    expiryDate := time.Now().Add(5 * time.Minute)
+    otp := OTP{
+        Email:     email,
+        Code:      otpCode,
+        ExpiryDate: expiryDate,
+        Used:      false,
+        TempToken: tempToken,
+    }
+    return r.gormDB.Save(&otp).Error
+}
+
+func (r *Repository) VerifyOTPAndConsume(tempToken, otpCode string) (string, error) {
+    if r.gormDB == nil {
+        return "", fmt.Errorf("gorm db is not initialized")
+    }
+    var otp OTP
+    err := r.gormDB.Where(
+        "temp_token = ? AND code = ? AND used = ? AND expiry_date > ?",
+        tempToken, otpCode, false, time.Now(),
+    ).First(&otp).Error
+    if err != nil {
+        return "", err
+    }
+    err = r.gormDB.Model(&OTP{}).
+        Where("email = ?", otp.Email).
+        Updates(map[string]interface{}{"used": true, "temp_token": ""}).Error
+    if err != nil {
+        return "", err
+    }
+	return otp.Email, nil
 }
 
 func (r *Repository) SaveListingImageBinary(listingID int, data []byte, mime string, isPrimary bool) error {
