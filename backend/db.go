@@ -25,7 +25,8 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 	}
 
 	if err := runListingsMigration(rawDB); err != nil {
-		return nil, nil, fmt.Errorf("listings migration failed: %w", err)
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("listings migration failed: %w", err)
 	}
 
 	log.Println("Database connected successfully")

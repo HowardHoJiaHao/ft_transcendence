@@ -303,6 +303,17 @@ export default function ProfilePage() {
 
   // backend base URL for serving avatars
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  const defaultAvatarUrl = "/default-avatar.png";
+  const placeholderAvatarUrl = "https://via.placeholder.com/120";
+  const resolveAvatarUrl = (url?: string) => {
+    if (!url)
+      return defaultAvatarUrl;
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
+      return url;
+    if (url.startsWith("/"))
+      return `${API_BASE}${url}`;
+    return `${API_BASE}/${url}`;
+  };
 
   if (showOtp) {
     return (
@@ -376,13 +387,12 @@ export default function ProfilePage() {
             <hr className={styles.divider} />
             <div className={styles.avatarContainer}>
               <img
-                src={
-                  user.avatarUrl
-                    ? `${API_BASE}${user.avatarUrl}`
-                    : "/default-avatar.png"
-                }
+                src={resolveAvatarUrl(user.avatarUrl)}
                 alt="Profile Avatar"
                 className={styles.avatarImg}
+                onError={(event) => {
+                  (event.currentTarget as HTMLImageElement).src = placeholderAvatarUrl;
+                }}
               />
               <div>
                 <input

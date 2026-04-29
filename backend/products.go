@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -500,6 +501,67 @@ func uploadListingImages(c echo.Context, gormDB *gorm.DB) error {
 		"imageUrls":    imageURLs,
 		"primaryImage": imageURLs[0],
 	})
+}
+
+func getListingImages(c echo.Context, gormDB *gorm.DB) error {
+	listingID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid listing id"})
+	}
+
+	if _, statErr := os.Stat("static/listings"); statErr != nil {
+		if os.IsNotExist(statErr) {
+			return c.JSON(200, map[string]interface{}{"imageUrls": []string{}})
+		}
+		return c.JSON(500, map[string]string{"error": "failed to read storage directory"})
+	}
+
+	entries, err := os.ReadDir("static/listings")
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "failed to list images"})
+	}
+
+	type imageEntry struct {
+		index int
+		url   string
+	}
+
+	var images []imageEntry
+	prefix := fmt.Sprintf("%d_", listingID)
+	allowedExt := map[string]bool{
+		".jpg":  true,
+		".jpeg": true,
+		".png":  true,
+		".webp": true,
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		ext := strings.ToLower(path.Ext(name))
+		if !allowedExt[ext] {
+			continue
+		}
+		idxStr := strings.TrimSuffix(strings.TrimPrefix(name, prefix), ext)
+		idx, convErr := strconv.Atoi(idxStr)
+		if convErr != nil {
+			continue
+		}
+		images = append(images, imageEntry{index: idx, url: "/static/listings/" + name})
+	}
+
+	sort.Slice(images, func(i, j int) bool { return images[i].index < images[j].index })
+	imageUrls := make([]string, 0, len(images))
+	for _, img := range images {
+		imageUrls = append(imageUrls, img.url)
+	}
+
+	return c.JSON(200, map[string]interface{}{"imageUrls": imageUrls})
 }
 
 func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {

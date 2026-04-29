@@ -54,6 +54,7 @@ func main() {
 	e.DELETE("/api/v1/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	e.PUT("/api/v1/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
 	e.POST("/api/v1/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
+	e.GET("/api/v1/products/:id/images", func(c echo.Context) error { return getListingImages(c, gormDB) })
 
 	//User Module initialization
 	baseRepo := user.NewRepository(rawDB, gormDB)
