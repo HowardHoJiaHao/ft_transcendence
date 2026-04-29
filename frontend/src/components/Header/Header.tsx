@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'; //programmatic navigation
 import { useAuth } from '@/modules/user/components/AuthContext'; //import hook to access global authentication data
+import Link from 'next/link';
 import SearchBar from '@/components/SearchBar/SearchBar';
 import styles from './Header.module.css';
 
@@ -21,23 +22,24 @@ export default function Header({
      <header className={styles.header}>
         <div className="container">
           <div className={styles.headerTop}>
-            <h1 className={styles.logo} onClick={() => router.push('/')} style={{ cursor: 'pointer' }}> 🏸 RacquetDiction 💉</h1>
+			<Link href="/" className={styles.logo}><h1>🏸 RacketDiction 💉 </h1></Link>
             <SearchBar value={searchValue} onChange={onSearchChange} onSubmit={onSearchSubmit} />
             <div className={styles.headerActions}>
               {user ? (
                 <>
-                  <button className="btn btn-secondary btn-sm" onClick={() => router.push('/profile')}>{user.username}</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => router.push('/friends')}>Friends</button>
+                  <Link href="/profile" className="btn btn-secondary btn-sm">{user.username}</Link>
+                  <Link href="/friends" className="btn btn-secondary btn-sm">Friends</Link>
                   <button className="btn btn-secondary btn-sm" onClick={logout}>Logout</button>
                 </>
               ) : (
-                <button className="btn btn-secondary btn-sm" onClick={() => router.push('/login')}>Login</button>
+                <Link href="/login" className="btn btn-secondary btn-sm">Login</Link>
               )}
+              <Link href="/cart" className="btn btn-secondary btn-sm">🛒</Link>
               <button
-                className="btn btn-primary btn-sm"
-                onClick={() => router.push(user ? '/sell' : '/login')}
+              className="btn btn-primary btn-sm"
+              onClick={() => router.push(user ? '/sell' : '/login')}
               >
-                Sell Now
+              Sell Now
               </button>
             </div>
           </div>

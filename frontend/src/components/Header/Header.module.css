@@ -20,6 +20,8 @@
   font-weight: 700;
   color: var(--primary);
   margin: 0;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .headerActions {

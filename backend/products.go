@@ -21,7 +21,9 @@ type Product struct {
 	FlexibilityCategory string   `json:"flexibilityCategory"`
 	BalanceCategory     string   `json:"balanceCategory"`
 	Location            string   `json:"location"`
-	Seller              string   `json:"seller"`
+	SellerId            int      `json:"sellerId"`
+	SellerName          string   `json:"sellerName"`
+	SellerAvatar        string   `json:"sellerAvatar"`
 	Rating              float64  `json:"rating"`
 	Reviews             int      `json:"reviews"`
 	IsNew               bool     `json:"isNew"`
@@ -52,13 +54,14 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
 
-	weightCategory := c.QueryParam("weightCategory")
-	flexibilityCategory := c.QueryParam("flexibilityCategory")
-	balanceCategory := c.QueryParam("balanceCategory")
+	weightCategory := c.QueryParams()["weightCategory"]
+	flexibilityCategory := c.QueryParams()["flexibilityCategory"]
+	balanceCategory := c.QueryParams()["balanceCategory"]
 	search := c.QueryParam("search")
 	sortBy := c.QueryParam("sort")
 	limit := c.QueryParam("limit")
 	offset := c.QueryParam("offset")
+	sellerId := c.QueryParam("sellerId")
 
 	if limit == "" {
 		limit = "20"
@@ -70,26 +73,57 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	limitInt, _ := strconv.Atoi(limit)
 	offsetInt, _ := strconv.Atoi(offset)
 
-	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE 1=1"
+	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_id, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE 1=1"
 	var args []interface{}
 	
 	//the concept of sql injection is it want the full line with 1=1 OR as command. but by doing our parameterized way it separate commands and data. firslt, when it separate it doesnt take the full sentence as command. secondly, we already specify that 1=1 OR is a data and dont take it as command which translate to always true
 	//so make query string(maybe) and args slice
-	if weightCategory != "" && weightCategory != "All" {
-		query += fmt.Sprintf(" AND weight_category = $%d", len(args)+1)
-		args = append(args, weightCategory)
+	if len(weightCategory) > 0 {
+		startPos := len(args) + 1
+		placeholders := ""
+		for i := range weightCategory {
+			if i > 0 {
+				placeholders += ", "
+			}
+			placeholders += fmt.Sprintf("$%d", startPos + i)
+			args = append(args, weightCategory[i])
+		}
+		query += " AND weight_category IN (" + placeholders + ")"
 	}
-	if flexibilityCategory != "" && flexibilityCategory != "All" {
-		query += fmt.Sprintf(" AND flexibility_category = $%d", len(args)+1)
-		args = append(args, flexibilityCategory)
+	if len(flexibilityCategory) > 0 {
+		startPos := len(args) + 1
+		placeholders := ""
+		for i := range flexibilityCategory {
+			if i > 0 {
+				placeholders += ", "
+			}
+			placeholders += fmt.Sprintf("$%d", startPos + i)
+			args = append(args, flexibilityCategory[i])
+		}
+		query += " AND flexibility_category IN (" + placeholders + ")"
 	}
-	if balanceCategory != "" && balanceCategory != "All" {
-		query += fmt.Sprintf(" AND balance_category = $%d", len(args)+1)
-		args = append(args, balanceCategory)
+	if len(balanceCategory) > 0 {
+		startPos := len(args) + 1
+		placeholders := ""
+		for i := range balanceCategory {
+			if i > 0 {
+				placeholders += ", "
+			}
+			placeholders += fmt.Sprintf("$%d", startPos + i)
+			args = append(args, balanceCategory[i])
+		}
+		query += " AND balance_category IN (" + placeholders + ")"
 	}
 	if search != "" {
 		query += fmt.Sprintf(" AND title ILIKE $%d", len(args)+1)
 		args = append(args, "%"+search+"%")
+	}
+	if sellerId != "" {
+		sellerIdInt, err := strconv.Atoi(sellerId)
+		if err == nil {
+			query += fmt.Sprintf(" AND seller_id = $%d", len(args)+1)
+			args = append(args, sellerIdInt)
+		}
 	}
 
 	//add sorting
@@ -142,7 +176,8 @@ func scanProducts(rows *sql.Rows) ([]Product, error) {
 			&p.FlexibilityCategory,
 			&p.BalanceCategory,
 			&p.Location,
-			&p.Seller,
+			&p.SellerId,
+			&p.SellerName,
 			&p.Rating,
 			&p.Reviews,
 			&p.IsNew,
@@ -275,7 +310,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 }
 
 func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {
-	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE id = $1"
+	query := "SELECT id, title, price, original_price, image, weight_category, flexibility_category, balance_category, location, seller_id, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE id = $1"
 
 	var product Product
 	err := sqlDB.QueryRow(query, id).Scan(
@@ -288,7 +323,8 @@ func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {
 		&product.FlexibilityCategory,
 		&product.BalanceCategory,
 		&product.Location,
-		&product.Seller,
+		&product.SellerId,
+		&product.SellerName,
 		&product.Rating,
 		&product.Reviews,
 		&product.IsNew,

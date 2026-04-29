@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'; //programmatic navigation
 import { useAuth } from '@/modules/user/components/AuthContext'; //import hook to access global authentication data
 import styles from './page.module.css'; //import CSS module for scope styling
 import Header from '@/components/Header/Header';
+import Link from 'next/link';
 
 interface Product
 {
@@ -17,7 +18,8 @@ interface Product
   flexibilityCategory: string;
   balanceCategory: string;
   location: string;
-  seller: string;
+  sellerId: string;
+  sellerName: string;
   rating: number;
   reviews: number;
   isNew: boolean;
@@ -54,9 +56,9 @@ export default function Home()
 {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const [selectedWeightCategory, setSelectedWeightCategory] = useState('All');
-  const [selectedFlexibilityCategory, setSelectedFlexibilityCategory] = useState('All');
-  const [selectedBalanceCategory, setSelectedBalanceCategory] = useState('All');
+  const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
+  const [selectedFlexibilities, setSelectedFlexibilities] = useState<string[]>([]);
+  const [selectedBalances, setSelectedBalances] = useState<string[]>([]);
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('featured');
@@ -76,30 +78,45 @@ export default function Home()
                 ? null : new URLSearchParams(window.location.search).get('search'); //if the search comes from url (other page), get they word from the key search
     const currentSearch = urlSearch ?? searchQuery; //if empty, means it dont come from url, use the searchQuery
     if (urlSearch && urlSearch !== searchQuery) //if both exist but different, means it come from url, update searchQuery following url
-      setSearchQuery(urlSearch);
+    {
+	  setSearchQuery(urlSearch);
+	  return ;
+	}
 
     const fetchProducts = async () => {
       try {
         setLoading(true);
         const query = new URLSearchParams();
-        if (selectedWeightCategory !== 'All')
-          query.append('weightCategory', selectedWeightCategory);
-        if (selectedFlexibilityCategory !== 'All')
-          query.append('flexibilityCategory', selectedFlexibilityCategory);
-		    if (selectedBalanceCategory !== 'All')
-			  query.append('balanceCategory', selectedBalanceCategory);
+        if (selectedWeights.length > 0)
+		{
+			selectedWeights.forEach((w) => {
+			query.append('weightCategory', w);
+			});
+		}
+        if (selectedFlexibilities.length > 0)
+		{
+			selectedFlexibilities.forEach((f) => {
+			query.append('flexibilityCategory', f);
+			});
+		}
+		if (selectedBalances.length > 0)
+		{
+			selectedBalances.forEach((b) => {
+			query.append('balanceCategory', b);
+			});
+		}
         if (currentSearch)
           query.append('search', currentSearch);
         query.append('sort', sortBy);
 
-        const response = await fetch(
+        const res = await fetch(
           `http://localhost:8080/api/v1/products?${query}`
         );
 
-        if (!response.ok)
+        if (!res.ok)
           throw new Error('Failed to fetch products');
 
-        const data = await response.json();
+        const data = await res.json();
         const mappedProducts = data.products.map((p: any) => ({ //for every single data call everything for a while then take the p and turn it into object below
           id: p.id,
           title: p.title,
@@ -110,7 +127,8 @@ export default function Home()
           flexibilityCategory: p.flexibilityCategory,
 		  balanceCategory: p.balanceCategory,
           location: p.location,
-          seller: p.seller,
+          sellerId: p.sellerId,
+		  sellerName: p.sellerName,
           rating: parseFloat(p.rating),
           reviews: p.reviews,
           isNew: p.isNew,
@@ -128,7 +146,7 @@ export default function Home()
     };
 
     fetchProducts();
-  }, [selectedWeightCategory, selectedFlexibilityCategory, selectedBalanceCategory, searchQuery, sortBy]);
+  }, [selectedWeights, selectedFlexibilities, selectedBalances, searchQuery, sortBy]);
 
   return (
     <main className={styles.main}>
@@ -140,18 +158,80 @@ export default function Home()
       />
 
       {/* Main Content */}
-      <div className="container">
-        <div className={styles.content}>
+	  <div className={styles.content}>
           {/* Sidebar Filters */}
           <aside className={styles.sidebar}>
             <div className={styles.filterSection}>
               <h3>Price Range</h3>
-              <input type="range" min="0" max="5000" className={styles.slider} />
-              <div className={styles.priceRange}>
-                <span>RM 0</span>
-                <span>RM 5000+</span>
-              </div>
-            </div>
+			  	<div className={styles.priceRange}>
+				  <div className={styles.rangeInputs}>
+					<input className={styles.priceInput} type="number" id="minPrice" placeholder="Min" min="0"/>
+					<span className={styles.separator}>-</span>
+					<input className={styles.priceInput} type="number" id="maxPrice" placeholder="Max" min="0"/>
+				  </div>
+                  <button className={styles.applyBtn}>Apply</button>
+				</div>
+          </div>
+
+			<div className={styles.filterSection}>
+			  <h3>Weight</h3>
+			    <div className={styles.weightFilterOptions}>
+				  {WEIGHT_CATEGORIES.filter(c => c !== 'All').map((category) => (
+					<label key={category}>
+					  <input type="checkbox" value={category} checked={selectedWeights.includes(category)}
+						onChange={(e) => {
+						  const value = e.target.value;
+
+						  setSelectedWeights((prev) =>
+							prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+						  );
+						}}
+						/>
+						{category}
+					</label>
+				  ))}
+				</div>
+			</div>
+
+			<div className={styles.filterSection}>
+				<h3>Flexibility</h3>
+				<div className={styles.filterOptions}>
+					{FLEXIBILITY_CATEGORIES.filter(c => c !== 'All').map((category) => (
+						<label key={category}>
+							<input type="checkbox" value={category} checked={selectedFlexibilities.includes(category)}
+							onChange={(e) => {
+								const value = e.target.value;
+
+								setSelectedFlexibilities((prev) =>
+									prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+								);
+							}}
+							/>
+							{category}
+						</label>
+					))}
+				</div>
+			</div>
+
+			<div className={styles.filterSection}>
+			  <h3>Balance</h3>
+			    <div className={styles.filterOptions}>
+				  {BALANCE_CATEGORIES.filter(c => c !== 'All').map((category) => (
+					<label key={category}>
+					  <input type="checkbox" value={category} checked={selectedBalances.includes(category)}
+						onChange={(e) => {
+						  const value = e.target.value;
+
+						  setSelectedBalances((prev) =>
+							prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+						  );
+						}}
+						/>
+						{category}
+					</label>
+				  ))}
+				</div>
+			</div>
 
             <div className={styles.filterSection}>
               <h3>Location</h3>
@@ -274,12 +354,13 @@ export default function Home()
                       </div>
 
                       <div className={styles.productSeller}>
-                        <span className={styles.sellerName}>{product.seller}</span>
+                        <span className={styles.sellerName}>{product.sellerName}</span>
                       </div>
-
-                      <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }}>
-                        View Details
-                      </button>
+					  <Link href={`/products/${product.id}`}>
+                        <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} >
+                          View Details
+                        </button>
+					  </Link>
                     </div>
                   </div>
                 ))}
@@ -291,9 +372,9 @@ export default function Home()
                   className="btn btn-secondary"
                   onClick={() => {
                     setSearchQuery('');
-                    setSelectedWeightCategory('All');
-                    setSelectedFlexibilityCategory('All');
-					setSelectedBalanceCategory('All');
+                    setSelectedWeights([]);
+                    setSelectedFlexibilities([]);
+					setSelectedBalances([]);
                   }}
                 >
                   Clear Filters
@@ -302,7 +383,6 @@ export default function Home()
             )}
           </div>
         </div>
-      </div>
     </main>
   );
 }

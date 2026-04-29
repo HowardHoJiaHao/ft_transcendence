@@ -58,7 +58,7 @@ export default function LoginPage ()
 				}
 				setTempToken(data.tempToken);
 				setResendCd(60);
-				showToast(data.message ?? 'OTP resent', 'success');
+				showToast(data.message ?? 'OTP sent', 'success');
 				return ;
 			}
 			showToast(data.error ?? 'Failed to resend OTP', 'error');
