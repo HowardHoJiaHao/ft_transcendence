@@ -10,18 +10,18 @@ import (
 )
 
 type Repository struct {
-	db     *sql.DB
-	gormDB *gorm.DB
+	DB     *sql.DB
+	GormDB *gorm.DB
 }
 
-func NewRepository(db *sql.DB, gormDB *gorm.DB) *Repository {
-	return &Repository{db: db, gormDB: gormDB}
+func NewRepository(db *sql.DB, GormDB *gorm.DB) *Repository {
+	return &Repository{DB: db, GormDB: GormDB}
 }
 
 func (r *Repository) CreateUser(req RegisterRequest) (int64, error) {
 	avatar := "https://ui-avatars.com/api/?name=" + req.FirstName + "+" + req.LastName
 	var id int64
-	err := r.db.QueryRow(
+	err := r.DB.QueryRow(
 		"INSERT INTO users (username, email, password_hash, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, is_verified, requires_2fa) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
 		req.Username, req.Email, req.Password, req.FirstName, req.LastName, req.PhoneNo, req.DateOfBirth, req.Gender, avatar, true, true,
 	).Scan(&id)
@@ -37,7 +37,7 @@ func (r *Repository) GetUserByEmailAndPassword(email, password string) (*User, e
 	var bio, avatarURL, avatarMime sql.NullString /*phone_no, gender*/
 	// var dob sql.NullTime
 	var avatarData []byte
-	err := r.db.QueryRow(
+	err := r.DB.QueryRow(
 		"SELECT id, username, email, first_name, last_name, avatar_url, phone_no, date_of_birth, gender, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1 AND password_hash = $2",
 		email, password,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
@@ -68,7 +68,7 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 	var avatarURL sql.NullString
 	var avatarMime sql.NullString
 	var avatarData []byte
-	err := r.db.QueryRow(
+	err := r.DB.QueryRow(
 		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE id = $1",
 		id,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
@@ -99,7 +99,7 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 	var avatarURL sql.NullString
 	var avatarMime sql.NullString
 	var avatarData []byte
-	err := r.db.QueryRow(
+	err := r.DB.QueryRow(
 		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1",
 		email,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
@@ -124,23 +124,23 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 	return &user, nil
 }
 
-//use r.db.exec when you dont care the information once you execute.use queryrow if you want to know some variables after you exec
+//use r.DB.exec when you dont care the information once you execute.use queryrow if you want to know some variables after you exec
 //in this case we ignore the sql result
 func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
-	// _, err := r.db.Exec(
+	// _, err := r.DB.Exec(
 	// 	"UPDATE users SET first_name = $1, last_name = $2, bio = $3, date_of_birth = $4, gender = $5, avatar_url = $6 WHERE id = $7",
 	// 	req.FirstName, req.LastName, req.Bio, req.DateOfBirth, req.Gender, req.AvatarURL, id,
 	// )
-	// err := r.db.Model(user).Updates(req).Error
+	// err := r.DB.Model(user).Updates(req).Error
 	user, err := r.GetUserByID(id)
 	if (err != nil) {
 		return fmt.Errorf("Failed to fetch id in UpdateUserProfile")
 	}
-	return r.gormDB.Model(user).Updates(req).Error
+	return r.GormDB.Model(user).Updates(req).Error
 }
 
 func (r *Repository) UpdateUserAvatarUrl(userID int, publicUrl string, mime string) error {
-	_, err := r.db.Exec(
+	_, err := r.DB.Exec(
 		"UPDATE users SET avatar_url = $1, avatar_mime_type = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
 		publicUrl, mime, userID,
 	)
@@ -150,7 +150,7 @@ func (r *Repository) UpdateUserAvatarUrl(userID int, publicUrl string, mime stri
 func (r *Repository) GetUserAvatarBinary(userID int) ([]byte, string, error) {
 	var data []byte
 	var mime sql.NullString
-	err := r.db.QueryRow(
+	err := r.DB.QueryRow(
 		"SELECT avatar_data, avatar_mime_type FROM users WHERE id = $1 AND avatar_data IS NOT NULL",
 		userID,
 	).Scan(&data, &mime)
@@ -167,7 +167,7 @@ func (r *Repository) GetUserAvatarBinary(userID int) ([]byte, string, error) {
 }
 
 func (r *Repository) GetFriends(userID int) ([]Friend, error) {
-	rows, err := r.db.Query(`
+	rows, err := r.DB.Query(`
 		SELECT u.id, u.username, u.avatar_url, f.created_at 
 		FROM friendships f
 		JOIN users u ON f.friend_id = u.id
@@ -202,25 +202,25 @@ func (r *Repository) GetFriends(userID int) ([]Friend, error) {
 func (r *Repository) AddFriend(userID, friendID int) error {
 	//check if friend exists
 	var exists int
-	err := r.db.QueryRow("SELECT id FROM users WHERE id = $1", friendID).Scan(&exists)
+	err := r.DB.QueryRow("SELECT id FROM users WHERE id = $1", friendID).Scan(&exists)
 	if err != nil {
 		return fmt.Errorf("friend user does not exist")
 	}
 
-	_, err = r.db.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", userID, friendID)
+	_, err = r.DB.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", userID, friendID)
 	//bidirectional for simplicirt
-	_, err = r.db.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", friendID, userID)
+	_, err = r.DB.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", friendID, userID)
 	return err
 }
 
 func (r *Repository) RemoveFriend(userID, friendID int) error {
-	_, err := r.db.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", userID, friendID)
-	_, err = r.db.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", friendID, userID)
+	_, err := r.DB.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", userID, friendID)
+	_, err = r.DB.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", friendID, userID)
 	return err
 }
 
 func (r *Repository) SaveOTP(tempToken, email, otpCode string) error {
-    if r.gormDB == nil {
+    if r.GormDB == nil {
         return fmt.Errorf("gorm db is not initialized")
     }
     expiryDate := time.Now().Add(5 * time.Minute)
@@ -231,22 +231,22 @@ func (r *Repository) SaveOTP(tempToken, email, otpCode string) error {
         Used:      false,
         TempToken: tempToken,
     }
-    return r.gormDB.Save(&otp).Error
+    return r.GormDB.Save(&otp).Error
 }
 
 func (r *Repository) VerifyOTPAndConsume(tempToken, otpCode string) (string, error) {
-    if r.gormDB == nil {
+    if r.GormDB == nil {
         return "", fmt.Errorf("gorm db is not initialized")
     }
     var otp OTP
-    err := r.gormDB.Where(
+    err := r.GormDB.Where(
         "temp_token = ? AND code = ? AND used = ? AND expiry_date > ?",
         tempToken, otpCode, false, time.Now(),
     ).First(&otp).Error
     if err != nil {
         return "", err
     }
-    err = r.gormDB.Model(&OTP{}).
+    err = r.GormDB.Model(&OTP{}).
         Where("email = ?", otp.Email).
         Updates(map[string]interface{}{"used": true, "temp_token": ""}).Error
     if err != nil {
@@ -256,7 +256,7 @@ func (r *Repository) VerifyOTPAndConsume(tempToken, otpCode string) (string, err
 }
 
 func (r *Repository) SaveListingImageBinary(listingID int, data []byte, mime string, isPrimary bool) error {
-	_, err := r.db.Exec(
+	_, err := r.DB.Exec(
 		`INSERT INTO listing_images (listing_id, image_data, mime_type, is_primary, uploaded_at)
 		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
 		listingID, data, mime, isPrimary,

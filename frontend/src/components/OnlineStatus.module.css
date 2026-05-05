@@ -1,0 +1,16 @@
+.status-text {
+	font-size: 12px;
+	font-weight: 500;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-family: sans-serif;
+}
+
+.status-online {
+	color: #22c55e;
+}
+
+.status-offline {
+	color: #94a3b8;
+}

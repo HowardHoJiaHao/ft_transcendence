@@ -109,7 +109,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 				<div className={styles.shopName}>{product.sellerName}</div>
 				<div className={styles.onlineStatus}>-Online Status-</div>
 				<div className={styles.shopButtonGroup}>
-				  <button className={styles.button}>Chat Seller</button>
+				        <Link href={`/chat?partner=${product.sellerId}`} className={styles.button}>Chat Seller</Link>
 				  	<Link href={`/user/${product.sellerId}`} className={styles.button}>View Shop</Link>
 				</div>
 			  </div>

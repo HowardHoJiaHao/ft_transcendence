@@ -7,6 +7,8 @@ import Link from 'next/link';
 import Header from '@/components/Header/Header';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useAuth } from '@/modules/user/components/AuthContext';
+import ChatModal from '@/app/(user)/chat/ChatModal';
+import { useWebSocketContext } from '@/context/WebSocketContext';
 import styles from './user.module.css';
 
 interface Product
@@ -40,6 +42,15 @@ interface UserProfile {
 	avatarUrl?: string;
 }
 
+interface PrivateMessage {
+	type: 'private_message';
+	sender_id: number;
+	receiver_id: number;
+	content: string;
+	created_at: string;
+	id: number;
+}
+
 export default function UserPage()
 {
 	const { id } = useParams();
@@ -50,9 +61,39 @@ export default function UserPage()
 	const [loading, setLoading] = useState(true);
 	const [searchQuery, setSearchQuery] = useState('');
 	const [error, setError] = useState<string | null>(null);
+	const [chatOpen, setChatOpen] = useState(false);
+	const [chatMessages, setChatMessages] = useState<PrivateMessage[]>([]);
+	const [chatLoading, setChatLoading] = useState(false);
 
 	const { showToast } = useToast();
+	const { onlineUsers } = useWebSocketContext();
 	const handleSearch = () => { router.push(`/?search=${encodeURIComponent(searchQuery)}`) };
+
+	const fetchChatHistory = async (partnerId: number) => {
+		if (!currentUser?.id) return [];
+		try {
+			const res = await fetch(`http://localhost:8080/api/v1/messages/${partnerId}`, {
+				headers: {
+					'Authorization': `Bearer ${localStorage.getItem('token')}`
+				}
+			});
+			if (!res.ok) throw new Error('Failed to fetch chat messages');
+			const data = await res.json();
+			return data.messages || [];
+		} catch (err) {
+			console.error('Failed to fetch chat history:', err);
+			return [];
+		}
+	};
+
+	const openChat = async () => {
+		if (!seller?.id || !currentUser?.id) return;
+		setChatLoading(true);
+		const history = await fetchChatHistory(seller.id);
+		setChatMessages(history);
+		setChatLoading(false);
+		setChatOpen(true);
+	};
 
 	useEffect(() => {
 		const fetchSeller = async () => {
@@ -83,8 +124,7 @@ export default function UserPage()
 			fetchSeller();
 	}, [id, showToast])
 
-	//fetch products logic
-  	useEffect(() =>
+   	useEffect(() =>
 	{
 		if (!seller)
 			return ;
@@ -101,7 +141,7 @@ export default function UserPage()
 			  throw new Error('Failed to fetch products');
 
 			const data = await res.json();
-			const mappedProducts = data.products.map((p: any) => ({ //for every single data call everything for a while then take the p and turn it into object below
+			const mappedProducts = data.products.map((p: any) => ({
 			  id: p.id,
 			  title: p.title,
 			  price: parseFloat(p.price),
@@ -117,7 +157,7 @@ export default function UserPage()
 			  reviews: p.reviews,
 			  isNew: p.isNew,
 			  isFeatured: p.isFeatured,
-			}));
+			}));  
 
 			setProducts(mappedProducts);
 		  }
@@ -134,14 +174,14 @@ export default function UserPage()
 		};
 
 		fetchProducts();
-  	}, [seller?.id]);
+   	}, [seller?.id]);
 
 	return (
 	  <main className={styles.main}>
 	    <Header
-	  	searchValue={searchQuery}
-	  	onSearchChange={setSearchQuery}
-	  	onSearchSubmit={handleSearch}
+	   	searchValue={searchQuery}
+	   	onSearchChange={setSearchQuery}
+	   	onSearchSubmit={handleSearch}
 	    />
 		<div className={styles.shopCard}>
 		  <div className={styles.shopImage}>
@@ -149,73 +189,91 @@ export default function UserPage()
 		  </div>
 		  <div className={styles.shopInfo}>
 			<div className={styles.shopName}>{seller?.firstName} {seller?.lastName}</div>
-			<div className={styles.onlineStatus}>-Online Status-</div>
+			<div className={styles.onlineStatus}>
+			  {seller?.id !== undefined && <OnlineStatus userId={seller.id} />}
+			</div>
 			<div className={styles.shopButtonGroup}>
-			  <button className={styles.button}>Chat Seller</button>
+			  <button className={styles.button} onClick={openChat} disabled={chatLoading || !currentUser?.id}>
+			    {chatLoading ? 'Loading...' : 'Chat Seller'}
+			  </button>
 			</div>
 		  </div>
 		</div>
 
 		<div className={styles.content}>
 		  <div className={styles.productsSection}>
-              {/* Products Grid */}
-              {loading ? (
-                <div className={styles.noResults}><p>Loading products...</p></div>
-              ) : error ? (
-                <div className={styles.noResults}><p>Error: {error}</p>
-                  <button className="btn btn-secondary" onClick={() => window.location.reload()}>
-                    Retry
-                  </button>
-                </div>
-              ) : products.length > 0 ? (
-                <div className={styles.productsGrid}>
-                  {products.map((product) => (
-                    <div key={product.id} className={styles.productCard}>
-                      <div className={styles.productImage}>
-                        <img src={product.image} alt={product.title} />
-                        {product.isFeatured && (
-                          <span className={`badge badge-primary ${styles.badgeFeatured}`}>
-                            Featured
-                          </span>
-                        )}
-                        {product.isNew && (
-                          <span className={`badge badge-success ${styles.badgeNew}`}>
-                            New
-                          </span>
-                        )}
-                      </div>
-                      <div className={styles.productBody}>
-                        <h4 className={styles.productTitle}>{product.title}</h4>
-                        <div className={styles.productMeta}>
-                          <span className={styles.location}>📍 {product.location}</span>
-                        </div>
-                        <div className={styles.productPrice}>
-                          <span className="price">RM {product.price}</span>
-                          {product.originalPrice && (
-                            <span className="price-old">RM {product.originalPrice}</span>
-                          )}
-                        </div>
-                        <div className={styles.productRating}>
-                          <span className={styles.stars}>{'⭐'.repeat(Math.floor(product.rating))}</span>
-                          <span className={styles.ratingText}>{product.rating} ({product.reviews} reviews)</span>
-                        </div>
-                        <div className={styles.productSeller}>
-                          <span className={styles.sellerName}>{product.sellerName}</span>
-                        </div>
-                        <Link href={`/products/${product.id}`}>
-                          <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} >
-                            View Details
-                          </button>
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className={styles.noResults}><p>No products available</p></div>
-              )}
-          </div>
-		</div>
-	  </main>
-	);
-}	
+           {loading ? (
+             <div className={styles.noResults}><p>Loading products...</p></div>
+           ) : error ? (
+             <div className={styles.noResults}><p>Error: {error}</p>
+               <button className="btn btn-secondary" onClick={() => window.location.reload()}>
+                 Retry
+               </button>
+             </div>
+           ) : products.length > 0 ? (
+             <div className={styles.productsGrid}>
+               {products.map((product) => (
+                 <div key={product.id} className={styles.productCard}>
+                   <div className={styles.productImage}>
+                     <img src={product.image} alt={product.title} />
+                     {product.isFeatured && (
+                       <span className={`badge badge-primary ${styles.badgeFeatured}`}>
+                         Featured
+                       </span>
+                     )}
+                     {product.isNew && (
+                       <span className={`badge badge-success ${styles.badgeNew}`}>
+                         New
+                       </span>
+                     )}
+                   </div>
+                   <div className={styles.productBody}>
+                     <h4 className={styles.productTitle}>{product.title}</h4>
+                     <div className={styles.productMeta}>
+                       <span className={styles.location}>📍 {product.location}</span>
+                     </div>
+                     <div className={styles.productPrice}>
+                       <span className="price">RM {product.price}</span>
+                       {product.originalPrice && (
+                         <span className="price-old">RM {product.originalPrice}</span>
+                       )}
+                     </div>
+                     <div className={styles.productRating}>
+                       <span className={styles.stars}>{'⭐'.repeat(Math.floor(product.rating))}</span>
+                       <span className={styles.ratingText}>{product.rating} ({product.reviews} reviews)</span>
+                     </div>
+                     <div className={styles.productSeller}>
+                       <span className={styles.sellerName}>{product.sellerName}</span>
+                     </div>
+                     <Link href={`/products/${product.id}`}>
+                       <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} >
+                         View Details
+                       </button>
+                     </Link>
+                   </div>
+                 </div>
+               ))}
+             </div>
+           ) : (
+             <div className={styles.noResults}><p>No products available</p></div>
+           )}
+       </div>
+	  {chatOpen && (
+	    <ChatModal partnerId={seller!.id}  messages={chatMessages} onClose={() => setChatOpen(false)}/>
+	  )}
+	  </div>
+	</main>
+	)
+}
+
+function OnlineStatus({ userId, showDot = true }: { userId: number, showDot?: boolean }) {
+	const { onlineUsers } = useWebSocketContext();
+	const isOnline = onlineUsers.has(userId);
+
+	return (
+		<span className={isOnline ? styles.statusOnlineText : styles.statusOfflineText}>
+		  {showDot && (isOnline ? '●' : '○')}
+		  {isOnline ? 'Online' : 'Offline'}
+		</span>
+	)
+}

@@ -326,9 +326,9 @@ func deleteProduct(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(400, map[string]string{"error": "invalid product id"})
 	}
 
-	userID, err := extractUserID(c)
-	if err != nil {
-		return c.JSON(401, map[string]string{"error": err.Error()})
+	userID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(401, map[string]string{"error": "Invalid authorization token"})
 	}
 
 	var sellerID int
@@ -360,9 +360,9 @@ func updateProduct(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(400, map[string]string{"error": "invalid product id"})
 	}
 
-	userID, err := extractUserID(c)
-	if err != nil {
-		return c.JSON(401, map[string]string{"error": err.Error()})
+	userID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(401, map[string]string{"error": "Invalid authorization token"})
 	}
 
 	var sellerID int
@@ -418,12 +418,12 @@ func uploadListingImages(c echo.Context, gormDB *gorm.DB) error {
 
 	listingID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid listing id"})
+		return c.JSON(400, map[string]string{"error": "Invalid listing id"})
 	}
 
-	userID, err := extractUserID(c)
-	if err != nil {
-		return c.JSON(401, map[string]string{"error": err.Error()})
+	userID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(401, map[string]string{"error": "Invalid authorization token"})
 	}
 
 	var sellerID int

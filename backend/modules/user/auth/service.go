@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"strconv"
 
 	brevo "github.com/getbrevo/brevo-go/lib"
 	"github.com/google/uuid"
@@ -19,6 +21,29 @@ type Service struct {
 func NewService(repo *user.Repository) *Service {
 	return &Service{repo: repo}
 }
+
+func (s *Service) ValidateToken(tokenStr string) (*Claims, error) {
+	if !strings.HasPrefix(tokenStr, "token_") {
+		return nil, fmt.Errorf("invalid token format")
+	}
+
+	idStr := strings.TrimPrefix(tokenStr, "token_")
+	userId, err := strconv.Atoi(idStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id in token")
+	}
+
+	_, err = s.repo.GetUserByID(userId)
+	if err != nil {
+		return nil, fmt.Errorf("user not found")
+	}
+	return &Claims{UserId: userId}, nil
+}
+
+type Claims struct {
+	UserId int `json:"user_id"`
+}
+
 
 func (s *Service) GenerateAndSendOTP(email string) (string, error) {
 	tempToken := uuid.NewString()

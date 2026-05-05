@@ -12,6 +12,8 @@ import (
     "transcendence/modules/user/auth"
     "transcendence/modules/user/profile"
     "transcendence/modules/user/friends"
+	"transcendence/modules/user/chat"
+	authMiddleware "transcendence/middleware"
 )
 
 func main() {
@@ -48,12 +50,16 @@ func main() {
 
 	// Product routes
 	e.GET("/api/v1/products", func(c echo.Context) error { return getProducts(c, gormDB) })
-	e.POST("/api/v1/products", func(c echo.Context) error { return createProduct(c, gormDB) })
-
 	e.GET("/api/v1/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
-	e.DELETE("/api/v1/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
-	e.PUT("/api/v1/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
-	e.POST("/api/v1/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
+	
+	// protected product routes
+	protected := e.Group("/api/v1")
+	protected.Use(authMiddleware.JWTAuth())
+
+	protected.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
+	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
+	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
+	protected.POST("/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
 
 	//User Module initialization
 	baseRepo := user.NewRepository(rawDB, gormDB)
@@ -69,15 +75,22 @@ func main() {
 	// Initialize Friends module
 	friendsHandler := friends.NewHandler(baseRepo)
 
+	// Initialize Chat module
+	chatRepo := chat.NewRepository(baseRepo)
+	chatHub := chat.NewHub(chatRepo)
+	go chatHub.Run()
+	chatHandler := chat.NewHandler(chatHub, chatRepo, authService)
+
 	// Register routes
 	authHandler.RegisterRoutes(v1)
 	profileHandler.RegisterRoutes(v1)
 	friendsHandler.RegisterRoutes(v1)
+	chatHandler.RegisterRoutes(v1)
 
 	// serve static files (avatars) from ./static mapped to /static URL
 	e.Static("/static", "static")
 
-	//start server
+	//start server 
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
 		port = "8080"
