@@ -27,9 +27,16 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
 	useEffect(() => {
 		const unsubscribe = onMessage((msg: WebSocketMessage) => {
-			if (msg.type === 'user_online') {
+			console.log('WS Message received:', msg); //debug
+			if (msg.type === 'online_users')
+				setOnlineUsers(new Set(msg.user_ids));
+			else if (msg.type === 'user_online') 
+			{
+				console.log('WS Message received inside user_online:', msg); //debug
 				setOnlineUsers(prev => new Set(prev).add(msg.user_id));
-			} else if (msg.type === 'user_offline') {
+			} 
+			else if (msg.type === 'user_offline') 
+			{
 				setOnlineUsers(prev => {
 					const next = new Set(prev);
 					next.delete(msg.user_id);

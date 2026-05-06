@@ -206,3 +206,12 @@
   font-weight: 500;
   color: var(--dark);
 }
+
+.statusOnlineText {
+  color: #22c55e;  /* Green for online */
+}
+
+.statusOfflineText {
+  color: var(--secondary);  /* Grey for offline */
+
+}

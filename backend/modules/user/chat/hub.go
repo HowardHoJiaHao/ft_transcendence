@@ -48,6 +48,37 @@ func (h *Hub) Run() {
 		case client := <-h.Register:
 			h.Clients[client.UserId] = client
 			log.Printf("✓ User %d connected(%d online)", client.UserId, len(h.Clients))
+			//				GIVE EXISTING ONLINE LIST TO NEW CLIENT
+			userIds := make([]int, 0, len(h.Clients))
+			for userId := range h.Clients {
+				// if userId == client.UserId {
+				// 	continue
+				// }
+				userIds = append(userIds, userId)
+			}
+			initialMsg := OnlineUsersMessage{
+				Type: "online_users",
+				UserIds: userIds,
+			}
+			initialPayload, _ := json.Marshal(initialMsg)
+			select {
+			case client.Send <- initialPayload:
+			default:
+			}
+			//			GIVE NEW CLIENT ONLINE NOTI TO EXISTING CLIENTS
+			onlineMsg := OnlineStatusMessage{
+				Type:   "user_online",
+				UserId: client.UserId,
+			}
+			payload, _ := json.Marshal(onlineMsg)
+			for _, c := range h.Clients {
+				if c.UserId != client.UserId {
+					select {
+					case c.Send <- payload:
+					default:
+					}
+				}
+			}
 
 		case userId := <- h.Unregister:
 			if Client, ok := h.Clients[userId]; ok {
@@ -55,6 +86,18 @@ func (h *Hub) Run() {
 				delete(h.Clients, userId)
 				log.Printf("✗ User %d disconnected(%d online)", userId, len(h.Clients))
 			}
+			offlineMsg := OnlineStatusMessage{
+				Type: "user_offline",
+				UserId: userId,
+			}
+			payload, _ := json.Marshal(offlineMsg)
+			for _, c := range h.Clients {
+				select {
+				case c.Send <- payload:
+				default:
+				}
+			}
+
 
 		case msg := <- h.Send:
 			if client, ok := h.Clients[msg.ToUserId]; ok {

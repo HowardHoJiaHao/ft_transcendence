@@ -148,7 +148,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 
 			  <div className={styles.shopInfo}>
 				<div className={styles.shopName}>{product.sellerName}</div>
-				<div className={styles.onlineStatus}>-Online Status-</div>
+				<div className={styles.onlineStatus}>{product.sellerId !== undefined && <OnlineStatus userId={product.sellerId} />}</div>
 				<div className={styles.shopButtonGroup}>
 					<button className={styles.button} onClick={openChat} disabled={chatLoading || !currentUser?.id}>
 						{chatLoading ? 'Loading...' : 'Chat Seller'}
@@ -176,6 +176,18 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		)}
 		</main>
 	);
+}
+
+function OnlineStatus({ userId, showDot = true }: { userId: number, showDot?: boolean }) {
+	const { onlineUsers } = useWebSocketContext();
+	const isOnline = onlineUsers.has(userId);
+
+	return (
+		<span className={isOnline ? styles.statusOnlineText : styles.statusOfflineText}>
+		  {showDot && (isOnline ? '●' : '○')}
+		  {isOnline ? 'Online' : 'Offline'}
+		</span>
+	)
 }
 
 //<Link href={`/chat?partner=${product.sellerId}`} className={styles.button}>Chat Seller</Link>

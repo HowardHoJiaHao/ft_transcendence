@@ -167,3 +167,12 @@
         max-width: 100%;
     }
 }
+
+.statusOnlineText {
+  color: #22c55e;  /* Green for online */
+}
+
+.statusOfflineText {
+  color: var(--secondary);  /* Grey for offline */
+
+}
