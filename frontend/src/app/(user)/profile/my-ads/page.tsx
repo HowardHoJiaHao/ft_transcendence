@@ -20,7 +20,8 @@ interface Ad {
 }
 
 const ADS_PER_PAGE = 5;
-const API_BASE = 'http://localhost:8080';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/350x450';
 
 export default function MyAdsPage() {
   const router = useRouter();
@@ -101,9 +102,11 @@ export default function MyAdsPage() {
   };
 
   const imgSrc = (ad: Ad) => {
-    if (!ad.image) return '/placeholder.png';
-    if (ad.image.startsWith('/static')) return `${API_BASE}${ad.image}`;
-    return ad.image;
+    if (!ad.image) return PLACEHOLDER_IMAGE;
+    if (ad.image.startsWith('http://') || ad.image.startsWith('https://') || ad.image.startsWith('data:'))
+      return ad.image;
+    if (ad.image.startsWith('/')) return `${API_BASE}${ad.image}`;
+    return `${API_BASE}/${ad.image}`;
   };
 
   return (
@@ -167,7 +170,7 @@ export default function MyAdsPage() {
                     src={imgSrc(ad)}
                     alt={ad.title}
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/placeholder.png';
+                      (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
                     }}
                   />
                 </div>

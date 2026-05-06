@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -80,12 +81,13 @@ type UpdateProductRequest struct {
 }
 
 // listingSelectCols is the shared SELECT column list used in all product queries.
-const listingSelectCols = `id, title, price, original_price, image,
-	COALESCE(category, 'Others'), COALESCE(condition, 'Second-hand (Used)'),
-	COALESCE(dealing_method, ''), COALESCE(phone_number, ''),
-	weight_category, flexibility_category, balance_category,
-	location, seller_id, seller_name, rating, reviews, is_new, is_featured,
-	COALESCE(status, 'active'), COALESCE(views_count, 0), created_at, description`
+const listingSelectCols = `l.id, l.title, l.price, l.original_price, l.image,
+	COALESCE(l.category, 'Others'), COALESCE(l.condition, 'Second-hand (Used)'),
+	COALESCE(l.dealing_method, ''), COALESCE(l.phone_number, ''),
+	l.weight_category, l.flexibility_category, l.balance_category,
+	l.location, l.seller_id, l.seller_name, COALESCE(u.avatar_url, ''),
+	l.rating, l.reviews, l.is_new, l.is_featured,
+	COALESCE(l.status, 'active'), COALESCE(l.views_count, 0), l.created_at, l.description`
 
 func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
@@ -113,7 +115,7 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	limitInt, _ := strconv.Atoi(limit)
 	offsetInt, _ := strconv.Atoi(offset)
 
-	query := "SELECT " + listingSelectCols + " FROM listings WHERE 1=1"
+	query := "SELECT " + listingSelectCols + " FROM listings l LEFT JOIN users u ON l.seller_id = u.id WHERE 1=1"
 	var args []interface{}
 
 	if len(weightCategory) > 0 {
@@ -126,7 +128,7 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 			placeholders += fmt.Sprintf("$%d", startPos+i)
 			args = append(args, weightCategory[i])
 		}
-		query += " AND weight_category IN (" + placeholders + ")"
+		query += " AND l.weight_category IN (" + placeholders + ")"
 	}
 	if len(flexibilityCategory) > 0 {
 		startPos := len(args) + 1
@@ -138,7 +140,7 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 			placeholders += fmt.Sprintf("$%d", startPos+i)
 			args = append(args, flexibilityCategory[i])
 		}
-		query += " AND flexibility_category IN (" + placeholders + ")"
+		query += " AND l.flexibility_category IN (" + placeholders + ")"
 	}
 	if len(balanceCategory) > 0 {
 		startPos := len(args) + 1
@@ -150,34 +152,34 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 			placeholders += fmt.Sprintf("$%d", startPos+i)
 			args = append(args, balanceCategory[i])
 		}
-		query += " AND balance_category IN (" + placeholders + ")"
+		query += " AND l.balance_category IN (" + placeholders + ")"
 	}
 	if search != "" {
-		query += fmt.Sprintf(" AND title ILIKE $%d", len(args)+1)
+		query += fmt.Sprintf(" AND l.title ILIKE $%d", len(args)+1)
 		args = append(args, "%"+search+"%")
 	}
 	if sellerId != "" {
 		sellerIdInt, err := strconv.Atoi(sellerId)
 		if err == nil {
-			query += fmt.Sprintf(" AND seller_id = $%d", len(args)+1)
+			query += fmt.Sprintf(" AND l.seller_id = $%d", len(args)+1)
 			args = append(args, sellerIdInt)
 		}
 	}
 	if status != "" {
-		query += fmt.Sprintf(" AND status = $%d", len(args)+1)
+		query += fmt.Sprintf(" AND l.status = $%d", len(args)+1)
 		args = append(args, status)
 	}
 
 	if sortBy == "price-low" {
-		query += " ORDER BY price ASC"
+		query += " ORDER BY l.price ASC"
 	} else if sortBy == "price-high" {
-		query += " ORDER BY price DESC"
+		query += " ORDER BY l.price DESC"
 	} else if sortBy == "newest" {
-		query += " ORDER BY id DESC"
+		query += " ORDER BY l.id DESC"
 	} else if sortBy == "rating" {
-		query += " ORDER BY rating DESC"
+		query += " ORDER BY l.rating DESC"
 	} else {
-		query += " ORDER BY is_featured DESC, id DESC"
+		query += " ORDER BY l.is_featured DESC, l.id DESC"
 	}
 
 	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
@@ -210,7 +212,7 @@ func scanProducts(rows *sql.Rows) ([]Product, error) {
 			&p.ID, &p.Title, &p.Price, &p.OriginalPrice, &p.Image,
 			&p.Category, &p.Condition, &p.DealingMethod, &p.PhoneNumber,
 			&p.WeightCategory, &p.FlexibilityCategory, &p.BalanceCategory,
-			&p.Location, &p.SellerId, &p.SellerName, &p.Rating, &p.Reviews,
+			&p.Location, &p.SellerId, &p.SellerName, &p.SellerAvatar, &p.Rating, &p.Reviews,
 			&p.IsNew, &p.IsFeatured, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
 		)
 		if err != nil {
@@ -502,14 +504,75 @@ func uploadListingImages(c echo.Context, gormDB *gorm.DB) error {
 	})
 }
 
+func getListingImages(c echo.Context, gormDB *gorm.DB) error {
+	listingID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid listing id"})
+	}
+
+	if _, statErr := os.Stat("static/listings"); statErr != nil {
+		if os.IsNotExist(statErr) {
+			return c.JSON(200, map[string]interface{}{"imageUrls": []string{}})
+		}
+		return c.JSON(500, map[string]string{"error": "failed to read storage directory"})
+	}
+
+	entries, err := os.ReadDir("static/listings")
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "failed to list images"})
+	}
+
+	type imageEntry struct {
+		index int
+		url   string
+	}
+
+	var images []imageEntry
+	prefix := fmt.Sprintf("%d_", listingID)
+	allowedExt := map[string]bool{
+		".jpg":  true,
+		".jpeg": true,
+		".png":  true,
+		".webp": true,
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		ext := strings.ToLower(path.Ext(name))
+		if !allowedExt[ext] {
+			continue
+		}
+		idxStr := strings.TrimSuffix(strings.TrimPrefix(name, prefix), ext)
+		idx, convErr := strconv.Atoi(idxStr)
+		if convErr != nil {
+			continue
+		}
+		images = append(images, imageEntry{index: idx, url: "/static/listings/" + name})
+	}
+
+	sort.Slice(images, func(i, j int) bool { return images[i].index < images[j].index })
+	imageUrls := make([]string, 0, len(images))
+	for _, img := range images {
+		imageUrls = append(imageUrls, img.url)
+	}
+
+	return c.JSON(200, map[string]interface{}{"imageUrls": imageUrls})
+}
+
 func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {
-	query := "SELECT " + listingSelectCols + " FROM listings WHERE id = $1"
+	query := "SELECT " + listingSelectCols + " FROM listings l LEFT JOIN users u ON l.seller_id = u.id WHERE l.id = $1"
 	var p Product
 	err := sqlDB.QueryRow(query, id).Scan(
 		&p.ID, &p.Title, &p.Price, &p.OriginalPrice, &p.Image,
 		&p.Category, &p.Condition, &p.DealingMethod, &p.PhoneNumber,
 		&p.WeightCategory, &p.FlexibilityCategory, &p.BalanceCategory,
-		&p.Location, &p.SellerId, &p.SellerName, &p.Rating, &p.Reviews,
+		&p.Location, &p.SellerId, &p.SellerName, &p.SellerAvatar, &p.Rating, &p.Reviews,
 		&p.IsNew, &p.IsFeatured, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
 	)
 	return p, err

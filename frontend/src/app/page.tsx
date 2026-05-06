@@ -56,6 +56,8 @@ export default function Home()
 {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+  const placeholderListingImageUrl = 'https://via.placeholder.com/350x450';
   const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
   const [selectedFlexibilities, setSelectedFlexibilities] = useState<string[]>([]);
   const [selectedBalances, setSelectedBalances] = useState<string[]>([]);
@@ -68,6 +70,15 @@ export default function Home()
 
   const handleSearch = () => {
     setSearchQuery(searchInput);
+  }
+  const resolveListingImageUrl = (url?: string) => {
+    if (!url)
+      return placeholderListingImageUrl;
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:'))
+      return url;
+    if (url.startsWith('/'))
+      return `${apiBaseUrl}${url}`;
+    return `${apiBaseUrl}/${url}`;
   }
 
   // Fetch products from API
@@ -110,7 +121,7 @@ export default function Home()
         query.append('sort', sortBy);
 
         const res = await fetch(
-          `http://localhost:8080/api/v1/products?${query}`
+          `${apiBaseUrl}/api/v1/products?${query}`
         );
 
         if (!res.ok)
@@ -317,7 +328,13 @@ export default function Home()
                 {products.map((product) => (
                   <div key={product.id} className={styles.productCard}>
                     <div className={styles.productImage}>
-                      <img src={product.image} alt={product.title} />
+                      <img
+                        src={resolveListingImageUrl(product.image)}
+                        alt={product.title}
+                        onError={(event) => {
+                          (event.currentTarget as HTMLImageElement).src = placeholderListingImageUrl;
+                        }}
+                      />
                       {product.isFeatured && (
                         <span className={`badge badge-primary ${styles.badgeFeatured}`}>
                           Featured

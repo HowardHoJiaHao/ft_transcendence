@@ -26,6 +26,14 @@
     flex: 0 0 50%;
     overflow: hidden;
     border-radius: 8px;
+    aspect-ratio: 4 / 5;
+    max-height: 520px;
+}
+
+.imageFrame {
+    position: relative;
+    width: 100%;
+    height: 100%;
 }
 
 .productImage img {
@@ -33,6 +41,46 @@
     height: 100%;
     object-fit: cover;
     display: block;
+}
+
+.carouselControls {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    pointer-events: none;
+}
+
+.carouselButton {
+    pointer-events: auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.carouselButton:hover {
+    background: rgba(0, 0, 0, 0.75);
+}
+
+.carouselCounter {
+    pointer-events: auto;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    letter-spacing: 0.4px;
 }
 
 .productInfo {
@@ -59,6 +107,15 @@
     flex: 0 0 30%;
     overflow: hidden;
     border-radius: 8px;
+    aspect-ratio: 1 / 1;
+    max-height: 160px;
+}
+
+.shopImage img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .shopInfo {
@@ -132,6 +189,31 @@
     color: var(--secondary);
     line-height: 1.6;
     margin-bottom: 25px;
+}
+
+.detailGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px 24px;
+}
+
+.detailItem {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.detailLabel {
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--secondary);
+}
+
+.detailValue {
+    font-size: 14px;
+    color: var(--dark);
+    font-weight: 600;
 }
 
 .shopButtonGroup {

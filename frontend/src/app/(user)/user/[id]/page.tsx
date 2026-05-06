@@ -56,6 +56,10 @@ export default function UserPage()
 	const { id } = useParams();
 	const router = useRouter();
 	const { user: currentUser } = useAuth();
+	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+	const defaultAvatarUrl = '/default-avatar.png';
+	const placeholderAvatarUrl = 'https://via.placeholder.com/120';
+	const placeholderListingImageUrl = 'https://via.placeholder.com/350x450';
 	const [seller, setSeller] = useState<UserProfile | null>(null)
 	const [products, setProducts] = useState<Product[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -68,6 +72,24 @@ export default function UserPage()
 	const { showToast } = useToast();
 	const { onlineUsers } = useWebSocketContext();
 	const handleSearch = () => { router.push(`/?search=${encodeURIComponent(searchQuery)}`) };
+	const resolveAvatarUrl = (url?: string) => {
+		if (!url)
+			return defaultAvatarUrl;
+		if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:'))
+			return url;
+		if (url.startsWith('/'))
+			return `${apiBaseUrl}${url}`;
+		return `${apiBaseUrl}/${url}`;
+	}
+	const resolveListingImageUrl = (url?: string) => {
+		if (!url)
+			return placeholderListingImageUrl;
+		if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:'))
+			return url;
+		if (url.startsWith('/'))
+			return `${apiBaseUrl}${url}`;
+		return `${apiBaseUrl}/${url}`;
+	}
 
 	const fetchChatHistory = async (partnerId: number) => {
 		if (!currentUser?.id) return [];
@@ -185,7 +207,13 @@ export default function UserPage()
 	    />
 		<div className={styles.shopCard}>
 		  <div className={styles.shopImage}>
-			<img src={seller?.avatarUrl || "https://via.placeholder.com/350x450"} alt="-Shop Picture-" />
+			<img
+				src={resolveAvatarUrl(seller?.avatarUrl)}
+				alt="-Shop Picture-"
+				onError={(event) => {
+					(event.currentTarget as HTMLImageElement).src = placeholderAvatarUrl;
+				}}
+			/>
 		  </div>
 		  <div className={styles.shopInfo}>
 			<div className={styles.shopName}>{seller?.firstName} {seller?.lastName}</div>
@@ -277,3 +305,70 @@ function OnlineStatus({ userId, showDot = true }: { userId: number, showDot?: bo
 		</span>
 	)
 }
+//               {/* Products Grid */}
+//               {loading ? (
+//                 <div className={styles.noResults}><p>Loading products...</p></div>
+//               ) : error ? (
+//                 <div className={styles.noResults}><p>Error: {error}</p>
+//                   <button className="btn btn-secondary" onClick={() => window.location.reload()}>
+//                     Retry
+//                   </button>
+//                 </div>
+//               ) : products.length > 0 ? (
+//                 <div className={styles.productsGrid}>
+//                   {products.map((product) => (
+//                     <div key={product.id} className={styles.productCard}>
+//                       <div className={styles.productImage}>
+// 							<img
+// 								src={resolveListingImageUrl(product.image)}
+// 								alt={product.title}
+// 								onError={(event) => {
+// 									(event.currentTarget as HTMLImageElement).src = placeholderListingImageUrl;
+// 								}}
+// 							/>
+//                         {product.isFeatured && (
+//                           <span className={`badge badge-primary ${styles.badgeFeatured}`}>
+//                             Featured
+//                           </span>
+//                         )}
+//                         {product.isNew && (
+//                           <span className={`badge badge-success ${styles.badgeNew}`}>
+//                             New
+//                           </span>
+//                         )}
+//                       </div>
+//                       <div className={styles.productBody}>
+//                         <h4 className={styles.productTitle}>{product.title}</h4>
+//                         <div className={styles.productMeta}>
+//                           <span className={styles.location}>📍 {product.location}</span>
+//                         </div>
+//                         <div className={styles.productPrice}>
+//                           <span className="price">RM {product.price}</span>
+//                           {product.originalPrice && (
+//                             <span className="price-old">RM {product.originalPrice}</span>
+//                           )}
+//                         </div>
+//                         <div className={styles.productRating}>
+//                           <span className={styles.stars}>{'⭐'.repeat(Math.floor(product.rating))}</span>
+//                           <span className={styles.ratingText}>{product.rating} ({product.reviews} reviews)</span>
+//                         </div>
+//                         <div className={styles.productSeller}>
+//                           <span className={styles.sellerName}>{product.sellerName}</span>
+//                         </div>
+//                         <Link href={`/products/${product.id}`}>
+//                           <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} >
+//                             View Details
+//                           </button>
+//                         </Link>
+//                       </div>
+//                     </div>
+//                   ))}
+//                 </div>
+//               ) : (
+//                 <div className={styles.noResults}><p>No products available</p></div>
+//               )}
+//           </div>
+// 		</div>
+// 	  </main>
+// 	);
+// }	
