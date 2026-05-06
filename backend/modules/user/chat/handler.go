@@ -26,6 +26,7 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.GET("/ws", h.WebSocketHandler)
 	e.POST("/messages", h.SendMessage, h.AuthMiddleware)
 	e.GET("/conversations", h.GetConversations, h.AuthMiddleware)
+	e.DELETE("/conversations/:userId", h.DeleteConversation, h.AuthMiddleware)
 	e.GET("/messages/:userId", h.GetMessages, h.AuthMiddleware)
 }
 
@@ -139,3 +140,20 @@ func (h *Handler) GetMessages(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{"messages":messages})
 }
 
+func (h *Handler) DeleteConversation(c echo.Context) error {
+	userId, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
+
+	partnerId, err := strconv.Atoi(c.Param("userId"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"})
+	}
+
+	err = h.Repo.DeleteConversation(userId, partnerId)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to delete messages"})
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "deleted"})
+}

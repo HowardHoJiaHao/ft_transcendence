@@ -113,3 +113,12 @@ func (r *Repository) GetUnreadCount(userId int) (int, error) {
 	}
 	return count, nil
 }
+
+func (r *Repository) DeleteConversation(userId, partnerId int) error {
+	result := r.GormDB.Where(
+		"(sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)",
+		userId, partnerId, partnerId, userId,
+	).Delete(&Message{})
+
+	return result.Error
+}

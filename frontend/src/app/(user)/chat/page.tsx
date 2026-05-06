@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/modules/user/components/AuthContext'
 import ChatModal from './ChatModal';
 import type { PrivateMessage, Conversation } from '@/types/websocket';
@@ -17,6 +17,26 @@ export default function ChatPage() {
 		if (user)
 			fetchConversations();
 	}, [user]);
+
+	const deleteConversation = async (partnerId: number, e: React.MouseEvent) => {
+		e.stopPropagation();
+		try
+		{
+			const token = localStorage.getItem('token') || `token_$(user?.id)`;
+			const res = await fetch(`http://localhost:8080/api/v1/conversations/${partnerId}`, {
+				method: 'DELETE',
+				headers: { Authorization: `Bearer ${token}` },
+			});
+			if (res.ok)
+			{
+				setConversations(prev => prev.filter(c => c.partner_id !== partnerId));
+			}
+		}
+		catch (err)
+		{
+			console.error('Failed to delete conversation: ', err);
+		}
+	};
 
 	const fetchConversations = async() => {
 		try
@@ -96,8 +116,9 @@ export default function ChatPage() {
 				  <div className={styles.conversationInfo}>
 					<div className={styles.conversationName}>{conv.partner_username}</div>
 				  </div>
-				  <div>
-					{new Date(conv.last_message_at).toLocaleDateString()}
+				  <div className={styles.conversationActions}>
+				    <button className={styles.delete} onClick={(e) => deleteConversation(conv.partner_id, e)} title="Delete conversation">x</button>
+				    {/*<div>{new Date(conv.last_message_at).toLocaleDateString()}</div>*/}
 				  </div>
 				</li>
 			  )}

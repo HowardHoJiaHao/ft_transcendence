@@ -5,6 +5,7 @@ import { WebSocketProvider } from '@/context/WebSocketContext'
 import { AuthProvider } from "@/modules/user/components/AuthContext";
 import { ToastProvider } from "@/components/Toast/ToastContext";
 import Footer from "@/components/Footer/Footer";
+import FloatingChat from "@/components/FloatingChat/FloatingChat";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,6 +27,7 @@ export default function RootLayout({
             <ToastProvider>
               {children}
               <Footer />
+			  <FloatingChat />
             </ToastProvider>
           </WebSocketProvider>
         </AuthProvider>
