@@ -4,6 +4,9 @@ import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+import { useAuth } from '@/modules/user/components/AuthContext';
+import { useWebSocketContext } from '@/context/WebSocketContext'
+import ChatModal from '@/app/(user)/chat/ChatModal'
 import styles from './product.module.css';
 import Header from '@/components/Header/Header'
 
@@ -33,6 +36,11 @@ interface Product {
 
 export default function ProductPage({ params }: { params: Promise<{ id: string}> })
 {
+	const { user: currentUser } = useAuth();
+	const { onlineUsers } = useWebSocketContext();
+	const [chatOpen, setChatOpen] = useState(false);
+	const [chatMessages, setChatMessages] = useState<any[]>([]);
+	const [chatLoading, setChatLoading] = useState(false);
 	const router = useRouter();
 	const resolvedParams = use(params);
 	const productId = parseInt(resolvedParams.id);
@@ -63,6 +71,39 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		return resolveImageUrl(url);
 	}
 	//fetch the product
+
+	const fetchChatHistory = async (partnerId: number) => {
+		if (!currentUser?.id)
+			return[]
+		try
+		{
+			const res = await fetch(`http://localhost:8080/api/v1/messages/${partnerId}`, {
+				headers: {
+					'Authorization': `Bearer ${localStorage.getItem('token')}`
+				}
+			});
+			if (!res.ok)
+				throw new Error('Failed to fetch chat messages');
+			const data = await res.json();
+			return data.messages || [];
+		}
+		catch (err)
+		{
+			console.error('Failed to fetch chat history:', err);
+			return [];
+		}
+	};
+
+	const openChat = async () => 
+	{
+		if (!product?.sellerId || !currentUser?.id)
+			return ;
+		setChatLoading(true);
+		const history = await fetchChatHistory(product.sellerId);
+		setChatMessages(history);
+		setChatLoading(false);
+		setChatOpen(true);
+	}
 
 	useEffect(() => {
 		const fetchProduct = async() => {
@@ -200,9 +241,11 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 
 			  <div className={styles.shopInfo}>
 				<div className={styles.shopName}>{product.sellerName}</div>
-				<div className={styles.onlineStatus}>-Online Status-</div>
+				<div className={styles.onlineStatus}>{product.sellerId !== undefined && <OnlineStatus userId={product.sellerId} />}</div>
 				<div className={styles.shopButtonGroup}>
-				        <Link href={`/chat?partner=${product.sellerId}`} className={styles.button}>Chat Seller</Link>
+					<button className={styles.button} onClick={openChat} disabled={chatLoading || !currentUser?.id}>
+						{chatLoading ? 'Loading...' : 'Chat Seller'}
+					</button>
 				  	<Link href={`/user/${product.sellerId}`} className={styles.button}>View Shop</Link>
 				</div>
 			  </div>
@@ -238,6 +281,28 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 					</div>
 				</div>
 			</div>
+
+		{chatOpen && product && (
+			<ChatModal
+				partnerId={product.sellerId}
+				messages={chatMessages}
+				onClose={() => setChatOpen(false)}
+			/>
+		)}
 		</main>
 	);
 }
+
+function OnlineStatus({ userId, showDot = true }: { userId: number, showDot?: boolean }) {
+	const { onlineUsers } = useWebSocketContext();
+	const isOnline = onlineUsers.has(userId);
+
+	return (
+		<span className={isOnline ? styles.statusOnlineText : styles.statusOfflineText}>
+		  {showDot && (isOnline ? '●' : '○')}
+		  {isOnline ? 'Online' : 'Offline'}
+		</span>
+	)
+}
+
+//<Link href={`/chat?partner=${product.sellerId}`} className={styles.button}>Chat Seller</Link>

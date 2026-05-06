@@ -34,3 +34,13 @@ type OutboundMessage struct {
 	CreatedAt  string `json:"created_at"`
 	Id         int    `json:"id,omitempty"`
 }
+
+type OnlineStatusMessage struct {
+	Type   string `json:"type"`
+	UserId int    `json:"user_id"`
+}
+
+type OnlineUsersMessage struct {
+	Type     string `json:"type"`
+	UserIds  []int  `json:"user_ids"`
+}

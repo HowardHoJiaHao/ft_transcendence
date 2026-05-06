@@ -67,3 +67,17 @@
   font-weight: bold;
   margin: 0;
 }
+
+.delete {
+  background: none;
+  border: none;
+  color: #ff6b6b;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.conversationActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

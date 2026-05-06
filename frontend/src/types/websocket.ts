@@ -22,9 +22,14 @@ export interface WSPrivateMessage {
 	id: number;
 }
 
-export interface PresenceEvent {
+export interface OnlineStatusMessage {
 	type: 'user_online' | 'user_offline';
 	user_id: number;
 }
 
-export type WSMessage = WSPrivateMessage | PresenceEvent; 
+export interface OnlineUsersMessage {
+	type: 'online_users';
+	user_ids: number[];
+}
+
+export type WSMessage = WSPrivateMessage | OnlineStatusMessage | OnlineUsersMessage;
