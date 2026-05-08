@@ -270,11 +270,7 @@ function SellPageInner() {
   if (editLoading) {
     return (
       <main className={styles.main}>
-        <Header
-          searchValue={searchInput}
-          onSearchChange={setSearchInput}
-          onSearchSubmit={handleSearch}
-        />
+        <Header/>
         <div className={styles.loadingWrap}>Loading listing data…</div>
       </main>
     );
@@ -282,11 +278,7 @@ function SellPageInner() {
 
   return (
     <main className={styles.main}>
-      <Header
-        searchValue={searchInput}
-        onSearchChange={setSearchInput}
-        onSearchSubmit={handleSearch}
-      />
+      <Header/>
 
       <div className={styles.pageLayout}>
         {/* ── SIDEBAR ── */}

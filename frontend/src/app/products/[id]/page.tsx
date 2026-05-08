@@ -51,11 +51,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const [product, setProduct] = useState<Product | null>(null);
 	const [imageUrls, setImageUrls] = useState<string[]>([]);
 	const [imageIndex, setImageIndex] = useState(0);
-	const [searchQuery, setSearchQuery] = useState('');
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
-	const handleSearch = () => { router.push(`/?search=${encodeURIComponent(searchQuery)}`); }
 	const resolveImageUrl = (url?: string) => {
 		if (!url)
 			return 'https://via.placeholder.com/350x450';
@@ -176,11 +174,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 
 	return (
 		<main className={styles.main}>
-		  <Header
-		      searchValue={searchQuery}
-		      onSearchChange={setSearchQuery}
-		      onSearchSubmit={handleSearch}
-		  />
+		  <Header/>
 		    <div className={styles.productCard}>
 		  	  <div className={styles.productImage}>
 					<div className={styles.imageFrame}>

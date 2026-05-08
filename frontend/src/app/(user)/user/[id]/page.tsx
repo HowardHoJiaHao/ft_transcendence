@@ -7,7 +7,6 @@ import Link from 'next/link';
 import Header from '@/components/Header/Header';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useAuth } from '@/modules/user/components/AuthContext';
-import { useSearch } from '@/hooks/useSearch';
 import ChatModal from '@/app/(user)/chat/ChatModal';
 import { useWebSocketContext } from '@/context/WebSocketContext';
 import styles from './user.module.css';
@@ -57,7 +56,6 @@ export default function UserPage()
 	const { id } = useParams();
 	const router = useRouter();
 	const { user: currentUser } = useAuth();
-	const {searchQuery, setSearchQuery, handleSearch} = useSearch();
 	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 	const defaultAvatarUrl = '/default-avatar.png';
 	const placeholderAvatarUrl = 'https://via.placeholder.com/120';
@@ -225,11 +223,7 @@ export default function UserPage()
 
 	return (
 	  <main className={styles.main}>
-	    <Header
-	   	searchValue={searchQuery}
-	   	onSearchChange={setSearchQuery}
-	   	onSearchSubmit={handleSearch}
-	    />
+	    <Header/>
 		<div className={styles.shopCard}>
 		  <div className={styles.shopImage}>
 			<img

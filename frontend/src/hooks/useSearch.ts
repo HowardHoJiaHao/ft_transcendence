@@ -12,7 +12,7 @@ export function useSearch(initialValue = '')
 		if (searchQuery.trim())
 			router.push(`/?search=${encodeURIComponent(searchQuery.trim())}`);
 		else
-			router.push('/')
+			return ;
 	}, [searchQuery, router]);
 
 
@@ -21,7 +21,7 @@ export function useSearch(initialValue = '')
 		if (inputValue.trim())
 			router.push(`/?search=${encodeURIComponent(inputValue.trim())}`);
 		else
-			router.push('/');
+			return ;
 	}, [router]);
 
 	return {

@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 
 import { useAuth } from '@/modules/user/components/AuthContext'
-import { useSearch } from '@/hooks/useSearch';
 import Header from '@/components/Header/Header';
 import ChatModal from './ChatModal';
 import type { PrivateMessage, Conversation } from '@/types/websocket';
@@ -11,7 +10,6 @@ import styles from './chat.module.css';
 
 export default function ChatPage() {
 	const { user } = useAuth();
-	const { searchQuery, setSearchQuery, handleSearch } = useSearch();
 	const [conversations, setConversations] = useState<Conversation[]>([]);
 	const [selectedPartner, setSelectedPartner] = useState<number | null>(null);
 	const [messages, setMessages] = useState<PrivateMessage[]>([]);
@@ -105,7 +103,7 @@ export default function ChatPage() {
 
 	return (
         <main>
-		  <Header searchValue={searchQuery} onSearchChange={setSearchQuery} onSearchSubmit={handleSearch}/>
+		  <Header />
             <div className={styles.container}>
               <h1 className={styles.title}>Your Conversations</h1>
               {conversations.length === 0 ? (

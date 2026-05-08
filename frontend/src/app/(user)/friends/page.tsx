@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 import { useAuth } from '@/modules/user/components/AuthContext';
-import { useSearch } from '@/hooks/useSearch'
 import Header from "@/components/Header/Header"
 import styles from "./friends.module.css"
 
@@ -19,7 +18,6 @@ type Friend = {
 export default function FriendPage()
 {
 	const { user } = useAuth();
-	const { searchQuery, setSearchQuery, handleSearch } = useSearch();
 	const [friendList, setFriendList] = useState<Friend[]>([]);
 	const [loading, setLoading] = useState(true);
 
@@ -77,7 +75,7 @@ export default function FriendPage()
 
 	return (
 		<main>
-		  <Header searchValue={searchQuery} onSearchChange={setSearchQuery} onSearchSubmit={handleSearch}/>
+		  <Header />
 			<div className={styles.container}>
 			  <h1 className={styles.title}>Your Friends</h1>
 			  {friendList.length === 0 ? (

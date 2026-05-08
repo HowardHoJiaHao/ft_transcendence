@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/modules/user/components/AuthContext";
 import { useToast } from "@/components/Toast/ToastContext";
-import { useSearch } from "@/hooks/useSearch";
 import Header from "@/components/Header/Header";
 import styles from "./profile.module.css";
 
@@ -23,7 +22,6 @@ interface UserProfile {
 export default function ProfilePage() {
   const router = useRouter();
   const { user: ctxUser, logout, updateUser } = useAuth();
-  const { searchQuery, setSearchQuery, handleSearch } = useSearch();
   const { showToast } = useToast();
   const [user, setUser] = useState<UserProfile | null>(ctxUser ?? null);
   const [loading, setLoading] = useState(!ctxUser);
@@ -348,11 +346,7 @@ export default function ProfilePage() {
   }
   return (
     <main className={styles.main}>
-      <Header
-        searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
-        onSearchSubmit={handleSearch}
-      />
+      <Header/>
 
       <div className={styles.cardFlex}>
         <div className="container">

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react'; //std react hook for managing local state & side effects
-import { useRouter } from 'next/navigation'; //programmatic navigation
 import { useAuth } from '@/modules/user/components/AuthContext'; //import hook to access global authentication data
 import styles from './page.module.css'; //import CSS module for scope styling
 import Header from '@/components/Header/Header';
@@ -54,7 +53,6 @@ const BALANCE_CATEGORIES = [
 
 export default function Home()
 {
-  const router = useRouter();
   const { user, logout } = useAuth();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
   const placeholderListingImageUrl = 'https://via.placeholder.com/350x450';
@@ -68,9 +66,10 @@ export default function Home()
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSearch = () => {
-    setSearchQuery(searchInput);
-  }
+//   const handleSearchWithFilters = (nextSearchQuery: string) => {
+//     setSearchQuery(nextSearchQuery);
+//   };
+
   const resolveListingImageUrl = (url?: string) => {
     if (!url)
       return placeholderListingImageUrl;
@@ -81,18 +80,35 @@ export default function Home()
     return `${apiBaseUrl}/${url}`;
   }
 
+  useEffect(() => {
+	const urlSearch = new URLSearchParams(window.location.search).get('search');
+	if (urlSearch)
+	{
+		setSearchInput(urlSearch);
+		setSearchQuery(urlSearch);
+	}
+  }, [])
+
+  useEffect(() => {
+	const timeoutId = setTimeout(() => {
+		setSearchQuery(searchInput)
+	}, 250);
+
+	return () => clearTimeout(timeoutId);
+  }, [searchInput]);
+
   // Fetch products from API
   //new URLSearchParams(window.location.search) gives search query and get('search') gives value of search key.
   useEffect(() =>
 	{
-    const urlSearch = typeof window === 'undefined'
-                ? null : new URLSearchParams(window.location.search).get('search'); //if the search comes from url (other page), get they word from the key search
-    const currentSearch = urlSearch ?? searchQuery; //if empty, means it dont come from url, use the searchQuery
-    if (urlSearch && urlSearch !== searchQuery) //if both exist but different, means it come from url, update searchQuery following url
-    {
-	  setSearchQuery(urlSearch);
-	  return ;
-	}
+    // const urlSearch = typeof window === 'undefined'
+    //             ? null : new URLSearchParams(window.location.search).get('search'); //if the search comes from url (other page), get they word from the key search
+    // const currentSearch = urlSearch ?? searchQuery; //if empty, means it dont come from url, use the searchQuery
+    // if (urlSearch && urlSearch !== searchQuery) //if both exist but different, means it come from url, update searchQuery following url
+    // {
+	//   setSearchQuery(urlSearch);
+	//   return ;
+	// }
 
     const fetchProducts = async () => {
       try {
@@ -116,13 +132,11 @@ export default function Home()
 			query.append('balanceCategory', b);
 			});
 		}
-        if (currentSearch)
-          query.append('search', currentSearch);
+        if (searchQuery.trim())
+          query.append('search', searchQuery.trim());
         query.append('sort', sortBy);
 
-        const res = await fetch(
-          `${apiBaseUrl}/api/v1/products?${query}`
-        );
+        const res = await fetch(`${apiBaseUrl}/api/v1/products?${query}`);
 
         if (!res.ok)
           throw new Error('Failed to fetch products');
@@ -165,7 +179,7 @@ export default function Home()
       <Header
         searchValue={searchInput}
         onSearchChange={setSearchInput}
-        onSearchSubmit={handleSearch}
+		onSearchSubmit={() => setSearchQuery(searchInput.trim())}
       />
 
       {/* Main Content */}
