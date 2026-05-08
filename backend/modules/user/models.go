@@ -61,14 +61,6 @@ type UpdateProfileRequest struct {
 	PhoneNo      *string    `json:"phoneNo"`
 }
 
-type Friend struct {
-	ID        int       `json:"id"`
-	Username  string    `json:"username"`
-	AvatarURL *string   `json:"avatar,omitempty"`
-	IsOnline  bool      `json:"onlineStatus"`
-	AddedAt   time.Time `json:"addedAt"`
-}
-
 type OTP struct {
 	Email      string    `gorm:"primaryKey;type:varchar(255);column:email"`
 	Code       string    `gorm:"type:char(6);not null;column:code"`

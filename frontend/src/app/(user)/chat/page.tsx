@@ -1,13 +1,17 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+
 import { useAuth } from '@/modules/user/components/AuthContext'
+import { useSearch } from '@/hooks/useSearch';
+import Header from '@/components/Header/Header';
 import ChatModal from './ChatModal';
 import type { PrivateMessage, Conversation } from '@/types/websocket';
 import styles from './chat.module.css';
 
 export default function ChatPage() {
 	const { user } = useAuth();
+	const { searchQuery, setSearchQuery, handleSearch } = useSearch();
 	const [conversations, setConversations] = useState<Conversation[]>([]);
 	const [selectedPartner, setSelectedPartner] = useState<number | null>(null);
 	const [messages, setMessages] = useState<PrivateMessage[]>([]);
@@ -100,33 +104,35 @@ export default function ChatPage() {
 		return <div>Loading...</div>
 
 	return (
-		<div className={styles.container}>
-		  <h1 className={styles.title}>Your Conversations</h1>
-
-		  {conversations.length === 0 ? (
-			<div className={styles.emptyState}>No conversations yet.</div>
-		  ) : (
-			<ul className={styles.conversationList}>
-			  {conversations.map((conv) =>
-				<li key={conv.partner_id} onClick={() => openChat(conv.partner_id)} className={styles.conversationItem}>
-				  <div className={styles.avatar}>
-					{conv.partner_avatar_url ? 
-					  (<img src={conv.partner_avatar_url} alt="" />) : (<span className={styles.avatarPlaceholder}>{conv.partner_username[0]}</span>)}
-				  </div>
-				  <div className={styles.conversationInfo}>
-					<div className={styles.conversationName}>{conv.partner_username}</div>
-				  </div>
-				  <div className={styles.conversationActions}>
-				    <button className={styles.delete} onClick={(e) => deleteConversation(conv.partner_id, e)} title="Delete conversation">x</button>
-				    {/*<div>{new Date(conv.last_message_at).toLocaleDateString()}</div>*/}
-				  </div>
-				</li>
-			  )}
-			</ul>
-		  )}
-		{selectedPartner && (
-			<ChatModal partnerId={selectedPartner} messages={messages} onClose={() => setSelectedPartner(null)}/>
-		)}
-		</div>
+        <main>
+		  <Header searchValue={searchQuery} onSearchChange={setSearchQuery} onSearchSubmit={handleSearch}/>
+            <div className={styles.container}>
+              <h1 className={styles.title}>Your Conversations</h1>
+              {conversations.length === 0 ? (
+            	<div className={styles.emptyState}>No conversations yet.</div>
+              ) : (
+                <ul className={styles.conversationList}>
+                  {conversations.map((conv) =>
+                    <li key={conv.partner_id} onClick={() => openChat(conv.partner_id)} className={styles.conversationItem}>
+                      <div className={styles.avatar}>
+                    	{conv.partner_avatar_url ? 
+                    	  (<img src={conv.partner_avatar_url} alt="" />) : (<span className={styles.avatarPlaceholder}>{conv.partner_username[0]}</span>)}
+                      </div>
+                      <div className={styles.conversationInfo}>
+                    	<div className={styles.conversationName}>{conv.partner_username}</div>
+                      </div>
+                      <div className={styles.conversationActions}>
+                        <button className={styles.delete} onClick={(e) => deleteConversation(conv.partner_id, e)} title="Delete conversation">x</button>
+                        {/*<div>{new Date(conv.last_message_at).toLocaleDateString()}</div>*/}
+                      </div>
+                    </li>
+                  )}
+                </ul>
+              )}
+            {selectedPartner && (
+            	<ChatModal partnerId={selectedPartner} messages={messages} onClose={() => setSelectedPartner(null)}/>
+            )}
+            </div>
+		</main>
 	);
 }

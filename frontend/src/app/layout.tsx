@@ -24,11 +24,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <WebSocketProvider>
-            <ToastProvider>
-              {children}
-              <Footer />
-			  <FloatingChat />
-            </ToastProvider>
+            <ToastProvider>{children}</ToastProvider>
+              <FloatingChat />
+            <Footer />
           </WebSocketProvider>
         </AuthProvider>
       </body>

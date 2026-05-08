@@ -21,7 +21,6 @@ func NewHandler(hub *Hub, repo *Repository, service *auth.Service) *Handler {
 	return &Handler{Hub: hub, Repo: repo, Service: service}
 }
 
-
 func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.GET("/ws", h.WebSocketHandler)
 	e.POST("/messages", h.SendMessage, h.AuthMiddleware)
@@ -30,6 +29,7 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.GET("/messages/:userId", h.GetMessages, h.AuthMiddleware)
 }
 
+//need to create a shared function. DRY
 func (h *Handler) AuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		authHeader := c.Request().Header.Get("Authorization")

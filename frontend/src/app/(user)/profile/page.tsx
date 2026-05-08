@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/modules/user/components/AuthContext";
 import { useToast } from "@/components/Toast/ToastContext";
+import { useSearch } from "@/hooks/useSearch";
 import Header from "@/components/Header/Header";
 import styles from "./profile.module.css";
 
@@ -22,11 +23,11 @@ interface UserProfile {
 export default function ProfilePage() {
   const router = useRouter();
   const { user: ctxUser, logout, updateUser } = useAuth();
+  const { searchQuery, setSearchQuery, handleSearch } = useSearch();
   const { showToast } = useToast();
   const [user, setUser] = useState<UserProfile | null>(ctxUser ?? null);
   const [loading, setLoading] = useState(!ctxUser);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [inputData, setInputData] = useState({
     firstName: ctxUser?.firstName ?? "",
     lastName: ctxUser?.lastName ?? "",
@@ -146,10 +147,6 @@ export default function ProfilePage() {
   const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await handleOtp();
-  };
-
-  const handleSearch = () => {
-    router.push(`/?search=${encodeURIComponent(searchQuery)}`);
   };
 
   useEffect(() => {

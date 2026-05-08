@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'; //programmatic navigation
 import { useAuth } from '@/modules/user/components/AuthContext'; //import hook to access global authentication data
+// import { useSearch } from '@/hooks/useSearch';
 import Link from 'next/link';
 import SearchBar from '@/components/SearchBar/SearchBar';
 import styles from './Header.module.css';
