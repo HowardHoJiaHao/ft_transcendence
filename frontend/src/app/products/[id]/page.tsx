@@ -44,9 +44,10 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const router = useRouter();
 	const resolvedParams = use(params);
 	const productId = parseInt(resolvedParams.id);
-	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 	const defaultAvatarUrl = '/default-avatar.png';
 	const placeholderAvatarUrl = 'https://via.placeholder.com/120';
+	const placeholderListingImageUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='900' viewBox='0 0 700 900'%3E%3Crect width='700' height='900' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%236b7280' font-family='Arial,sans-serif' font-size='32'%3ENo image%3C/text%3E%3C/svg%3E";
 
 	const [product, setProduct] = useState<Product | null>(null);
 	const [imageUrls, setImageUrls] = useState<string[]>([]);
@@ -58,7 +59,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const handleSearch = () => { router.push(`/?search=${encodeURIComponent(searchQuery)}`); }
 	const resolveImageUrl = (url?: string) => {
 		if (!url)
-			return 'https://via.placeholder.com/350x450';
+			return placeholderListingImageUrl;
 		if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:'))
 			return url;
 		if (url.startsWith('/'))
@@ -187,6 +188,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 						<img
 							src={resolveImageUrl(activeImage)}
 							alt={product.title || 'Product image'}
+							onError={(event) => {
+								(event.currentTarget as HTMLImageElement).src = placeholderListingImageUrl;
+							}}
 						/>
 						{canNavigate && (
 							<div className={styles.carouselControls}>

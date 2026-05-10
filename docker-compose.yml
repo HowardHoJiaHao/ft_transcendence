@@ -37,6 +37,7 @@ services:
       - ./uploads:/app/uploads
       - ./avatar:/app/avatar
       - ./static/avatars:/app/static/avatars
+      - ./static/listings:/app/static/listings
     depends_on:
       db:
         condition: service_healthy

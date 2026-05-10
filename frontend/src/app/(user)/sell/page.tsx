@@ -27,6 +27,11 @@ const FLEXIBILITY_CATEGORIES = [
   "High Flexibility",
 ];
 const BALANCE_CATEGORIES = ["Head Heavy", "Even Balance", "Head Light"];
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8080";
+const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 
 type Condition = (typeof CONDITIONS)[number];
 
@@ -77,7 +82,7 @@ function SellPageInner() {
   useEffect(() => {
     if (!editId) return;
     setEditLoading(true);
-    fetch(`http://localhost:8080/api/v1/products/${editId}`)
+    fetch(`${API_BASE}/api/v1/products/${editId}`)
       .then((r) => r.json())
       .then((p) => {
         setCategory(p.category || "Others");
@@ -128,8 +133,15 @@ function SellPageInner() {
 
   const addPhotos = (files: File[]) => {
     const valid = files.filter((f) => f.type.startsWith("image/"));
+    const uploadable = valid.filter((f) => f.size <= MAX_PHOTO_SIZE);
     const slots = 6 - photos.length;
-    const newFiles = valid.slice(0, slots);
+    const newFiles = uploadable.slice(0, slots);
+    if (valid.length !== files.length)
+      showToast("Only image files can be uploaded", "error");
+    if (uploadable.length !== valid.length)
+      showToast("Each photo must be 10MB or smaller", "error");
+    if (uploadable.length > slots)
+      showToast("You can upload up to 6 photos", "error");
     if (!newFiles.length) return;
     setPhotos((prev) => [...prev, ...newFiles]);
     setPhotoPreviewUrls((prev) => [
@@ -153,11 +165,15 @@ function SellPageInner() {
     if (!photos.length) return;
     const fd = new FormData();
     photos.forEach((p) => fd.append("images", p));
-    await fetch(`http://localhost:8080/api/v1/products/${listingId}/images`, {
+    const res = await fetch(`${API_BASE}/api/v1/products/${listingId}/images`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: fd,
     });
+    if (!res.ok) {
+      const e = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(e.error || "Failed to upload listing photos");
+    }
   };
 
   const handleSubmit = async () => {
@@ -191,7 +207,7 @@ function SellPageInner() {
       if (isEditMode) {
         /* ── UPDATE ── */
         const res = await fetch(
-          `http://localhost:8080/api/v1/products/${editId}`,
+          `${API_BASE}/api/v1/products/${editId}`,
           {
             method: "PUT",
             headers: {
@@ -223,7 +239,7 @@ function SellPageInner() {
         router.push("/profile/my-ads");
       } else {
         /* ── CREATE ── */
-        const res = await fetch("http://localhost:8080/api/v1/products", {
+        const res = await fetch(`${API_BASE}/api/v1/products`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

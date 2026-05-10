@@ -80,6 +80,8 @@ type UpdateProductRequest struct {
 	Status              string   `json:"status"`
 }
 
+const maxListingImageSize = 10 * 1024 * 1024
+
 // listingSelectCols is the shared SELECT column list used in all product queries.
 const listingSelectCols = `l.id, l.title, l.price, l.original_price, l.image,
 	COALESCE(l.category, 'Others'), COALESCE(l.condition, 'Second-hand (Used)'),
@@ -454,6 +456,10 @@ func uploadListingImages(c echo.Context, gormDB *gorm.DB) error {
 	if err := os.MkdirAll("static/listings", 0755); err != nil {
 		return c.JSON(500, map[string]string{"error": "failed to create storage directory"})
 	}
+	if err := clearStoredListingImages(listingID); err != nil {
+		log.Printf("Error clearing old listing images: %v", err)
+		return c.JSON(500, map[string]string{"error": "failed to replace existing images"})
+	}
 
 	mimeToExt := map[string]string{
 		"image/jpeg": "jpg",
@@ -463,7 +469,7 @@ func uploadListingImages(c echo.Context, gormDB *gorm.DB) error {
 	var imageURLs []string
 
 	for i, fh := range files {
-		if fh.Size > 2*1024*1024 {
+		if fh.Size > maxListingImageSize {
 			continue
 		}
 		f, ferr := fh.Open()
@@ -488,7 +494,7 @@ func uploadListingImages(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	if len(imageURLs) == 0 {
-		return c.JSON(400, map[string]string{"error": "no valid images were uploaded"})
+		return c.JSON(400, map[string]string{"error": "no valid images were uploaded. Use JPG, PNG, or WEBP images up to 10MB each"})
 	}
 
 	if _, uerr := sqlDB.Exec(
@@ -563,6 +569,27 @@ func getListingImages(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	return c.JSON(200, map[string]interface{}{"imageUrls": imageUrls})
+}
+
+func clearStoredListingImages(listingID int) error {
+	entries, err := os.ReadDir("static/listings")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	prefix := fmt.Sprintf("%d_", listingID)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), prefix) {
+			continue
+		}
+		if err := os.Remove(path.Join("static/listings", entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {
