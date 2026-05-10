@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header/Header";
-import { useAuth } from "@/modules/user/components/AuthContext";
+import { useAuth } from '@/context/AuthContext';
 import { useToast } from "@/components/Toast/ToastContext";
 import styles from "./sell.module.css";
 

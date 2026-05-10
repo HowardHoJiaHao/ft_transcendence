@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 import Header from '@/components/Header/Header';
 import { useToast } from '@/components/Toast/ToastContext';
-import { useAuth } from '@/modules/user/components/AuthContext';
+import { useAuth } from '@/context/AuthContext';;
 import ChatModal from '@/app/(user)/chat/ChatModal';
 import { useWebSocketContext } from '@/context/WebSocketContext';
 import styles from './user.module.css';

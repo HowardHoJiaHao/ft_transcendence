@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation'
 
-import { useAuth } from '@/modules/user/components/AuthContext'; //import hook to access global authentication data
+import { useAuth } from '@/context/AuthContext';; //import hook to access global authentication data
 import { useSearch } from '@/hooks/useSearch';
 import SearchBar from '@/components/SearchBar/SearchBar';
 import styles from './Header.module.css';

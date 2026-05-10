@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'; //std react hook for managing local state & side effects
 import { useRouter } from 'next/navigation'; //programmatic navigation
-import { useAuth } from '@/modules/user/components/AuthContext'; //import hook to access global authentication data
+import { useAuth } from '@/context/AuthContext';; //import hook to access global authentication data
 import styles from './page.module.css'; //import CSS module for scope styling
 import Header from '@/components/Header/Header';
 import Link from 'next/link';

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 
-import { useAuth } from '@/modules/user/components/AuthContext'
+import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header/Header';
 import ChatModal from './ChatModal';
 import type { PrivateMessage, Conversation } from '@/types/websocket';

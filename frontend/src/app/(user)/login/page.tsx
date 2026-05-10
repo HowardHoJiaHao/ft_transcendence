@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/modules/user/components/AuthContext';
+import { useAuth } from '@/context/AuthContext';;
 import { useToast } from '@/components/Toast/ToastContext';
 import { useRouter } from 'next/navigation';
 import styles from './login.module.css';

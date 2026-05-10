@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { useAuth } from '@/modules/user/components/AuthContext';
+import { useAuth } from '@/context/AuthContext';;
 import { useRouter } from 'next/navigation';
 import styles from './login.module.css';
 

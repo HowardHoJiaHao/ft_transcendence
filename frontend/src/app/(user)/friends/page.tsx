@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
-import { useAuth } from '@/modules/user/components/AuthContext';
+import { useAuth } from '@/context/AuthContext';
+import OnlineStatus from '@/components/OnlineStatus';
 import Header from "@/components/Header/Header"
 import styles from "./friends.module.css"
 
@@ -95,6 +96,7 @@ export default function FriendPage()
 					    <div className={styles.friendInfo}>
 					      <div className={styles.friendName}>{friend.username}</div>
 					    </div>
+						<div><OnlineStatus userId={friend.id}/></div>
 					  </Link>
 					  <div className={styles.friendActions}>
 					    <button className={styles.delete} onClick={(e) => deleteFriend(friend.id, e)} title="Delete friend">x</button>

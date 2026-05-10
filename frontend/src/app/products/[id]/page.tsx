@@ -4,8 +4,8 @@ import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-import { useAuth } from '@/modules/user/components/AuthContext';
-import { useWebSocketContext } from '@/context/WebSocketContext'
+import { useAuth } from '@/context/AuthContext';
+import OnlineStatus from '@/components/OnlineStatus';
 import ChatModal from '@/app/(user)/chat/ChatModal'
 import styles from './product.module.css';
 import Header from '@/components/Header/Header'
@@ -37,7 +37,6 @@ interface Product {
 export default function ProductPage({ params }: { params: Promise<{ id: string}> })
 {
 	const { user: currentUser } = useAuth();
-	const { onlineUsers } = useWebSocketContext();
 	const [chatOpen, setChatOpen] = useState(false);
 	const [chatMessages, setChatMessages] = useState<any[]>([]);
 	const [chatLoading, setChatLoading] = useState(false);
@@ -68,8 +67,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 			return defaultAvatarUrl;
 		return resolveImageUrl(url);
 	}
-	//fetch the product
 
+	//fetch the product
 	const fetchChatHistory = async (partnerId: number) => {
 		if (!currentUser?.id)
 			return[]
@@ -287,16 +286,19 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	);
 }
 
-function OnlineStatus({ userId, showDot = true }: { userId: number, showDot?: boolean }) {
-	const { onlineUsers } = useWebSocketContext();
-	const isOnline = onlineUsers.has(userId);
+// function OnlineStatus({ userId, showDot = true }: { userId: number, showDot?: boolean }) {
+// 	const { onlineUsers } = useWebSocketContext();
+// 	const isOnline = onlineUsers.has(userId);
 
-	return (
-		<span className={isOnline ? styles.statusOnlineText : styles.statusOfflineText}>
-		  {showDot && (isOnline ? '●' : '○')}
-		  {isOnline ? 'Online' : 'Offline'}
-		</span>
-	)
-}
+// 	return (
+// 		<span className={isOnline ? styles.statusOnlineText : styles.statusOfflineText}>
+// 		  {showDot && (isOnline ? '●' : '○')}
+// 		  {isOnline ? 'Online' : 'Offline'}
+// 		</span>
+// 	)
+// }
 
 //<Link href={`/chat?partner=${product.sellerId}`} className={styles.button}>Chat Seller</Link>
+
+// import { useWebSocketContext } from '@/context/WebSocketContext';
+// const { onlineUsers } = useWebSocketContext();

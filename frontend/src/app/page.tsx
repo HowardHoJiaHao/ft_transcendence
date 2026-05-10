@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react'; //std react hook for managing local state & side effects
-import { useAuth } from '@/modules/user/components/AuthContext'; //import hook to access global authentication data
+import { useAuth } from '@/context/AuthContext';; //import hook to access global authentication data
 import styles from './page.module.css'; //import CSS module for scope styling
 import Header from '@/components/Header/Header';
 import Link from 'next/link';
@@ -65,6 +65,9 @@ export default function Home()
   const [products, setProducts] = useState<Product[]>([]); //declare a product array. declare the array is empty
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10;
 
 //   const handleSearchWithFilters = (nextSearchQuery: string) => {
 //     setSearchQuery(nextSearchQuery);
@@ -80,6 +83,7 @@ export default function Home()
     return `${apiBaseUrl}/${url}`;
   }
 
+  //			SEARH INITIALIZATION (FROM OTHER PAGE SEARCH)
   useEffect(() => {
 	const urlSearch = new URLSearchParams(window.location.search).get('search');
 	if (urlSearch)
@@ -89,6 +93,7 @@ export default function Home()
 	}
   }, [])
 
+  //			TYPE SEARCH TRIGGER CD
   useEffect(() => {
 	const timeoutId = setTimeout(() => {
 		setSearchQuery(searchInput)
@@ -97,7 +102,12 @@ export default function Home()
 	return () => clearTimeout(timeoutId);
   }, [searchInput]);
 
-  // Fetch products from API
+  useEffect(() => {
+	setCurrentPage(1)
+  }, [selectedWeights, selectedFlexibilities, selectedBalances, searchQuery, sortBy]);
+
+
+  //			FETCH PRODUCTS FROM API
   //new URLSearchParams(window.location.search) gives search query and get('search') gives value of search key.
   useEffect(() =>
 	{
@@ -136,12 +146,18 @@ export default function Home()
           query.append('search', searchQuery.trim());
         query.append('sort', sortBy);
 
+		const offset = (currentPage - 1) * itemsPerPage;
+		query.append('limit', itemsPerPage.toString())
+		query.append('offset', offset.toString());
+
         const res = await fetch(`${apiBaseUrl}/api/v1/products?${query}`);
 
         if (!res.ok)
           throw new Error('Failed to fetch products');
 
         const data = await res.json();
+        const totalCount = data.total;
+		setTotalPages(Math.ceil(totalCount/ itemsPerPage));
         const mappedProducts = data.products.map((p: any) => ({ //for every single data call everything for a while then take the p and turn it into object below
           id: p.id,
           title: p.title,
@@ -171,7 +187,7 @@ export default function Home()
     };
 
     fetchProducts();
-  }, [selectedWeights, selectedFlexibilities, selectedBalances, searchQuery, sortBy]);
+  }, [selectedWeights, selectedFlexibilities, selectedBalances, searchQuery, sortBy, currentPage]);
 
   return (
     <main className={styles.main}>
@@ -182,8 +198,8 @@ export default function Home()
 		onSearchSubmit={() => setSearchQuery(searchInput.trim())}
       />
 
-      {/* Main Content */}
-	  <div className={styles.content}>
+        {/* Main Content */}
+	    <div className={styles.content}>
           {/* Sidebar Filters */}
           <aside className={styles.sidebar}>
             <div className={styles.filterSection}>
@@ -196,7 +212,7 @@ export default function Home()
 				  </div>
                   <button className={styles.applyBtn}>Apply</button>
 				</div>
-          </div>
+            </div>
 
 			<div className={styles.filterSection}>
 			  <h3>Weight</h3>
@@ -413,6 +429,29 @@ export default function Home()
               </div>
             )}
           </div>
+
+		    {!loading && !error && products.length > 0 && (
+			  <div className={styles.pagination}>
+			    <div className={styles.paginationButtons}>
+			      <button className={styles.paginationBtn} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
+			        ← Prev
+				  </button>
+				  
+				  {/*Page Numbers*/}
+				  {[...Array(totalPages)].map((_, i) => (
+				    <button key={i + 1} className={`${styles.paginationBtn} ${currentPage === i + 1 ? styles.active : ''}`} onClick={() => setCurrentPage(i + 1)}>
+				  	{i + 1}
+				    </button>
+				  ))}
+				  <button className={styles.paginationBtn} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
+				    Next →
+				  </button>
+				</div>
+				<span className={styles.pageInfo}>
+				  Page {currentPage} of {totalPages}
+				</span>
+			  </div>
+			)}
         </div>
     </main>
   );
