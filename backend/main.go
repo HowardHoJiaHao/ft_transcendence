@@ -73,7 +73,8 @@ func main() {
 	profileHandler := profile.NewHandler(baseRepo, profileService)
 
 	// Initialize Friends module
-	friendsHandler := friends.NewHandler(baseRepo)
+	friendsRepo := friends.NewRepository(baseRepo)
+	friendsHandler := friends.NewHandler(friendsRepo, authService)
 
 	// Initialize Chat module
 	chatRepo := chat.NewRepository(baseRepo)

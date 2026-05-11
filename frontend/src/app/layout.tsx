@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { WebSocketProvider } from '@/context/WebSocketContext'
-import { AuthProvider } from "@/modules/user/components/AuthContext";
+import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from "@/components/Toast/ToastContext";
 import Footer from "@/components/Footer/Footer";
 import FloatingChat from "@/components/FloatingChat/FloatingChat";
@@ -24,11 +24,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <WebSocketProvider>
-            <ToastProvider>
-              {children}
-              <Footer />
-			  <FloatingChat />
-            </ToastProvider>
+            <ToastProvider>{children}</ToastProvider>
+              <FloatingChat />
+            <Footer />
           </WebSocketProvider>
         </AuthProvider>
       </body>

@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 import Header from '@/components/Header/Header';
 import { useToast } from '@/components/Toast/ToastContext';
-import { useAuth } from '@/modules/user/components/AuthContext';
+import { useAuth } from '@/context/AuthContext';;
 import ChatModal from '@/app/(user)/chat/ChatModal';
 import { useWebSocketContext } from '@/context/WebSocketContext';
 import styles from './user.module.css';
@@ -63,7 +63,6 @@ export default function UserPage()
 	const [seller, setSeller] = useState<UserProfile | null>(null)
 	const [products, setProducts] = useState<Product[]>([]);
 	const [loading, setLoading] = useState(true);
-	const [searchQuery, setSearchQuery] = useState('');
 	const [error, setError] = useState<string | null>(null);
 	const [chatOpen, setChatOpen] = useState(false);
 	const [chatMessages, setChatMessages] = useState<PrivateMessage[]>([]);
@@ -71,7 +70,6 @@ export default function UserPage()
 
 	const { showToast } = useToast();
 	const { onlineUsers } = useWebSocketContext();
-	const handleSearch = () => { router.push(`/?search=${encodeURIComponent(searchQuery)}`) };
 	const resolveAvatarUrl = (url?: string) => {
 		if (!url)
 			return defaultAvatarUrl;
@@ -116,6 +114,31 @@ export default function UserPage()
 		setChatLoading(false);
 		setChatOpen(true);
 	};
+
+	const addFriend = async () => {
+		if (!seller?.id || !currentUser?.id || seller.id === currentUser.id)
+			return;
+		try
+		{
+			const token = localStorage.getItem('token') || `token_${currentUser?.id}`;
+			const res = await fetch(`http://localhost:8080/api/v1/friends/${seller?.id}`, {
+				method: 'POST',
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (res.ok)
+			{
+				showToast("Friend added succesfully", "success")
+			}
+			else
+			{
+				showToast("Failed to add friend", "error")
+			}
+		}
+		catch(err)
+		{
+			showToast("Error adding friend", "error")
+		}
+	}
 
 	useEffect(() => {
 		const fetchSeller = async () => {
@@ -200,11 +223,7 @@ export default function UserPage()
 
 	return (
 	  <main className={styles.main}>
-	    <Header
-	   	searchValue={searchQuery}
-	   	onSearchChange={setSearchQuery}
-	   	onSearchSubmit={handleSearch}
-	    />
+	    <Header/>
 		<div className={styles.shopCard}>
 		  <div className={styles.shopImage}>
 			<img
@@ -223,6 +242,9 @@ export default function UserPage()
 			<div className={styles.shopButtonGroup}>
 			  <button className={styles.button} onClick={openChat} disabled={chatLoading || !currentUser?.id}>
 			    {chatLoading ? 'Loading...' : 'Chat Seller'}
+			  </button>
+			  <button className={styles.button} onClick={addFriend} disabled={!currentUser?.id || !seller?.id || seller.id === currentUser.id}>
+			    Add Friend
 			  </button>
 			</div>
 		  </div>

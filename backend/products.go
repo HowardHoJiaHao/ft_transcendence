@@ -114,10 +114,20 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 		offset = "0"
 	}
 
-	limitInt, _ := strconv.Atoi(limit)
-	offsetInt, _ := strconv.Atoi(offset)
+	limitInt, err := strconv.Atoi(limit)
+	if err != nil || limitInt <= 0 {
+		limitInt = 20
+	}
+	if limitInt > 100 {
+		limitInt = 100
+	}
+	offsetInt, err := strconv.Atoi(offset)
+	if err != nil || offsetInt < 0 {
+		offsetInt = 0
+	}
 
-	query := "SELECT " + listingSelectCols + " FROM listings l LEFT JOIN users u ON l.seller_id = u.id WHERE 1=1"
+	query := "SELECT " + listingSelectCols + " FROM listings l LEFT JOIN users u ON l.seller_id = u.id"
+	whereClause := " WHERE 1=1"
 	var args []interface{}
 
 	if len(weightCategory) > 0 {
@@ -130,7 +140,7 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 			placeholders += fmt.Sprintf("$%d", startPos+i)
 			args = append(args, weightCategory[i])
 		}
-		query += " AND l.weight_category IN (" + placeholders + ")"
+		whereClause += " AND l.weight_category IN (" + placeholders + ")"
 	}
 	if len(flexibilityCategory) > 0 {
 		startPos := len(args) + 1
@@ -142,7 +152,7 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 			placeholders += fmt.Sprintf("$%d", startPos+i)
 			args = append(args, flexibilityCategory[i])
 		}
-		query += " AND l.flexibility_category IN (" + placeholders + ")"
+		whereClause += " AND l.flexibility_category IN (" + placeholders + ")"
 	}
 	if len(balanceCategory) > 0 {
 		startPos := len(args) + 1
@@ -154,24 +164,33 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 			placeholders += fmt.Sprintf("$%d", startPos+i)
 			args = append(args, balanceCategory[i])
 		}
-		query += " AND l.balance_category IN (" + placeholders + ")"
+		whereClause += " AND l.balance_category IN (" + placeholders + ")"
 	}
 	if search != "" {
-		query += fmt.Sprintf(" AND l.title ILIKE $%d", len(args)+1)
+		whereClause += fmt.Sprintf(" AND l.title ILIKE $%d", len(args)+1)
 		args = append(args, "%"+search+"%")
 	}
 	if sellerId != "" {
 		sellerIdInt, err := strconv.Atoi(sellerId)
 		if err == nil {
-			query += fmt.Sprintf(" AND l.seller_id = $%d", len(args)+1)
+			whereClause += fmt.Sprintf(" AND l.seller_id = $%d", len(args)+1)
 			args = append(args, sellerIdInt)
 		}
 	}
 	if status != "" {
-		query += fmt.Sprintf(" AND l.status = $%d", len(args)+1)
+		whereClause += fmt.Sprintf(" AND l.status = $%d", len(args)+1)
 		args = append(args, status)
 	}
 
+	countQuery := "SELECT COUNT(*) FROM listings l LEFT JOIN users u ON l.seller_id = u.id" + whereClause
+	var totalCount int
+	err = sqlDB.QueryRow(countQuery, args...).Scan(&totalCount)
+	if err != nil {
+		log.Printf("Error querying products count: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to fetch products count"})
+	}
+
+	query += whereClause
 	if sortBy == "price-low" {
 		query += " ORDER BY l.price ASC"
 	} else if sortBy == "price-high" {
@@ -202,7 +221,7 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 
 	return c.JSON(200, map[string]interface{}{
 		"products": products,
-		"total":    len(products),
+		"total":    totalCount,
 	})
 }
 

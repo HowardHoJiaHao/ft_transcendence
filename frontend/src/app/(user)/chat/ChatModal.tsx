@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '@/modules/user/components/AuthContext';
+import { useAuth } from '@/context/AuthContext';;
 import { useWebSocketContext } from '@/context/WebSocketContext';
 import type { PrivateMessage } from '@/types/websocket';
 import type { WebSocketMessage } from '@/context/WebSocketContext';

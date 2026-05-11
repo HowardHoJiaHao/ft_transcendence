@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import Link from 'next/link';
-import { useAuth } from '../../modules/user/components/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import styles from './NavBar.module.css';
 
 export default function NavBar() 

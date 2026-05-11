@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS friendships (
     id SERIAL PRIMARY KEY,
     user_id1 INT NOT NULL,
     user_id2 INT NOT NULL,
+    CONSTRAINT friendships_user_pair_unique UNIQUE (user_id1, user_id2),
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'blocked')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id1) REFERENCES users(id) ON DELETE CASCADE,

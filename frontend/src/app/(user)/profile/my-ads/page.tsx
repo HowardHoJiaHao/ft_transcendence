@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/modules/user/components/AuthContext';
+import { useAuth } from '@/context/AuthContext';;
 import { useToast } from '@/components/Toast/ToastContext';
 import Header from '@/components/Header/Header';
 import styles from './my-ads.module.css';
@@ -28,16 +28,16 @@ export default function MyAdsPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const [searchQuery, setSearchQuery] = useState('');
+//   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'active' | 'sold'>('active');
   const [publishedAds, setPublishedAds] = useState<Ad[]>([]);
   const [soldAds, setSoldAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
-  const handleSearch = () => {
-    router.push(`/?search=${encodeURIComponent(searchQuery)}`);
-  };
+//   const handleSearch = () => {
+//     router.push(`/?search=${encodeURIComponent(searchQuery)}`);
+//   };
 
   useEffect(() => {
     if (!user) {
@@ -111,11 +111,7 @@ export default function MyAdsPage() {
 
   return (
     <main className={styles.main}>
-      <Header
-        searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
-        onSearchSubmit={handleSearch}
-      />
+      <Header/>
 
       <div className={styles.container}>
         <button

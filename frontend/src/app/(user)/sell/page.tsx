@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header/Header";
-import { useAuth } from "@/modules/user/components/AuthContext";
+import { useAuth } from '@/context/AuthContext';
 import { useToast } from "@/components/Toast/ToastContext";
 import styles from "./sell.module.css";
 
@@ -286,11 +286,7 @@ function SellPageInner() {
   if (editLoading) {
     return (
       <main className={styles.main}>
-        <Header
-          searchValue={searchInput}
-          onSearchChange={setSearchInput}
-          onSearchSubmit={handleSearch}
-        />
+        <Header/>
         <div className={styles.loadingWrap}>Loading listing data…</div>
       </main>
     );
@@ -298,11 +294,7 @@ function SellPageInner() {
 
   return (
     <main className={styles.main}>
-      <Header
-        searchValue={searchInput}
-        onSearchChange={setSearchInput}
-        onSearchSubmit={handleSearch}
-      />
+      <Header/>
 
       <div className={styles.pageLayout}>
         {/* ── SIDEBAR ── */}

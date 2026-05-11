@@ -166,59 +166,6 @@ func (r *Repository) GetUserAvatarBinary(userID int) ([]byte, string, error) {
 	return data, contentType, nil
 }
 
-func (r *Repository) GetFriends(userID int) ([]Friend, error) {
-	rows, err := r.DB.Query(`
-		SELECT u.id, u.username, u.avatar_url, f.created_at 
-		FROM friendships f
-		JOIN users u ON f.friend_id = u.id
-		WHERE f.user_id = $1
-		ORDER BY f.created_at DESC
-	`, userID)//--JOIN combine two table. ON only combine two rows w/ specific value match
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var friends []Friend
-	for rows.Next() {
-		var f Friend
-		var avatarURL sql.NullString
-		if err := rows.Scan(&f.ID, &f.Username, &avatarURL, &f.AddedAt); err != nil {
-			return nil, err
-		}
-		if avatarURL.Valid {
-			urlStr := avatarURL.String
-			f.AvatarURL = &urlStr
-		}
-		f.IsOnline = true
-		friends = append(friends, f)
-	}
-	if friends == nil {
-		friends = []Friend{}
-	}
-	return friends, nil
-}
-
-func (r *Repository) AddFriend(userID, friendID int) error {
-	//check if friend exists
-	var exists int
-	err := r.DB.QueryRow("SELECT id FROM users WHERE id = $1", friendID).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("friend user does not exist")
-	}
-
-	_, err = r.DB.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", userID, friendID)
-	//bidirectional for simplicirt
-	_, err = r.DB.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", friendID, userID)
-	return err
-}
-
-func (r *Repository) RemoveFriend(userID, friendID int) error {
-	_, err := r.DB.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", userID, friendID)
-	_, err = r.DB.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", friendID, userID)
-	return err
-}
-
 func (r *Repository) SaveOTP(tempToken, email, otpCode string) error {
     if r.GormDB == nil {
         return fmt.Errorf("gorm db is not initialized")
@@ -263,3 +210,56 @@ func (r *Repository) SaveListingImageBinary(listingID int, data []byte, mime str
 	)
 	return err
 }
+
+// func (r *Repository) GetFriends(userID int) ([]Friend, error) {
+// 	rows, err := r.DB.Query(`
+// 		SELECT u.id, u.username, u.avatar_url, f.created_at 
+// 		FROM friendships f
+// 		JOIN users u ON f.friend_id = u.id
+// 		WHERE f.user_id = $1
+// 		ORDER BY f.created_at DESC
+// 	`, userID)//--JOIN combine two table. ON only combine two rows w/ specific value match
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer rows.Close()
+
+// 	var friends []Friend
+// 	for rows.Next() {
+// 		var f Friend
+// 		var avatarURL sql.NullString
+// 		if err := rows.Scan(&f.ID, &f.Username, &avatarURL, &f.AddedAt); err != nil {
+// 			return nil, err
+// 		}
+// 		if avatarURL.Valid {
+// 			urlStr := avatarURL.String
+// 			f.AvatarURL = &urlStr
+// 		}
+// 		f.IsOnline = true
+// 		friends = append(friends, f)
+// 	}
+// 	if friends == nil {
+// 		friends = []Friend{}
+// 	}
+// 	return friends, nil
+// }
+
+// func (r *Repository) AddFriend(userID, friendID int) error {
+// 	//check if friend exists
+// 	var exists int
+// 	err := r.DB.QueryRow("SELECT id FROM users WHERE id = $1", friendID).Scan(&exists)
+// 	if err != nil {
+// 		return fmt.Errorf("friend user does not exist")
+// 	}
+
+// 	_, err = r.DB.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", userID, friendID)
+// 	//bidirectional for simplicirt
+// 	_, err = r.DB.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", friendID, userID)
+// 	return err
+// }
+
+// func (r *Repository) RemoveFriend(userID, friendID int) error {
+// 	_, err := r.DB.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", userID, friendID)
+// 	_, err = r.DB.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", friendID, userID)
+// 	return err
+// }

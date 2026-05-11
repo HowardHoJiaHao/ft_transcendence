@@ -1,29 +1,38 @@
 'use client';
 
-import { useRouter } from 'next/navigation'; //programmatic navigation
-import { useAuth } from '@/modules/user/components/AuthContext'; //import hook to access global authentication data
+import { useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'
+
+import { useAuth } from '@/context/AuthContext';; //import hook to access global authentication data
+import { useSearch } from '@/hooks/useSearch';
 import SearchBar from '@/components/SearchBar/SearchBar';
 import styles from './Header.module.css';
+
+type HeaderProps = {
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  onSearchSubmit?: () => void;
+};
 
 export default function Header({
   searchValue,
   onSearchChange,
   onSearchSubmit,
-}: {
-  searchValue: string;
-  onSearchChange: (value: string) => void;
-  onSearchSubmit: () => void;
-}) {
-    const router = useRouter();
-    const { user, logout } = useAuth();
+}: HeaderProps) {
+  const router = useRouter();
+  const { user, logout } = useAuth();
+  const { searchQuery, setSearchQuery, handleSearch } = useSearch();
+  const activeSearchValue = searchValue ?? searchQuery;
+  const handleSearchChange = onSearchChange ?? setSearchQuery;
+  const submitSearch = onSearchSubmit ?? handleSearch;
 
     return (
      <header className={styles.header}>
         <div className="container">
           <div className={styles.headerTop}>
 			<Link href="/" className={styles.logo}><h1>🏸 RacketDiction 💉 </h1></Link>
-            <SearchBar value={searchValue} onChange={onSearchChange} onSubmit={onSearchSubmit} />
+            <SearchBar value={activeSearchValue} onChange={handleSearchChange} onSubmit={submitSearch} />
             <div className={styles.headerActions}>
               {user ? (
                 <>
@@ -47,3 +56,13 @@ export default function Header({
       </header>
     )
 }
+
+// {
+//   searchValue,
+//   onSearchChange,
+//   onSearchSubmit,
+// }: {
+//   searchValue: string;
+//   onSearchChange: (value: string) => void;
+//   onSearchSubmit: () => void;
+// })
