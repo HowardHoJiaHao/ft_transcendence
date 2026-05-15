@@ -113,7 +113,7 @@ export default function MyAdsPage() {
     <main className={styles.main}>
       <Header/>
 
-      <div className={styles.container}>
+      <div className={styles.EmptyCartContainer}>
         <button
           className={styles.backBtn}
           onClick={() => router.push('/profile')}

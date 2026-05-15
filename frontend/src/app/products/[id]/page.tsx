@@ -1,9 +1,9 @@
 'use client';
 
 import { use, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext';
 import OnlineStatus from '@/components/OnlineStatus';
 import ChatModal from '@/app/(user)/chat/ChatModal'
@@ -37,10 +37,11 @@ interface Product {
 export default function ProductPage({ params }: { params: Promise<{ id: string}> })
 {
 	const { user: currentUser } = useAuth();
+	const { addToCart } = useCart();
 	const [chatOpen, setChatOpen] = useState(false);
 	const [chatMessages, setChatMessages] = useState<any[]>([]);
 	const [chatLoading, setChatLoading] = useState(false);
-	const router = useRouter();
+	const [quantity, setQuantity] = useState(1);
 	const resolvedParams = use(params);
 	const productId = parseInt(resolvedParams.id);
 	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
@@ -217,7 +218,14 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 				  {product.originalPrice && (
                     <span className={styles.originalPrice}> ${product.originalPrice.toFixed(2)} </span> )}
 				</p>
-		  	    <button className={styles.button}>Add to Cart</button>
+				<div className="quantitySelector">
+				  <button className="quantityBtn" onClick={() => setQuantity(prev => Math.max(1, prev - 1))} disabled={quantity <= 1}>-</button>
+				    <span className="quantityDisplay">{quantity}</span>
+				  <button className="quantityBtn" onClick={() => setQuantity(prev => Math.max(1, prev + 1))}> + </button>
+				</div>
+		  	    <button className={styles.button} onClick={() => addToCart({id: product.id, title: product.title, price: product.price, image: product.image}, quantity)}>
+				  🛒 Add to Cart
+				</button>
 		  	  </div>
 		    </div>
 

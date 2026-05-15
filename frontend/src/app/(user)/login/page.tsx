@@ -152,9 +152,9 @@ export default function LoginPage ()
 						value={otpCode}
 						onChange={(e) => setOtpCode(e.target.value)}
 						required
-						className={styles.input}
+						className={styles.otpInput}
 					/>
-					<div style={{display: 'flex', gap: 8}}>
+					<div className={styles.buttonGroup}>
 						<button type="submit" className ={styles.button}>Verify Code</button>
 						<button type="button" className={styles.button} onClick={handleResendOtp} disabled={resendCd > 0}>
 							{resendCd > 0 ? `Resend OTP (${resendCd}s)` : 'Resend OTP'}

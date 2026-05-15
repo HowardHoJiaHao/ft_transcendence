@@ -29,3 +29,34 @@
   gap: 12px;
   flex-wrap: wrap;
 }
+
+.cartBtn {
+  position: relative; /*stays within the box*/
+  background: white;
+  color: white;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 18px;
+}
+
+.cartBtn:hover {
+  background: #e9ecef;
+}
+
+.cartBadge {
+  position: absolute; /*stays at the exact position*/
+  top: -6px;
+  right: -6px;
+  background: #ef4444;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
