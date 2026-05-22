@@ -201,7 +201,12 @@ function SellPageInner() {
     }
 
     setSubmitting(true);
-    const token = localStorage.getItem("token") || "";
+    const token = localStorage.getItem("token") || (user ? `token_${user.id}` : "");
+    if (!token) {
+      showToast("Please login again", "error");
+      router.push("/login");
+      return;
+    }
 
     try {
       if (isEditMode) {

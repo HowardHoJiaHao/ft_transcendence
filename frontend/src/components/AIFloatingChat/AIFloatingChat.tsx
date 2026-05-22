@@ -140,20 +140,59 @@ export default function AIFloatingChat() {
 
   // Helper to parse content text and inject action buttons dynamically
   const renderMessageContent = (content: string) => {
+    const renderInlineMarkdown = (text: string) => {
+      const parts = text.split('**');
+      if (parts.length === 1) {
+        return text;
+      }
+      return parts.map((part, idx) => (
+        idx % 2 === 1 ? <strong key={`b-${idx}`}>{part}</strong> : part
+      ));
+    };
+
     // Find Racket ID matches (e.g. "Racket ID: 3")
     const racketMatch = content.match(/Racket ID:\s*(\d+)/i);
     const orderMatch = content.match(/Order #\s*(\d+)/i);
     const postAdMatch = content.toLowerCase().includes("post an ad") || content.toLowerCase().includes("sell");
     
-    // Parse formatting (simple bolding for specs or terms)
-    const formattedText = content.split('\n').map((line, i) => {
-      let lineHtml = line;
-      // Handle simple bullet formatting
-      if (lineHtml.trim().startsWith('* ') || lineHtml.trim().startsWith('- ')) {
-        return <li key={i} style={{ marginLeft: '12px', marginBottom: '4px' }}>{lineHtml.replace(/^[\*\-]\s+/, '')}</li>;
+    const lines = content.split('\n');
+    const formattedText: React.ReactNode[] = [];
+    let listItems: React.ReactNode[] = [];
+    let listIndex = 0;
+
+    const flushList = () => {
+      if (listItems.length > 0) {
+        formattedText.push(
+          <ul key={`ul-${listIndex++}`}>
+            {listItems}
+          </ul>
+        );
+        listItems = [];
       }
-      return <p key={i} style={{ margin: '0 0 6px 0' }}>{lineHtml}</p>;
+    };
+
+    lines.forEach((line, i) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        flushList();
+        return;
+      }
+
+      if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+        const itemText = trimmed.replace(/^[\*\-]\s+/, '');
+        listItems.push(
+          <li key={`li-${i}`}>{renderInlineMarkdown(itemText)}</li>
+        );
+        return;
+      }
+
+      flushList();
+      formattedText.push(
+        <p key={`p-${i}`}>{renderInlineMarkdown(line)}</p>
+      );
     });
+
+    flushList();
 
     return (
       <div className={styles.messageContent}>

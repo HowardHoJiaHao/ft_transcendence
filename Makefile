@@ -1,9 +1,10 @@
-.PHONY: help build up down restart logs logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check setup setup-backend
+.PHONY: help build up down restart logs logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check setup setup-backend setup-frontend build-up
 
 help:
 	@echo "Transcendence Marketplace - Available Commands"
 	@echo "=============================================="
 	@echo "make build              - Build all Docker images"
+	@echo "make build-up           - Build images and start all services"
 	@echo "make up                 - Start all services"
 	@echo "make down               - Stop all services"
 	@echo "make restart            - Restart all services"
@@ -23,6 +24,10 @@ help:
 
 build:
 	docker compose build
+	@echo "✅ Docker images built. Next: 'make up' (or 'make setup' to build+up with URLs)."
+
+build-up: build up
+	@echo "✅ Services started. Frontend: http://localhost:3000"
 
 up:
 	docker compose up -d

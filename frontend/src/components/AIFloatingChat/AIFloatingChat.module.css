@@ -287,10 +287,32 @@
 }
 
 .bubbleAI {
-  background: rgba(30, 41, 59, 0.9);
-  color: #f1f5f9;
+  background: rgba(17, 24, 39, 0.92);
+  color: #f8fafc;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-bottom-left-radius: 4px;
+}
+
+.bubbleAI * {
+  color: #f8fafc !important;
+}
+
+.messageContent {
+  color: #f8fafc !important;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.messageContent strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.bubbleAI p,
+.bubbleAI li,
+.bubbleAI ul,
+.bubbleAI ol {
+  color: #f8fafc !important;
 }
 
 /* Markdown typography styling for AI replies */
