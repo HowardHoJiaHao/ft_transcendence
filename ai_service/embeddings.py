@@ -6,6 +6,5 @@ def get_embeddings():
     return OpenAIEmbeddings(
         openai_api_key=api_key,
         openai_api_base="https://openrouter.ai/api/v1",
-        model="nvidia/llama-nemotron-embed-vl-1b-v2:free",
-        check_embedding_ctx_length=False
+        model="nvidia/llama-nemotron-embed-vl-1b-v2:free"
     )

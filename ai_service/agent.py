@@ -1,18 +1,19 @@
 import os
 from langchain.agents import AgentExecutor, initialize_agent, AgentType
 from langchain.memory import ConversationBufferWindowMemory
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, AIMessage
 from tools import all_tools
 
 def create_agent():
-    api_key = os.getenv("OPENROUTER_API_KEY", "")
-    
-    # OpenRouter compatible OpenAI client
-    llm = ChatOpenAI(
-        openai_api_key=api_key,
-        openai_api_base="https://openrouter.ai/api/v1",
-        model_name="deepseek/deepseek-v4-flash:free",
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    base_url = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    model = os.getenv("ANTHROPIC_MODEL", "ilmu-glm-5.1")
+
+    llm = ChatAnthropic(
+        anthropic_api_key=api_key,
+        anthropic_api_url=base_url,
+        model=model,
         temperature=0.3,
     )
     

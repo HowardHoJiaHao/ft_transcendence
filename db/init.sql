@@ -1,3 +1,6 @@
+-- Enable pgvector extension for embeddings
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY, --primary key means the official address of row w/ characteristics of unique and cannot be NULL
