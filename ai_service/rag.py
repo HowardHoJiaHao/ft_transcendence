@@ -1,0 +1,139 @@
+import os
+import psycopg2
+from pgvector.psycopg2 import register_vector
+from embeddings import get_embeddings
+
+def get_db_connection():
+    conn = psycopg2.connect(
+        host=os.getenv("DB_HOST", "db"),
+        port=os.getenv("DB_PORT", "5432"),
+        user=os.getenv("DB_USER", "transcendence"),
+        password=os.getenv("DB_PASSWORD", "transcendence_pass"),
+        dbname=os.getenv("DB_NAME", "transcendence")
+    )
+    # Register vector type in psycopg2
+    register_vector(conn)
+    return conn
+
+def retrieve_faq_context(query: str) -> str:
+    try:
+        embeddings = get_embeddings()
+        query_vector = embeddings.embed_query(query)
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Calculate cosine similarity using pgvector distance operator <=>
+        cur.execute(
+            """
+            SELECT source_file, chunk_text, (embedding <=> %s) AS distance 
+            FROM faq_embeddings 
+            ORDER BY distance ASC 
+            LIMIT 4;
+            """,
+            (query_vector,)
+        )
+        results = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if not results:
+            return ""
+            
+        context_chunks = []
+        for row in results:
+            source, text, dist = row
+            # Cosine distance of 0.6 is a standard similarity threshold
+            if dist < 0.6:
+                context_chunks.append(f"[Source: {source}]\n{text}")
+                
+        return "\n\n".join(context_chunks)
+    except Exception as e:
+        print(f"Error retrieving FAQ context: {e}")
+        return ""
+
+def ingest_faqs():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Ensure extension and table exist
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS faq_embeddings (
+                id SERIAL PRIMARY KEY,
+                source_file VARCHAR(255),
+                chunk_text TEXT NOT NULL,
+                embedding vector(1536),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_faq_embeddings_vector ON faq_embeddings USING ivfflat (embedding vector_cosine_ops);"
+        )
+        conn.commit()
+        
+        # Clear existing to prevent double-inserting
+        cur.execute("DELETE FROM faq_embeddings;")
+        conn.commit()
+        
+        faq_dir = "faq_docs"
+        if not os.path.exists(faq_dir):
+            print("FAQ directory 'faq_docs' does not exist yet.")
+            cur.close()
+            conn.close()
+            return
+            
+        embeddings = get_embeddings()
+        
+        for filename in os.listdir(faq_dir):
+            if filename.endswith(".md"):
+                filepath = os.path.join(faq_dir, filename)
+                with open(filepath, "r", encoding="utf-8") as f:
+                    content = f.read()
+                
+                # Split markdown into paragraphs or headings
+                sections = content.split("\n\n")
+                chunks = []
+                current_chunk = []
+                
+                for sec in sections:
+                    sec = sec.strip()
+                    if not sec:
+                        continue
+                    # Keep headings and paragraphs combined if they are short, or split them
+                    if sec.startswith("#"):
+                        if current_chunk:
+                            chunks.append("\n\n".join(current_chunk))
+                            current_chunk = []
+                        current_chunk.append(sec)
+                    else:
+                        current_chunk.append(sec)
+                        if len("\n\n".join(current_chunk)) > 200:
+                            chunks.append("\n\n".join(current_chunk))
+                            current_chunk = []
+                
+                if current_chunk:
+                    chunks.append("\n\n".join(current_chunk))
+                
+                chunks = [c.strip() for c in chunks if len(c.strip()) > 20]
+                
+                for chunk in chunks:
+                    vector = embeddings.embed_query(chunk)
+                    cur.execute(
+                        "INSERT INTO faq_embeddings (source_file, chunk_text, embedding) VALUES (%s, %s, %s);",
+                        (filename, chunk, vector)
+                    )
+                print(f"Ingested {filename} with {len(chunks)} chunks.")
+                
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("FAQ Ingestion completed successfully.")
+    except Exception as e:
+        print(f"Error ingesting FAQs: {e}")
+
+if __name__ == "__main__":
+    ingest_faqs()

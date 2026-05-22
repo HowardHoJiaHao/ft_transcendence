@@ -213,3 +213,17 @@ CREATE TABLE IF NOT EXISTS analytics (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (listing_id) REFERENCES listings(id)
 );
+
+-- Enable pgvector extension and create faq_embeddings table
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS faq_embeddings (
+    id SERIAL PRIMARY KEY,
+    source_file VARCHAR(255),
+    chunk_text TEXT NOT NULL,
+    embedding vector(1536),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_faq_embeddings_vector 
+ON faq_embeddings USING ivfflat (embedding vector_cosine_ops);

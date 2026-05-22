@@ -1,7 +1,7 @@
 services:
   # PostgreSQL Database
   db:
-    image: postgres:15
+    image: pgvector/pgvector:pg15
     container_name: transcendence-postgres
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
@@ -57,6 +57,28 @@ services:
       - "3000:3000" #left side is host port and right side is container port. host port right in browser. container port where application is listening
     depends_on:
       - backend
+    networks:
+      - transcendence-network
+
+  # Python AI Service (FastAPI + LangChain + RAG)
+  ai:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: transcendence-ai
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-transcendence}
+      - DB_PASSWORD=${DB_PASSWORD:-transcendence_pass}
+      - DB_NAME=${DB_NAME:-transcendence}
+      - BACKEND_URL=http://backend:8080
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - transcendence-network
 

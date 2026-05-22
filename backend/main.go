@@ -47,7 +47,8 @@ func main() {
 	e.GET("/health", healthCheckHandler)
 	v1 := e.Group("/api/v1")
 	v1.GET("/status", statusHandler)
-
+	v1.POST("/ai/chat", handleAIChat)
+ 
 	// Product routes
 	e.GET("/api/v1/products", func(c echo.Context) error { return getProducts(c, gormDB) })
 	e.GET("/api/v1/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
@@ -55,11 +56,13 @@ func main() {
 	// protected product routes
 	protected := e.Group("/api/v1")
 	protected.Use(authMiddleware.JWTAuth())
-
+ 
 	protected.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
 	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
 	protected.POST("/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
+	protected.GET("/orders", func(c echo.Context) error { return getOrders(c, gormDB) })
+	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) })
 	e.GET("/api/v1/products/:id/images", func(c echo.Context) error { return getListingImages(c, gormDB) })
 	//User Module initialization
 	baseRepo := user.NewRepository(rawDB, gormDB)
