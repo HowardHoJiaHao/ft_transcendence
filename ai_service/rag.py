@@ -15,6 +15,33 @@ def get_db_connection():
     register_vector(conn)
     return conn
 
+def _retrieve_local_faq_context(query: str) -> str:
+    faq_dir = "faq_docs"
+    if not os.path.exists(faq_dir):
+        return ""
+
+    query_terms = [term for term in query.lower().split() if len(term) > 2]
+    scored_chunks = []
+
+    for filename in os.listdir(faq_dir):
+        if not filename.endswith(".md"):
+            continue
+        filepath = os.path.join(faq_dir, filename)
+        with open(filepath, "r", encoding="utf-8") as f:
+            sections = [section.strip() for section in f.read().split("\n\n") if section.strip()]
+
+        for section in sections:
+            lowered = section.lower()
+            score = sum(1 for term in query_terms if term in lowered)
+            if score:
+                scored_chunks.append((score, filename, section))
+
+    scored_chunks.sort(key=lambda item: item[0], reverse=True)
+    return "\n\n".join(
+        f"[Source: {filename}]\n{section}"
+        for _, filename, section in scored_chunks[:4]
+    )
+
 def retrieve_faq_context(query: str) -> str:
     try:
         embeddings = get_embeddings()
@@ -50,7 +77,7 @@ def retrieve_faq_context(query: str) -> str:
         return "\n\n".join(context_chunks)
     except Exception as e:
         print(f"Error retrieving FAQ context: {e}")
-        return ""
+        return _retrieve_local_faq_context(query)
 
 def ingest_faqs():
     try:

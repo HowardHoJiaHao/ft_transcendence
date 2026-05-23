@@ -9,6 +9,82 @@ user_id_var = ContextVar("user_id", default=0)
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8080")
 
+def _format_products(products) -> str:
+    formatted = []
+    for p in products:
+        formatted.append(
+            f"Racket ID: {p.get('id')}\n"
+            f"Title: {p.get('title')}\n"
+            f"Price: RM {p.get('price')}\n"
+            f"Weight: {p.get('weightCategory')} | Flex: {p.get('flexibilityCategory')} | Balance: {p.get('balanceCategory')}\n"
+            f"Location: {p.get('location')} | Seller: {p.get('sellerName')} (Rating: {p.get('rating')}/5)\n"
+            f"Image URL: {p.get('image')}\n"
+            "---"
+        )
+    return "\n".join(formatted[:6])
+
+def _fetch_products(params):
+    response = httpx.get(
+        f"{BACKEND_URL}/api/v1/products",
+        params=params,
+        headers=get_auth_headers(),
+        timeout=5.0,
+    )
+    if response.status_code != 200:
+        return None, f"Error searching products: Go API returned HTTP {response.status_code}"
+    return response.json().get("products", []), None
+
+def _beginner_score(product):
+    score = 0
+    weight = (product.get("weightCategory") or "").upper()
+    flex = product.get("flexibilityCategory") or ""
+    balance = product.get("balanceCategory") or ""
+
+    if weight in ("5U", "6U", "7U"):
+        score += 3
+    elif weight == "8U":
+        score += 2
+    elif weight == "4U":
+        score += 1
+    elif weight in ("1U", "2U", "3U"):
+        score -= 3
+
+    if flex == "Medium Flex":
+        score += 3
+    elif flex == "High Flexibility":
+        score += 2
+    elif flex == "Stiff Shaft":
+        score -= 2
+
+    if balance == "Even Balance":
+        score += 3
+    elif balance == "Head Light":
+        score += 2
+    elif balance == "Head Heavy":
+        score -= 2
+
+    price = product.get("price")
+    if isinstance(price, (int, float)) and price <= 300:
+        score += 1
+
+    return score
+
+def _format_beginner_products(products) -> str:
+    formatted = []
+    for index, p in enumerate(products):
+        label = "Top Pick" if index == 0 else "Alternative"
+        formatted.append(
+            f"[ {label} — Racket ID: {p.get('id')} — {p.get('title')} ]\n"
+            f"Price: RM {p.get('price')}\n"
+            f"Weight: {p.get('weightCategory')}\n"
+            f"Flex: {p.get('flexibilityCategory')}\n"
+            f"Balance: {p.get('balanceCategory')}\n"
+            f"Location: {p.get('location')}\n"
+            f"Seller: {p.get('sellerName')} (Rating: {p.get('rating')}/5)\n"
+            f"Best for: Beginner-friendly handling and easier timing"
+        )
+    return "\n\n".join(formatted)
+
 def get_auth_headers():
     uid = user_id_var.get()
     headers = {}
@@ -17,7 +93,15 @@ def get_auth_headers():
     return headers
 
 @tool
-def search_listings(query: str = None, weight: str = None, flex: str = None, balance: str = None) -> str:
+def search_listings(
+    query: str = None,
+    weight: str = None,
+    flex: str = None,
+    balance: str = None,
+    min_price: float = None,
+    max_price: float = None,
+    sort: str = None,
+) -> str:
     """
     Search for badminton equipment and racket listings in the marketplace.
     Arguments:
@@ -25,6 +109,9 @@ def search_listings(query: str = None, weight: str = None, flex: str = None, bal
     - weight: optional racket weight category (e.g. '3U', '4U', '5U')
     - flex: optional racket flexibility category (e.g. 'Stiff Shaft', 'Medium Flex', 'High Flexibility')
     - balance: optional racket balance category (e.g. 'Head Heavy', 'Even Balance', 'Head Light')
+    - min_price: optional minimum price in RM
+    - max_price: optional maximum price in RM
+    - sort: optional sorting mode ('price-low', 'price-high', 'newest', or 'rating')
     """
     url = f"{BACKEND_URL}/api/v1/products"
     params = []
@@ -37,31 +124,97 @@ def search_listings(query: str = None, weight: str = None, flex: str = None, bal
         params.append(("flexibilityCategory", flex))
     if balance:
         params.append(("balanceCategory", balance))
+    if min_price is not None:
+        params.append(("minPrice", min_price))
+    if max_price is not None:
+        params.append(("maxPrice", max_price))
+    if sort:
+        params.append(("sort", sort))
         
     try:
-        response = httpx.get(url, params=params, headers=get_auth_headers(), timeout=5.0)
-        if response.status_code == 200:
-            data = response.json()
-            products = data.get("products", [])
-            if not products:
-                return "No listings match the given search criteria."
-                
-            formatted = []
-            for p in products:
-                formatted.append(
-                    f"Racket ID: {p.get('id')}\n"
-                    f"Title: {p.get('title')}\n"
-                    f"Price: RM {p.get('price')}\n"
-                    f"Weight: {p.get('weightCategory')} | Flex: {p.get('flexibilityCategory')} | Balance: {p.get('balanceCategory')}\n"
-                    f"Location: {p.get('location')} | Seller: {p.get('sellerName')} (Rating: {p.get('rating')}/5)\n"
-                    f"Image URL: {p.get('image')}\n"
-                    "---"
+        products, error = _fetch_products(params)
+        if error:
+            return error
+        if products:
+            return _format_products(products)
+
+        fallback_sections = []
+
+        strict_specs = weight or flex or balance or min_price is not None or max_price is not None
+        if query and strict_specs:
+            spec_params = [(key, value) for key, value in params if key != "search"]
+            spec_products, spec_error = _fetch_products(spec_params)
+            if spec_error:
+                return spec_error
+            if spec_products:
+                fallback_sections.append(
+                    "No exact brand match found. Similar rackets matching your specs:\n"
+                    + _format_products(spec_products)
                 )
-            return "\n".join(formatted[:6])  # limit results to top 6
-        else:
-            return f"Error searching products: Go API returned HTTP {response.status_code}"
+
+            brand_products, brand_error = _fetch_products([("search", query)])
+            if brand_error:
+                return brand_error
+            if brand_products:
+                fallback_sections.append(
+                    f"Available {query} rackets with different specs:\n"
+                    + _format_products(brand_products)
+                )
+
+        if fallback_sections:
+            return "\n\n".join(fallback_sections)
+
+        return "No listings match the given search criteria."
     except Exception as e:
         return f"Error contacting product backend: {e}"
+
+@tool
+def get_beginner_recommendations(max_price: float = 300) -> str:
+    """
+    Recommend beginner-friendly badminton rackets from marketplace listings.
+    Use this when users ask for beginner, newbie, first racket, or new player recommendations.
+    Arguments:
+    - max_price: optional maximum price in RM, defaults to 300 for first-racket budget picks.
+    """
+    try:
+        products, error = _fetch_products([("maxPrice", max_price), ("sort", "price-low")])
+        if error:
+            return error
+        if not products:
+            return "No beginner-friendly listings found within that budget right now."
+
+        ranked = sorted(products, key=_beginner_score, reverse=True)
+        recommended = [p for p in ranked if _beginner_score(p) > 0][:3]
+        avoid = [p for p in ranked if _beginner_score(p) <= 0][:2]
+
+        if not recommended:
+            recommended = ranked[:3]
+
+        sections = [
+            "Beginner racket guide:\n"
+            "- Weight: 5U to 8U is easier on your wrist and arm.\n"
+            "- Flex: High Flexibility or Medium Flex helps generate easy power.\n"
+            "- Balance: Even Balance or Head Light is easier to control.\n"
+            "- String tension: 18-23 lbs gives a bigger sweet spot."
+        ]
+
+        sections.append("Recommended beginner-friendly listings:\n" + _format_beginner_products(recommended))
+
+        if avoid:
+            avoid_lines = []
+            for p in avoid:
+                avoid_lines.append(
+                    f"{p.get('title')} (Racket ID: {p.get('id')}) — "
+                    f"{p.get('weightCategory')}, {p.get('flexibilityCategory')}, {p.get('balanceCategory')}"
+                )
+            sections.append(
+                "Less beginner-friendly options to avoid for now:\n"
+                + "\n".join(avoid_lines)
+            )
+
+        return "\n\n".join(sections)
+    except Exception as e:
+        return f"Error finding beginner recommendations: {e}"
 
 @tool
 def get_listing_detail(listing_id: int) -> str:
@@ -234,5 +387,6 @@ all_tools = [
     get_user_profile,
     get_order_status,
     get_my_orders,
+    get_beginner_recommendations,
     get_faq_policies
 ]

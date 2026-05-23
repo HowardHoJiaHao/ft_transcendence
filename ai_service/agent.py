@@ -2,20 +2,23 @@ import os
 from langchain.agents import AgentExecutor, initialize_agent, AgentType
 from langchain.memory import ConversationBufferWindowMemory
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from tools import all_tools
 
-def create_agent():
+def create_llm():
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     base_url = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
     model = os.getenv("ANTHROPIC_MODEL", "ilmu-glm-5.1")
 
-    llm = ChatAnthropic(
+    return ChatAnthropic(
         anthropic_api_key=api_key,
         anthropic_api_url=base_url,
         model=model,
         temperature=0.3,
     )
+
+def create_agent():
+    llm = create_llm()
     
     system_message = """You are RacketBot, the AI customer service assistant for RacketDiction —
 a Malaysian online marketplace for badminton equipment.
@@ -26,6 +29,7 @@ You help BUYERS only. You can:
 3. Check specific listing and seller profile details using the `get_seller_info` tool.
 4. Check current user profile using `get_user_profile` tool (only if user is logged in).
 5. Check order status for logged-in buyers using `get_my_orders` and `get_order_status` tools.
+6. Recommend first rackets for beginners using the `get_beginner_recommendations` tool.
 
 You cannot:
 - Help with seller account issues (direct them to support)
@@ -49,6 +53,9 @@ Formatting guidelines:
 - Use a short header line like "[ Racket 7 — Kawasaki Hyper Nano 7U ]" for each item.
 - When listing multiple items, separate cards with a blank line.
 - Keep labels consistent: Price, Weight, Flex, Balance, Location, Best for.
+- Never include raw tool syntax, XML tags, JSON action objects, or text like <tool_call> in your final answer.
+- For listing requests with a budget, call `search_listings` with `max_price` or `min_price`; for "under/lower than/below RM500", use `max_price: 500`.
+- If a search has no exact match, run one broader search before answering, then clearly say whether the broader results changed brand, weight, or balance.
 If a user is not logged in and requests a protected action (like checking their orders), politely ask them to login first.
 When you cannot help, always suggest they contact platform support.
 """
@@ -90,3 +97,53 @@ def run_agent_with_history(agent_executor, history, query):
     # Run the agent executor
     response = agent_executor.run(input=query)
     return response
+
+def format_listing_search_response(user_query, tool_result):
+    llm = create_llm()
+    response = llm.invoke([
+        SystemMessage(content=(
+            "You are RacketBot. Turn marketplace search results into a concise buyer-facing answer. "
+            "Do not call tools. Do not invent listings. Do not include image URLs. "
+            "If there is no exact match but alternatives are provided, clearly explain the tradeoff. "
+            "Never use Markdown tables. "
+            "Use short card-style blocks with labels: Price, Weight, Flex, Balance, Location, Seller, Best for."
+        )),
+        HumanMessage(content=(
+            f"User asked: {user_query}\n\n"
+            f"Search result data:\n{tool_result}\n\n"
+            "Write the final chat response in friendly Malaysian English."
+        )),
+    ])
+    if isinstance(response.content, list):
+        text_parts = [
+            part.get("text", "")
+            for part in response.content
+            if isinstance(part, dict) and part.get("type") == "text"
+        ]
+        return "\n".join(part for part in text_parts if part).strip()
+    return response.content
+
+def format_beginner_recommendation_response(user_query, guide_context, listing_result):
+    llm = create_llm()
+    response = llm.invoke([
+        SystemMessage(content=(
+            "You are RacketBot. Recommend beginner badminton rackets from provided marketplace data. "
+            "Do not call tools. Do not invent listings. Do not include image URLs. Never use Markdown tables. "
+            "Prefer light 5U-8U, flexible or medium-flex, even-balance or head-light rackets, and low tension advice. "
+            "Pick one best recommendation, then mention 1-2 alternatives or what to avoid."
+        )),
+        HumanMessage(content=(
+            f"User asked: {user_query}\n\n"
+            f"Beginner guide context:\n{guide_context}\n\n"
+            f"Available marketplace listings:\n{listing_result}\n\n"
+            "Write a concise friendly final answer in Malaysian English."
+        )),
+    ])
+    if isinstance(response.content, list):
+        text_parts = [
+            part.get("text", "")
+            for part in response.content
+            if isinstance(part, dict) and part.get("type") == "text"
+        ]
+        return "\n".join(part for part in text_parts if part).strip()
+    return response.content

@@ -16,10 +16,16 @@ from tools import (
     get_user_profile,
     get_order_status,
     get_my_orders,
+    get_beginner_recommendations,
     get_faq_policies,
 )
-from agent import create_agent, run_agent_with_history
-from rag import ingest_faqs
+from agent import (
+    create_agent,
+    run_agent_with_history,
+    format_listing_search_response,
+    format_beginner_recommendation_response,
+)
+from rag import ingest_faqs, retrieve_faq_context
 
 app = FastAPI(title="RacketDiction AI Service")
 
@@ -57,27 +63,138 @@ def _resolve_tool_action(action, action_input):
         "get_user_profile": get_user_profile,
         "get_order_status": get_order_status,
         "get_my_orders": get_my_orders,
+        "get_beginner_recommendations": get_beginner_recommendations,
         "get_faq_policies": get_faq_policies,
     }
     tool_fn = tool_map.get(action)
     if tool_fn is None:
         return None
 
-    if isinstance(action_input, dict):
-        return tool_fn(**action_input)
     if action_input is None:
-        return tool_fn()
-    if isinstance(action_input, str):
+        action_input = {}
+    elif isinstance(action_input, str):
         stripped = action_input.strip()
         if stripped.startswith("{") and stripped.endswith("}"):
             try:
                 parsed = json.loads(stripped)
                 if isinstance(parsed, dict):
-                    return tool_fn(**parsed)
+                    action_input = parsed
             except json.JSONDecodeError:
                 pass
+
+    if hasattr(tool_fn, "invoke"):
+        return tool_fn.invoke(action_input)
+
+    if isinstance(action_input, dict):
+        return tool_fn(**action_input)
+    if isinstance(action_input, str):
         return tool_fn(action_input)
-    return tool_fn(action_input)
+    return tool_fn(**action_input)
+
+def _extract_pseudo_tool_call(text: str):
+    if "<tool_call>" not in text:
+        return None
+
+    after_tag = text.split("<tool_call>", 1)[1]
+    action = re.split(r"<|\s|\(", after_tag, maxsplit=1)[0].strip()
+    if not action:
+        return None
+
+    # Some Anthropic-compatible models emit malformed XML-ish tool calls like:
+    # <tool_call>search_listings<tool_call>weight</arg_key><arg_value>5U</arg_value>
+    pairs = re.findall(
+        r"<(?:arg_key|tool_call)>\s*([^<]+?)\s*</arg_key>\s*<arg_value>\s*([^<]+?)\s*</arg_value>",
+        text,
+        re.DOTALL,
+    )
+    action_input = {key.strip(): value.strip() for key, value in pairs}
+
+    call_match = re.search(r"\w+\((.*?)\)", after_tag, re.DOTALL)
+    if call_match:
+        for key, value in re.findall(r"(\w+)\s*:\s*['\"]([^'\"]+)['\"]", call_match.group(1)):
+            action_input[key.strip()] = value.strip()
+
+    return action, action_input
+
+def _strip_pseudo_tool_calls(text: str) -> str:
+    stripped = re.sub(r"<tool_call>.*?(?:</tool_call>|$)", "", text, flags=re.DOTALL).strip()
+    return stripped or "Sorry Boss, I had trouble completing that search. Please try again lah."
+
+def _extract_price_filters(message: str):
+    text = message.lower()
+    max_match = re.search(
+        r"(?:under|below|less than|lower than|not more than|<=)\s*(?:rm\s*)?(\d+(?:\.\d+)?)|(?:rm\s*)?(\d+(?:\.\d+)?)\s*(?:rm)?\s*(?:or less|and below|or below)",
+        text,
+    )
+    min_match = re.search(
+        r"(?:above|over|more than|higher than|at least|>=)\s*(?:rm\s*)?(\d+(?:\.\d+)?)",
+        text,
+    )
+
+    filters = {}
+    if max_match:
+        filters["max_price"] = float(next(group for group in max_match.groups() if group))
+        filters["sort"] = "price-low"
+    if min_match:
+        filters["min_price"] = float(min_match.group(1))
+    return filters
+
+def _search_filters_from_message(message: str):
+    text = message.lower()
+    is_listing_request = any(word in text for word in ("racket", "racquet", "listing", "product"))
+    wants_search = any(word in text for word in ("show", "find", "search", "looking", "recommend", "any"))
+    if not (is_listing_request and wants_search):
+        return None
+
+    filters = _extract_price_filters(message)
+    if not filters and "racket" not in text and "racquet" not in text:
+        return None
+
+    for brand in ("yonex", "lining", "li-ning", "victor", "kawasaki", "apacs", "mizuno"):
+        if brand in text:
+            filters["query"] = "Li-Ning" if brand == "li-ning" else brand.title()
+            break
+
+    weight_match = re.search(r"\b([1-9]u)\b", text)
+    if weight_match:
+        filters["weight"] = weight_match.group(1).upper()
+
+    if "head light" in text or "head-light" in text:
+        filters["balance"] = "Head Light"
+    elif "head heavy" in text or "head-heavy" in text:
+        filters["balance"] = "Head Heavy"
+    elif "even balance" in text:
+        filters["balance"] = "Even Balance"
+
+    return filters
+
+def _needs_listing_search_fallback(user_message: str, answer: str):
+    if not isinstance(answer, str):
+        return False
+    if "Racket ID:" in answer or "No listings match" in answer or "Error searching products" in answer:
+        return False
+    lowered_answer = answer.lower().strip()
+    looks_unfinished = lowered_answer.startswith(("let me search", "i'll search", "i will search"))
+    return looks_unfinished and _search_filters_from_message(user_message) is not None
+
+def _fallback_listing_search(user_message: str):
+    filters = _search_filters_from_message(user_message)
+    if filters is None:
+        return None
+    return _resolve_tool_action("search_listings", filters)
+
+def _should_direct_listing_search(user_message: str):
+    filters = _search_filters_from_message(user_message)
+    return filters if filters else None
+
+def _is_beginner_recommendation(user_message: str):
+    text = user_message.lower()
+    beginner_terms = ("beginner", "begineer", "newbie", "new player", "start badminton")
+    recommendation_terms = ("recommend", "best", "suggest", "what should", "which racket")
+    return any(term in text for term in beginner_terms) and any(term in text for term in recommendation_terms)
+
+def _beginner_fallback_answer(listing_result: str):
+    return f"{listing_result}\n\nMy pick: start with the top recommended listing, Boss. Avoid heavy 1U-3U stiff head-heavy rackets until your timing and wrist strength improve."
 
 def _normalize_agent_answer(ans):
     # Handle dict payloads from structured agents
@@ -116,6 +233,14 @@ def _normalize_agent_answer(ans):
         except json.JSONDecodeError:
             pass
 
+    pseudo_call = _extract_pseudo_tool_call(trimmed)
+    if pseudo_call:
+        action, action_input = pseudo_call
+        resolved = _resolve_tool_action(action, action_input)
+        if resolved is not None:
+            return resolved
+        return _strip_pseudo_tool_calls(trimmed)
+
     return ans
 
 @app.get("/health")
@@ -143,9 +268,45 @@ async def chat_endpoint(req: ChatRequest):
             
         loop = asyncio.get_event_loop()
         try:
-            # Execute agent in an executor thread with propagated ContextVars
-            ans = await loop.run_in_executor(None, lambda: ctx.run(run_agent))
-            ans = _normalize_agent_answer(ans)
+            if _is_beginner_recommendation(req.message):
+                guide_context = retrieve_faq_context("beginner badminton racket specs weight flex balance string tension")
+                listing_result = await loop.run_in_executor(
+                    None,
+                    lambda: ctx.run(lambda: _resolve_tool_action("get_beginner_recommendations", {"max_price": 300})),
+                )
+                try:
+                    ans = await loop.run_in_executor(
+                        None,
+                        lambda: ctx.run(lambda: format_beginner_recommendation_response(
+                            req.message,
+                            guide_context,
+                            listing_result,
+                        )),
+                    )
+                    if not ans or len(str(ans).split()) < 20 or "racket" not in str(ans).lower():
+                        ans = _beginner_fallback_answer(listing_result)
+                except Exception as e:
+                    print(f"Error formatting beginner recommendation: {e}")
+                    ans = _beginner_fallback_answer(listing_result)
+            else:
+                direct_filters = _should_direct_listing_search(req.message)
+                if direct_filters:
+                    tool_result = await loop.run_in_executor(
+                        None,
+                        lambda: ctx.run(lambda: _resolve_tool_action("search_listings", direct_filters)),
+                    )
+                    ans = await loop.run_in_executor(
+                        None,
+                        lambda: ctx.run(lambda: format_listing_search_response(req.message, tool_result)),
+                    )
+                else:
+                    # Execute agent in an executor thread with propagated ContextVars
+                    ans = await loop.run_in_executor(None, lambda: ctx.run(run_agent))
+                    ans = _normalize_agent_answer(ans)
+                    if _needs_listing_search_fallback(req.message, ans):
+                        fallback_ans = _fallback_listing_search(req.message)
+                        if fallback_ans:
+                            ans = fallback_ans
             
             # Stream the final answer word-by-word (simulate streaming since structured agents 
             # complete their multi-turn tool reasoning synchronously first)

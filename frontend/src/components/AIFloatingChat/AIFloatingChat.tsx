@@ -153,7 +153,7 @@ export default function AIFloatingChat() {
     // Find Racket ID matches (e.g. "Racket ID: 3")
     const racketMatch = content.match(/Racket ID:\s*(\d+)/i);
     const orderMatch = content.match(/Order #\s*(\d+)/i);
-    const postAdMatch = content.toLowerCase().includes("post an ad") || content.toLowerCase().includes("sell");
+    const postAdMatch = /\b(post an ad|create (?:a )?listing|list (?:my|your) racket|start selling|sell (?:my|your) racket)\b/i.test(content);
     
     const lines = content.split('\n');
     const formattedText: React.ReactNode[] = [];

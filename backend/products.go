@@ -106,6 +106,8 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	offset := c.QueryParam("offset")
 	sellerId := c.QueryParam("sellerId")
 	status := c.QueryParam("status")
+	minPrice := c.QueryParam("minPrice")
+	maxPrice := c.QueryParam("maxPrice")
 
 	if limit == "" {
 		limit = "20"
@@ -169,6 +171,20 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	if search != "" {
 		whereClause += fmt.Sprintf(" AND l.title ILIKE $%d", len(args)+1)
 		args = append(args, "%"+search+"%")
+	}
+	if minPrice != "" {
+		minPriceFloat, err := strconv.ParseFloat(minPrice, 64)
+		if err == nil && minPriceFloat >= 0 {
+			whereClause += fmt.Sprintf(" AND l.price >= $%d", len(args)+1)
+			args = append(args, minPriceFloat)
+		}
+	}
+	if maxPrice != "" {
+		maxPriceFloat, err := strconv.ParseFloat(maxPrice, 64)
+		if err == nil && maxPriceFloat >= 0 {
+			whereClause += fmt.Sprintf(" AND l.price <= $%d", len(args)+1)
+			args = append(args, maxPriceFloat)
+		}
 	}
 	if sellerId != "" {
 		sellerIdInt, err := strconv.Atoi(sellerId)
