@@ -9,7 +9,10 @@ user_id_var = ContextVar("user_id", default=0)
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8080")
 
-def _format_products(products) -> str:
+def _format_products(products, limit: int = None) -> str:
+    safe_limit = None
+    if isinstance(limit, int) and limit > 0:
+        safe_limit = limit
     formatted = []
     for p in products:
         formatted.append(
@@ -18,10 +21,11 @@ def _format_products(products) -> str:
             f"Price: RM {p.get('price')}\n"
             f"Weight: {p.get('weightCategory')} | Flex: {p.get('flexibilityCategory')} | Balance: {p.get('balanceCategory')}\n"
             f"Location: {p.get('location')} | Seller: {p.get('sellerName')} (Rating: {p.get('rating')}/5)\n"
-            f"Image URL: {p.get('image')}\n"
             "---"
         )
-    return "\n".join(formatted[:6])
+    if safe_limit is None:
+        return "\n".join(formatted)
+    return "\n".join(formatted[:safe_limit])
 
 def _fetch_products(params):
     response = httpx.get(
@@ -71,10 +75,9 @@ def _beginner_score(product):
 
 def _format_beginner_products(products) -> str:
     formatted = []
-    for index, p in enumerate(products):
-        label = "Top Pick" if index == 0 else "Alternative"
+    for p in products:
         formatted.append(
-            f"[ {label} — Racket ID: {p.get('id')} — {p.get('title')} ]\n"
+            f"[ Racket ID: {p.get('id')} — {p.get('title')} ]\n"
             f"Price: RM {p.get('price')}\n"
             f"Weight: {p.get('weightCategory')}\n"
             f"Flex: {p.get('flexibilityCategory')}\n"
@@ -101,6 +104,7 @@ def search_listings(
     min_price: float = None,
     max_price: float = None,
     sort: str = None,
+    limit: int = None,
 ) -> str:
     """
     Search for badminton equipment and racket listings in the marketplace.
@@ -112,6 +116,7 @@ def search_listings(
     - min_price: optional minimum price in RM
     - max_price: optional maximum price in RM
     - sort: optional sorting mode ('price-low', 'price-high', 'newest', or 'rating')
+    - limit: optional number of listings to include in the response
     """
     url = f"{BACKEND_URL}/api/v1/products"
     params = []
@@ -136,7 +141,7 @@ def search_listings(
         if error:
             return error
         if products:
-            return _format_products(products)
+            return _format_products(products, limit=limit)
 
         fallback_sections = []
 
@@ -149,7 +154,7 @@ def search_listings(
             if spec_products:
                 fallback_sections.append(
                     "No exact brand match found. Similar rackets matching your specs:\n"
-                    + _format_products(spec_products)
+                    + _format_products(spec_products, limit=limit)
                 )
 
             brand_products, brand_error = _fetch_products([("search", query)])
@@ -158,7 +163,7 @@ def search_listings(
             if brand_products:
                 fallback_sections.append(
                     f"Available {query} rackets with different specs:\n"
-                    + _format_products(brand_products)
+                    + _format_products(brand_products, limit=limit)
                 )
 
         if fallback_sections:
@@ -169,12 +174,22 @@ def search_listings(
         return f"Error contacting product backend: {e}"
 
 @tool
-def get_beginner_recommendations(max_price: float = 300) -> str:
+def get_beginner_recommendations(
+    max_price: float = 300,
+    limit: int = None,
+    avoid_limit: int = None,
+    include_guide: bool = True,
+    include_avoid: bool = True,
+) -> str:
     """
     Recommend beginner-friendly badminton rackets from marketplace listings.
     Use this when users ask for beginner, newbie, first racket, or new player recommendations.
     Arguments:
     - max_price: optional maximum price in RM, defaults to 300 for first-racket budget picks.
+    - limit: optional number of recommended listings to return.
+    - avoid_limit: optional number of less suitable listings to mention.
+    - include_guide: whether to include the beginner guide section (default True).
+    - include_avoid: whether to include less suitable listings (default True).
     """
     try:
         products, error = _fetch_products([("maxPrice", max_price), ("sort", "price-low")])
@@ -184,23 +199,35 @@ def get_beginner_recommendations(max_price: float = 300) -> str:
             return "No beginner-friendly listings found within that budget right now."
 
         ranked = sorted(products, key=_beginner_score, reverse=True)
-        recommended = [p for p in ranked if _beginner_score(p) > 0][:3]
-        avoid = [p for p in ranked if _beginner_score(p) <= 0][:2]
+        if isinstance(limit, int) and limit > 0:
+            safe_limit = limit
+        else:
+            safe_limit = len(ranked)
+
+        if isinstance(avoid_limit, int) and avoid_limit >= 0:
+            safe_avoid_limit = avoid_limit
+        else:
+            safe_avoid_limit = len(ranked)
+
+        recommended = [p for p in ranked if _beginner_score(p) > 0][:safe_limit]
+        avoid = [p for p in ranked if _beginner_score(p) <= 0][:safe_avoid_limit]
 
         if not recommended:
-            recommended = ranked[:3]
+            recommended = ranked[:safe_limit]
 
-        sections = [
-            "Beginner racket guide:\n"
-            "- Weight: 5U to 8U is easier on your wrist and arm.\n"
-            "- Flex: High Flexibility or Medium Flex helps generate easy power.\n"
-            "- Balance: Even Balance or Head Light is easier to control.\n"
-            "- String tension: 18-23 lbs gives a bigger sweet spot."
-        ]
+        sections = []
+        if include_guide:
+            sections.append(
+                "Beginner racket guide:\n"
+                "- Weight: 5U to 8U is easier on your wrist and arm.\n"
+                "- Flex: High Flexibility or Medium Flex helps generate easy power.\n"
+                "- Balance: Even Balance or Head Light is easier to control.\n"
+                "- String tension: 18-23 lbs gives a bigger sweet spot."
+            )
 
         sections.append("Recommended beginner-friendly listings:\n" + _format_beginner_products(recommended))
 
-        if avoid:
+        if include_avoid and avoid:
             avoid_lines = []
             for p in avoid:
                 avoid_lines.append(
@@ -235,8 +262,7 @@ def get_listing_detail(listing_id: int) -> str:
                 f"Weight: {p.get('weightCategory')} | Flex: {p.get('flexibilityCategory')} | Balance: {p.get('balanceCategory')}\n"
                 f"Location: {p.get('location')}\n"
                 f"Seller: {p.get('sellerName')} (Seller ID: {p.get('sellerId')}, Rating: {p.get('rating')}/5, Reviews: {p.get('reviews')})\n"
-                f"Status: {p.get('status')} | Views: {p.get('viewsCount')}\n"
-                f"Image URL: {p.get('image')}"
+                f"Status: {p.get('status')} | Views: {p.get('viewsCount')}"
             )
         elif response.status_code == 404:
             return "Listing not found."

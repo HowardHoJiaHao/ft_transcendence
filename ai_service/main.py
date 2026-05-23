@@ -139,11 +139,54 @@ def _extract_price_filters(message: str):
         filters["min_price"] = float(min_match.group(1))
     return filters
 
+def _extract_requested_count(message: str):
+    text = message.lower()
+    if re.search(r"\b(one|single|only one|just one)\b", text):
+        return 1
+
+    word_map = {
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+        "eleven": 11,
+        "twelve": 12,
+        "thirteen": 13,
+        "fourteen": 14,
+        "fifteen": 15,
+        "sixteen": 16,
+        "seventeen": 17,
+        "eighteen": 18,
+        "nineteen": 19,
+        "twenty": 20,
+    }
+
+    for word, value in word_map.items():
+        if re.search(rf"\b{word}\s+(?:rackets?|racquets?|listings?|options|choices|results?)\b", text):
+            return value
+
+    count_match = re.search(
+        r"\b(\d+)\s*(?:rackets?|racquets?|listings?|options|choices|results?)\b",
+        text,
+    )
+    if count_match:
+        return int(count_match.group(1))
+
+    action_match = re.search(r"\b(?:show|give|list|recommend)\s*(?:me\s*)?(\d+)\b", text)
+    if action_match:
+        return int(action_match.group(1))
+
+    return None
+
 def _search_filters_from_message(message: str):
     text = message.lower()
     is_listing_request = any(word in text for word in ("racket", "racquet", "listing", "product"))
-    wants_search = any(word in text for word in ("show", "find", "search", "looking", "recommend", "any"))
-    if not (is_listing_request and wants_search):
+    if not is_listing_request:
         return None
 
     filters = _extract_price_filters(message)
@@ -185,13 +228,19 @@ def _fallback_listing_search(user_message: str):
 
 def _should_direct_listing_search(user_message: str):
     filters = _search_filters_from_message(user_message)
-    return filters if filters else None
+    return filters
 
 def _is_beginner_recommendation(user_message: str):
     text = user_message.lower()
     beginner_terms = ("beginner", "begineer", "newbie", "new player", "start badminton")
-    recommendation_terms = ("recommend", "best", "suggest", "what should", "which racket")
+    recommendation_terms = ("recommend", "best", "suggest", "what should", "which racket", "racket", "racquet")
     return any(term in text for term in beginner_terms) and any(term in text for term in recommendation_terms)
+
+def _wants_single_pick(user_message: str):
+    text = user_message.lower()
+    single_terms = ("one", "single", "only one", "just one", "best pick", "top pick")
+    expert_terms = ("expert", "advanced", "pro", "professional")
+    return any(term in text for term in single_terms) or ("best" in text and any(term in text for term in expert_terms))
 
 def _beginner_fallback_answer(listing_result: str):
     return f"{listing_result}\n\nMy pick: start with the top recommended listing, Boss. Avoid heavy 1U-3U stiff head-heavy rackets until your timing and wrist strength improve."
@@ -270,9 +319,21 @@ async def chat_endpoint(req: ChatRequest):
         try:
             if _is_beginner_recommendation(req.message):
                 guide_context = retrieve_faq_context("beginner badminton racket specs weight flex balance string tension")
+                requested_count = _extract_requested_count(req.message)
+                limit = requested_count if isinstance(requested_count, int) and requested_count > 0 else None
                 listing_result = await loop.run_in_executor(
                     None,
-                    lambda: ctx.run(lambda: _resolve_tool_action("get_beginner_recommendations", {"max_price": 300})),
+                    lambda: ctx.run(
+                        lambda: _resolve_tool_action(
+                            "get_beginner_recommendations",
+                            {
+                                "max_price": 300,
+                                "limit": limit,
+                                "include_guide": True,
+                                "include_avoid": True,
+                            },
+                        )
+                    ),
                 )
                 try:
                     ans = await loop.run_in_executor(
@@ -281,6 +342,7 @@ async def chat_endpoint(req: ChatRequest):
                             req.message,
                             guide_context,
                             listing_result,
+                            requested_count,
                         )),
                     )
                     if not ans or len(str(ans).split()) < 20 or "racket" not in str(ans).lower():
@@ -290,14 +352,20 @@ async def chat_endpoint(req: ChatRequest):
                     ans = _beginner_fallback_answer(listing_result)
             else:
                 direct_filters = _should_direct_listing_search(req.message)
-                if direct_filters:
+                if direct_filters is not None:
+                    requested_count = _extract_requested_count(req.message)
+                    if isinstance(requested_count, int) and requested_count > 0:
+                        direct_filters = {**direct_filters, "limit": requested_count}
+                    else:
+                        if "sort" not in direct_filters:
+                            direct_filters = {**direct_filters, "sort": "rating"}
                     tool_result = await loop.run_in_executor(
                         None,
                         lambda: ctx.run(lambda: _resolve_tool_action("search_listings", direct_filters)),
                     )
                     ans = await loop.run_in_executor(
                         None,
-                        lambda: ctx.run(lambda: format_listing_search_response(req.message, tool_result)),
+                        lambda: ctx.run(lambda: format_listing_search_response(req.message, tool_result, requested_count)),
                     )
                 else:
                     # Execute agent in an executor thread with propagated ContextVars
@@ -307,6 +375,12 @@ async def chat_endpoint(req: ChatRequest):
                         fallback_ans = _fallback_listing_search(req.message)
                         if fallback_ans:
                             ans = fallback_ans
+                    requested_count = _extract_requested_count(req.message)
+                    if isinstance(ans, str) and "Racket ID:" in ans:
+                        ans = await loop.run_in_executor(
+                            None,
+                            lambda: ctx.run(lambda: format_listing_search_response(req.message, ans, requested_count)),
+                        )
             
             # Stream the final answer word-by-word (simulate streaming since structured agents 
             # complete their multi-turn tool reasoning synchronously first)

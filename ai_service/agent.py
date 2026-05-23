@@ -98,18 +98,25 @@ def run_agent_with_history(agent_executor, history, query):
     response = agent_executor.run(input=query)
     return response
 
-def format_listing_search_response(user_query, tool_result):
+def format_listing_search_response(user_query, tool_result, requested_count=None):
     llm = create_llm()
+    count_hint = ""
+    if isinstance(requested_count, int) and requested_count > 0:
+        count_hint = f"The user explicitly asked for {requested_count} racket(s). Return exactly that many listings. "
     response = llm.invoke([
         SystemMessage(content=(
             "You are RacketBot. Turn marketplace search results into a concise buyer-facing answer. "
             "Do not call tools. Do not invent listings. Do not include image URLs. "
             "If there is no exact match but alternatives are provided, clearly explain the tradeoff. "
+            "If the user asks for a single or best pick, choose exactly one listing and explain why in 1-2 short reasons. "
+            "If the user asks for multiple rackets, return that number without extra filler. "
+            "If the user does not specify a number, decide how many to show based on the question and keep it concise. "
             "Never use Markdown tables. "
             "Use short card-style blocks with labels: Price, Weight, Flex, Balance, Location, Seller, Best for."
         )),
         HumanMessage(content=(
             f"User asked: {user_query}\n\n"
+            f"Count guidance: {count_hint}\n\n"
             f"Search result data:\n{tool_result}\n\n"
             "Write the final chat response in friendly Malaysian English."
         )),
@@ -123,17 +130,24 @@ def format_listing_search_response(user_query, tool_result):
         return "\n".join(part for part in text_parts if part).strip()
     return response.content
 
-def format_beginner_recommendation_response(user_query, guide_context, listing_result):
+def format_beginner_recommendation_response(user_query, guide_context, listing_result, requested_count=None):
     llm = create_llm()
+    count_hint = ""
+    if isinstance(requested_count, int) and requested_count > 0:
+        count_hint = f"The user explicitly asked for {requested_count} racket(s). Return exactly that many listings. "
     response = llm.invoke([
         SystemMessage(content=(
             "You are RacketBot. Recommend beginner badminton rackets from provided marketplace data. "
             "Do not call tools. Do not invent listings. Do not include image URLs. Never use Markdown tables. "
             "Prefer light 5U-8U, flexible or medium-flex, even-balance or head-light rackets, and low tension advice. "
-            "Pick one best recommendation, then mention 1-2 alternatives or what to avoid."
+            "If the user asks for a single or best pick, choose exactly one listing and explain why in 1-2 short reasons. "
+            "If the user asks for multiple rackets, return that number without extra filler. "
+            "If the user does not specify a number, decide how many to show based on the question and keep it concise. "
+            "You may summarize or omit the guide unless the user asks for tips or guidance."
         )),
         HumanMessage(content=(
             f"User asked: {user_query}\n\n"
+            f"Count guidance: {count_hint}\n\n"
             f"Beginner guide context:\n{guide_context}\n\n"
             f"Available marketplace listings:\n{listing_result}\n\n"
             "Write a concise friendly final answer in Malaysian English."

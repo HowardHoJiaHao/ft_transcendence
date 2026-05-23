@@ -200,7 +200,12 @@ export default function AIFloatingChat() {
         
         {/* Render quick navigation actions based on AI suggestions */}
         {racketMatch && (
-          <a href={`/products/${racketMatch[1]}`} className={styles.actionBtn}>
+          <a
+            href={`/products/${racketMatch[1]}`}
+            className={styles.actionBtn}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             🏸 View Racket #{racketMatch[1]} →
           </a>
         )}
