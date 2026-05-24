@@ -21,6 +21,7 @@ def _format_products(products, limit: int = None) -> str:
             f"Price: RM {p.get('price')}\n"
             f"Weight: {p.get('weightCategory')} | Flex: {p.get('flexibilityCategory')} | Balance: {p.get('balanceCategory')}\n"
             f"Location: {p.get('location')} | Seller: {p.get('sellerName')} (Rating: {p.get('rating')}/5)\n"
+            f"Product link: {p.get('title')} | /products/{p.get('id')}\n"
             "---"
         )
     if safe_limit is None:
@@ -84,7 +85,8 @@ def _format_beginner_products(products) -> str:
             f"Balance: {p.get('balanceCategory')}\n"
             f"Location: {p.get('location')}\n"
             f"Seller: {p.get('sellerName')} (Rating: {p.get('rating')}/5)\n"
-            f"Best for: Beginner-friendly handling and easier timing"
+            f"Best for: Beginner-friendly handling and easier timing\n"
+            f"Product link: {p.get('title')} | /products/{p.get('id')}"
         )
     return "\n\n".join(formatted)
 

@@ -178,6 +178,43 @@ export default function AIFloatingChat() {
         return;
       }
 
+      const productLinkMatch = trimmed.match(/^Product link:\s*(.+?)\s*\|\s*(\S+)/i);
+      if (productLinkMatch) {
+        flushList();
+        const linkText = productLinkMatch[1].trim();
+        const href = productLinkMatch[2];
+        formattedText.push(
+          <a
+            key={`product-link-${i}`}
+            href={href}
+            className={styles.actionBtn}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Product link: {linkText}
+          </a>
+        );
+        return;
+      }
+
+      const productLinkFallback = trimmed.match(/^Product link:\s*(\S+)/i);
+      if (productLinkFallback) {
+        flushList();
+        const href = productLinkFallback[1];
+        formattedText.push(
+          <a
+            key={`product-link-${i}`}
+            href={href}
+            className={styles.actionBtn}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Product link: {href}
+          </a>
+        );
+        return;
+      }
+
       if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
         const itemText = trimmed.replace(/^[\*\-]\s+/, '');
         listItems.push(

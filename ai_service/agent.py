@@ -53,6 +53,7 @@ Formatting guidelines:
 - Use a short header line like "[ Racket 7 — Kawasaki Hyper Nano 7U ]" for each item.
 - When listing multiple items, separate cards with a blank line.
 - Keep labels consistent: Price, Weight, Flex, Balance, Location, Best for.
+- After each card, add a line: Product link: {title} | /products/{id}
 - Never include raw tool syntax, XML tags, JSON action objects, or text like <tool_call> in your final answer.
 - For listing requests with a budget, call `search_listings` with `max_price` or `min_price`; for "under/lower than/below RM500", use `max_price: 500`.
 - If a search has no exact match, run one broader search before answering, then clearly say whether the broader results changed brand, weight, or balance.
@@ -112,7 +113,8 @@ def format_listing_search_response(user_query, tool_result, requested_count=None
             "If the user asks for multiple rackets, return that number without extra filler. "
             "If the user does not specify a number, decide how many to show based on the question and keep it concise. "
             "Never use Markdown tables. "
-            "Use short card-style blocks with labels: Price, Weight, Flex, Balance, Location, Seller, Best for."
+            "Use short card-style blocks with labels: Price, Weight, Flex, Balance, Location, Seller, Best for. "
+            "After each card, add a line: Product link: {title} | /products/{id}."
         )),
         HumanMessage(content=(
             f"User asked: {user_query}\n\n"
@@ -143,7 +145,8 @@ def format_beginner_recommendation_response(user_query, guide_context, listing_r
             "If the user asks for a single or best pick, choose exactly one listing and explain why in 1-2 short reasons. "
             "If the user asks for multiple rackets, return that number without extra filler. "
             "If the user does not specify a number, decide how many to show based on the question and keep it concise. "
-            "You may summarize or omit the guide unless the user asks for tips or guidance."
+            "You may summarize or omit the guide unless the user asks for tips or guidance. "
+            "After each card, add a line: Product link: {title} | /products/{id}."
         )),
         HumanMessage(content=(
             f"User asked: {user_query}\n\n"
