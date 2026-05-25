@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"golang.org/x/crypto/bcrypt"
 	"github.com/labstack/echo/v4"
 	"transcendence/modules/user"
 )
@@ -30,6 +31,10 @@ func (h *Handler) Register(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
 	}
 
+	if err := h.service.CheckAndHashNewPassword(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()});
+	}
+
 	id, err := h.repo.CreateUser(req)
 	if err != nil {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "User with this email or username already exists"})
@@ -52,13 +57,20 @@ func (h *Handler) Login(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
 	}
 
-	u, err := h.repo.GetUserByEmailAndPassword(req.Email, req.Password)
+	u, err := h.repo.GetUserByEmailWithPassword(req.Email)
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid credentials"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid credentials 1"})
+	}
+
+	if err = bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid credentials 2"})
 	}
 
 	if !u.Requires2FA {
-		token := u.GenerateToken()
+		token, err := GenerateToken(u.ID)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
+		}
 		return c.JSON(http.StatusOK, user.LoginResponse{Token: token, User: *u})
 	}
 
@@ -89,7 +101,10 @@ func (h *Handler) Verify2FA(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to load user"})
 	}
 
-	token := u.GenerateToken()
+	token, err := GenerateToken(u.ID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
+	}
 	return c.JSON(http.StatusOK, user.LoginResponse{Token: token, User: *u})
 }
 

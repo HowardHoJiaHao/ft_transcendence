@@ -1,26 +1,27 @@
 package middleware
 
 import (
-	"strconv"
+	"net/http"
 	"strings"
 	"github.com/labstack/echo/v4"
+	auth "transcendence/modules/user/auth"
 )
 
 func JWTAuth() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			auth := c.Request().Header.Get("Authorization")
-			if auth == "" || !strings.HasPrefix(auth, "Bearer token_") {
-				return c.JSON(401, map[string]string{"error": "Unauthorized"})
+			authHeader := c.Request().Header.Get("Authorization")
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
 			}
 
-			userIdStr := strings.TrimPrefix(auth, "Bearer token_")
-			userId, err := strconv.Atoi(userIdStr)
+			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+			claims, err := auth.ValidateToken(tokenStr)
 			if err != nil {
-				return c.JSON(401, map[string]string{"error": "Invalid token"})
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
 			}
 
-			c.Set("userId", userId)
+			c.Set("userId", claims.UserId)
 			return next(c)
 		}
 	}

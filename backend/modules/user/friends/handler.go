@@ -34,7 +34,7 @@ func (h *Handler) AuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		claims, err := h.Service.ValidateToken(tokenStr)
+		claims, err := auth.ValidateToken(tokenStr)
 		if err != nil {
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
 		}

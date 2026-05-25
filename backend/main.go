@@ -31,7 +31,6 @@ func main() {
 
 	defer cleanup() //run the line before exiting fx
 
-
 	//create echo instance
 	e := echo.New()
 
@@ -101,12 +100,14 @@ func main() {
 	e.Logger.Fatal(e.Start(":" + port)) //start is a function that enters infinite loop, wait, listens for http request. the port given should be in this format :XXXX
 }
 
+//dummy healthcheckhandler
 func healthCheckHandler(c echo.Context) error { //everytime a user enter /health give type echo.context to c
 	return c.JSON(200, map[string]interface{}{ //use a helper of echo context that take the data and change into json string. gives 200 error status. and declare a map with key(string) and value (can be any type). interface means can be any type
 		"status": "ok",
 	})
 }
 
+//dummy statushandler
 func statusHandler(c echo.Context) error {
 	return c.JSON(200, map[string]interface{}{
 		"status": "running", //the map element

@@ -32,18 +32,18 @@ func (r *Repository) CreateUser(req RegisterRequest) (int64, error) {
 	return id, nil
 }
 
-func (r *Repository) GetUserByEmailAndPassword(email, password string) (*User, error) {
+func (r *Repository) GetUserByEmailWithPassword(email string) (*User, error) {
 	var user User
 	var bio, avatarURL, avatarMime sql.NullString /*phone_no, gender*/
 	// var dob sql.NullTime
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, first_name, last_name, avatar_url, phone_no, date_of_birth, gender, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1 AND password_hash = $2",
-		email, password,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
+		"SELECT id, username, email, password_hash, first_name, last_name, avatar_url, phone_no, date_of_birth, gender, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1",
+		email, 
+	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
 
 	if err != nil {
-		fmt.Printf("\nError Getusebyemailandpassword\n")
+		fmt.Printf("\nFailed to fetch user and password using email\n")
 		return nil, err
 	}
 	user.Bio = bio.String
