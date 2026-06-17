@@ -147,6 +147,7 @@ func (r *Repository) UpdateUserAvatarUrl(userID int, publicUrl string, mime stri
 	return err
 }
 
+//Currently not being used
 func (r *Repository) GetUserAvatarBinary(userID int) ([]byte, string, error) {
 	var data []byte
 	var mime sql.NullString

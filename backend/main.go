@@ -13,7 +13,7 @@ import (
     "transcendence/modules/user/profile"
     "transcendence/modules/user/friends"
 	"transcendence/modules/user/chat"
-	authMiddleware "transcendence/middleware"
+	"transcendence/myMiddleware"
 )
 
 func main() {
@@ -48,18 +48,19 @@ func main() {
 	v1.GET("/status", statusHandler)
 
 	// Product routes
-	e.GET("/api/v1/products", func(c echo.Context) error { return getProducts(c, gormDB) })
-	e.GET("/api/v1/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
-	
+	v1.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
+	v1.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
+	v1.GET("/products/:id/images", func(c echo.Context) error { return getListingImages(c, gormDB) })
+
 	// protected product routes
 	protected := e.Group("/api/v1")
-	protected.Use(authMiddleware.JWTAuth())
+	protected.Use(myMiddleware.JWTAuth())
 
 	protected.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
-	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
+	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	protected.POST("/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
-	e.GET("/api/v1/products/:id/images", func(c echo.Context) error { return getListingImages(c, gormDB) })
+	
 	//User Module initialization
 	baseRepo := user.NewRepository(rawDB, gormDB)
 

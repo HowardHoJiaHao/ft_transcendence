@@ -225,7 +225,7 @@ export default function ProfilePage() {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:8080/api/v1/users/${user?.id}/upload-avatar`,
+        `http://localhost:8080/api/v1/users/upload-avatar`,
         {
           method: "POST",
           headers: { Authorization: token ? `Bearer ${token}` : "" },

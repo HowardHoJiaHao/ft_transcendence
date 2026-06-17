@@ -89,6 +89,7 @@ const listingSelectCols = `l.id, l.title, l.price, l.original_price, l.image,
 	l.rating, l.reviews, l.is_new, l.is_featured,
 	COALESCE(l.status, 'active'), COALESCE(l.views_count, 0), l.created_at, l.description`
 
+// list all products with filters
 func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
