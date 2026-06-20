@@ -12,7 +12,7 @@ export default function CartPage() {
 			return 'https://via.placeholder.com/100';
 		if (url.startsWith('http'))
 			return url;
-		return `http://localhost:8080/${url}`;
+		return `/${url}`;
 	};
 
 	if (items.length === 0)

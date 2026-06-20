@@ -32,7 +32,7 @@ export default function FriendPage()
 		try
 		{
 			const token = localStorage.getItem('token') || `token_${user?.id}`;
-			const res = await fetch(`http://localhost:8080/api/v1/friends/${partnerId}`, {
+			const res = await fetch(`/api/v1/friends/${partnerId}`, {
 				method: 'DELETE',
 				headers: { Authorization: `Bearer ${token}`},
 			});
@@ -51,7 +51,7 @@ export default function FriendPage()
 		try
 		{
 			const token = localStorage.getItem('token') || `token_${user?.id}`;
-			const res = await fetch(`http://localhost:8080/api/v1/friends`, {
+			const res = await fetch(`/api/v1/friends`, {
 				headers: { Authorization: `Bearer ${token}`},
 			});
 			if (res.ok)

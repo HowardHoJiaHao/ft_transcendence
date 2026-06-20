@@ -11,7 +11,7 @@ function connect(token: string) {
 	if (ws?.readyState === WebSocket.OPEN)
 		return ;
 
-	ws = new WebSocket(`ws://localhost:8080/api/v1/ws?token=${token}`);
+	ws = new WebSocket(`wss://localhost/api/v1/ws?token=${token}`);
 
 	ws.onopen = () => console.log('WS connected');
 	ws.onclose = (event) =>

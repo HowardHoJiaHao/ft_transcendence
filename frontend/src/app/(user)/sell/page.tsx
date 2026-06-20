@@ -77,7 +77,7 @@ function SellPageInner() {
   useEffect(() => {
     if (!editId) return;
     setEditLoading(true);
-    fetch(`http://localhost:8080/api/v1/products/${editId}`)
+    fetch(`/api/v1/products/${editId}`)
       .then((r) => r.json())
       .then((p) => {
         setCategory(p.category || "Others");
@@ -153,7 +153,7 @@ function SellPageInner() {
     if (!photos.length) return;
     const fd = new FormData();
     photos.forEach((p) => fd.append("images", p));
-    await fetch(`http://localhost:8080/api/v1/products/${listingId}/images`, {
+    await fetch(`/api/v1/products/${listingId}/images`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: fd,
@@ -191,7 +191,7 @@ function SellPageInner() {
       if (isEditMode) {
         /* ── UPDATE ── */
         const res = await fetch(
-          `http://localhost:8080/api/v1/products/${editId}`,
+          `/api/v1/products/${editId}`,
           {
             method: "PUT",
             headers: {
@@ -223,7 +223,7 @@ function SellPageInner() {
         router.push("/profile/my-ads");
       } else {
         /* ── CREATE ── */
-        const res = await fetch("http://localhost:8080/api/v1/products", {
+        const res = await fetch("/api/v1/products", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

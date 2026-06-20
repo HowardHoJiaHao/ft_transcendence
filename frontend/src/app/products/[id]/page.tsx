@@ -44,7 +44,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const [quantity, setQuantity] = useState(1);
 	const resolvedParams = use(params);
 	const productId = parseInt(resolvedParams.id);
-	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 	const defaultAvatarUrl = '/default-avatar.png';
 	const placeholderAvatarUrl = 'https://via.placeholder.com/120';
 
@@ -75,7 +75,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 			return[]
 		try
 		{
-			const res = await fetch(`http://localhost:8080/api/v1/messages/${partnerId}`, {
+			const res = await fetch(`/api/v1/messages/${partnerId}`, {
 				headers: {
 					'Authorization': `Bearer ${localStorage.getItem('token')}`
 				}

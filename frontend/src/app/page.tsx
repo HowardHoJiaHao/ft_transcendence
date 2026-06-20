@@ -54,7 +54,7 @@ const BALANCE_CATEGORIES = [
 export default function Home()
 {
   const { user, logout } = useAuth();
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
   const placeholderListingImageUrl = 'https://via.placeholder.com/350x450';
   const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
   const [selectedFlexibilities, setSelectedFlexibilities] = useState<string[]>([]);

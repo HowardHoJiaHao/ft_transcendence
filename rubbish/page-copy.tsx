@@ -14,7 +14,7 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const endpoint = isRegister ? 'http://localhost:8080/api/v1/auth/register' : 'http://localhost:8080/api/v1/auth/login';
+    const endpoint = isRegister ? '/api/v1/auth/register' : '/api/v1/auth/login';
     
     try
 	{
