@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { WebSocketProvider } from '@/context/WebSocketContext'
 import { AuthProvider } from '@/context/AuthContext';
+import { CartProvider } from "@/context/CartContext";
 import { ToastProvider } from "@/components/Toast/ToastContext";
 import Footer from "@/components/Footer/Footer";
 import FloatingChat from "@/components/FloatingChat/FloatingChat";
@@ -22,10 +23,14 @@ export default function RootLayout({
       <body>
         <AuthProvider>
           <WebSocketProvider>
-            <ToastProvider>{children}</ToastProvider>
+            <CartProvider>
+              <ToastProvider>
+                  {children}
+              </ToastProvider> {/*suggested moving toast as parents of floating chat and footer */}
               <FloatingChat />
               <AIFloatingChat />
             <Footer />
+			</CartProvider>
           </WebSocketProvider>
         </AuthProvider>
       </body>

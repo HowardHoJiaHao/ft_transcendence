@@ -25,7 +25,7 @@ export default function ChatPage() {
 		try
 		{
 			const token = localStorage.getItem('token') || `token_$(user?.id)`;
-			const res = await fetch(`http://localhost:8080/api/v1/conversations/${partnerId}`, {
+			const res = await fetch(`/api/v1/conversations/${partnerId}`, {
 				method: 'DELETE',
 				headers: { Authorization: `Bearer ${token}` },
 			});
@@ -44,7 +44,7 @@ export default function ChatPage() {
 		try
 		{
 			const token = localStorage.getItem('token') || `token_${user?.id}`;
-			const res = await fetch('http://localhost:8080/api/v1/conversations', {
+			const res = await fetch('/api/v1/conversations', {
 				headers: { Authorization: `Bearer ${token}` },
 			});
 			if (res.ok)
@@ -69,7 +69,7 @@ export default function ChatPage() {
 		try
 		{
 			const token = localStorage.getItem('token') || `token_${user?.id}`;
-			const res = await fetch(`http://localhost:8080/api/v1/messages/${partnerId}`, {
+			const res = await fetch(`/api/v1/messages/${partnerId}`, {
 				headers: { Authorization: `Bearer ${token}`},
 			});
 			if (res.ok)

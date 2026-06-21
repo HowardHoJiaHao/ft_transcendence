@@ -56,7 +56,7 @@ export default function UserPage()
 	const { id } = useParams();
 	const router = useRouter();
 	const { user: currentUser } = useAuth();
-	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 	const defaultAvatarUrl = '/default-avatar.png';
 	const placeholderAvatarUrl = 'https://via.placeholder.com/120';
 	const placeholderListingImageUrl = 'https://via.placeholder.com/350x450';
@@ -92,7 +92,7 @@ export default function UserPage()
 	const fetchChatHistory = async (partnerId: number) => {
 		if (!currentUser?.id) return [];
 		try {
-			const res = await fetch(`http://localhost:8080/api/v1/messages/${partnerId}`, {
+			const res = await fetch(`/api/v1/messages/${partnerId}`, {
 				headers: {
 					'Authorization': `Bearer ${localStorage.getItem('token')}`
 				}
@@ -121,7 +121,7 @@ export default function UserPage()
 		try
 		{
 			const token = localStorage.getItem('token') || `token_${currentUser?.id}`;
-			const res = await fetch(`http://localhost:8080/api/v1/friends/${seller?.id}`, {
+			const res = await fetch(`/api/v1/friends/${seller?.id}`, {
 				method: 'POST',
 				headers: { Authorization: `Bearer ${token}` }
 			});
@@ -145,7 +145,7 @@ export default function UserPage()
 			try
 			{
 				setLoading(true)
-				const res = await fetch(`http://localhost:8080/api/v1/users/${id}`)
+				const res = await fetch(`/api/v1/users/${id}`)
 
 				if (!res.ok)
 					throw new Error(`HTTP error! status: ${res.status}`)
@@ -180,7 +180,7 @@ export default function UserPage()
 			setLoading(true);
 			setError(null);
 
-			const res = await fetch( `http://localhost:8080/api/v1/products?sellerId=${seller.id}`);
+			const res = await fetch( `/api/v1/products?sellerId=${seller.id}`);
 
 			if (!res.ok)
 			  throw new Error('Failed to fetch products');

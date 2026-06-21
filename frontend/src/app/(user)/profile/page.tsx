@@ -61,7 +61,7 @@ export default function ProfilePage() {
     }
 
     try {
-      const res = await fetch("http://localhost:8080/api/v1/auth/resend-otp", {
+      const res = await fetch("/api/v1/auth/resend-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: ctxUser?.email }),
@@ -107,7 +107,7 @@ export default function ProfilePage() {
         );
         return;
       }
-      const res = await fetch("http://localhost:8080/api/v1/auth/verify-otp", {
+      const res = await fetch("/api/v1/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tempToken, otpCode }),
@@ -152,7 +152,7 @@ export default function ProfilePage() {
       setLoading(true);
       try {
         const token = localStorage.getItem("token") ?? "";
-        const res = await fetch("http://localhost:8080/api/v1/me", {
+        const res = await fetch("/api/v1/me", {
           headers: {
             Authorization: token ? `Bearer ${token}` : "",
           },
@@ -225,7 +225,7 @@ export default function ProfilePage() {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:8080/api/v1/users/${user?.id}/upload-avatar`,
+        `/api/v1/users/upload-avatar`,
         {
           method: "POST",
           headers: { Authorization: token ? `Bearer ${token}` : "" },
@@ -259,7 +259,7 @@ export default function ProfilePage() {
           : null,
       };
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:8080/api/v1/users/update", {
+      const res = await fetch("/api/v1/users/update", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -297,7 +297,7 @@ export default function ProfilePage() {
   const today = new Date().toISOString().split("T")[0];
 
   // backend base URL for serving avatars
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
   const defaultAvatarUrl = "/default-avatar.png";
   const placeholderAvatarUrl = "https://via.placeholder.com/120";
   const resolveAvatarUrl = (url?: string) => {

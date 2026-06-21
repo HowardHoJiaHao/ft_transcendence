@@ -3,11 +3,11 @@ package friends
 import (
 	"net/http"
 	"strconv"
-	"strings"
 	"log"
 
 	"github.com/labstack/echo/v4"
 	"transcendence/modules/user/auth"
+	"transcendence/myMiddleware"
 )
 
 type Handler struct {
@@ -20,28 +20,12 @@ func NewHandler(repo *Repository, service *auth.Service) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(e *echo.Group) {
-	e.GET("/friends", h.GetFriends, h.AuthMiddleware)
-	e.POST("/friends/:friend_id", h.AddFriend, h.AuthMiddleware)
-	e.DELETE("/friends/:friend_id", h.RemoveFriend, h.AuthMiddleware)
-}
+	protected := e.Group("")
+	protected.Use(myMiddleware.JWTAuth())
 
-//need to create a shared function. DRY
-func (h *Handler) AuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		authHeader := c.Request().Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer") {
-			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing or invalid authorization header"})
-		}
-
-		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		claims, err := h.Service.ValidateToken(tokenStr)
-		if err != nil {
-			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
-		}
-
-		c.Set("userId", claims.UserId)
-		return next(c)
-	}
+	protected.GET("/friends", h.GetFriends)
+	protected.POST("/friends/:friend_id", h.AddFriend)
+	protected.DELETE("/friends/:friend_id", h.RemoveFriend)
 }
 
 func (h *Handler) GetFriends(c echo.Context) error {
@@ -97,3 +81,28 @@ func (h *Handler) RemoveFriend(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Friend removed"})
 }
+
+// 	func (h *Handler) RegisterRoutes(e *echo.Group) {
+// 	e.GET("/friends", h.GetFriends, h.AuthMiddleware)
+// 	e.POST("/friends/:friend_id", h.AddFriend, h.AuthMiddleware)
+// 	e.DELETE("/friends/:friend_id", h.RemoveFriend, h.AuthMiddleware)
+// }
+
+// //need to create a shared function. DRY. can remove and import from mymiddleware auth.go
+// func (h *Handler) AuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+// 	return func(c echo.Context) error {
+// 		authHeader := c.Request().Header.Get("Authorization")
+// 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer") {
+// 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing or invalid authorization header"})
+// 		}
+
+// 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+// 		claims, err := auth.ValidateToken(tokenStr)
+// 		if err != nil {
+// 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
+// 		}
+
+// 		c.Set("userId", claims.UserId)
+// 		return next(c)
+// 	}
+// }

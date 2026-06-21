@@ -3,8 +3,8 @@
 import { useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation'
-
-import { useAuth } from '@/context/AuthContext';; //import hook to access global authentication data
+import { useCart } from '@/context/CartContext';
+import { useAuth } from '@/context/AuthContext'; //import hook to access global authentication data
 import { useSearch } from '@/hooks/useSearch';
 import SearchBar from '@/components/SearchBar/SearchBar';
 import styles from './Header.module.css';
@@ -22,6 +22,7 @@ export default function Header({
 }: HeaderProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { itemCount } = useCart();
   const { searchQuery, setSearchQuery, handleSearch } = useSearch();
   const activeSearchValue = searchValue ?? searchQuery;
   const handleSearchChange = onSearchChange ?? setSearchQuery;
@@ -43,7 +44,7 @@ export default function Header({
               ) : (
                 <Link href="/login" className="btn btn-secondary btn-sm">Login</Link>
               )}
-              <Link href="/cart" className="btn btn-secondary btn-sm">🛒</Link>
+              <Link href="/cart" className={styles.cartBtn}>🛒{itemCount > 0 && (<span className={styles.cartBadge}>{itemCount}</span>)}</Link>
               <button
               className="btn btn-primary btn-sm"
               onClick={() => router.push(user ? '/sell' : '/login')}

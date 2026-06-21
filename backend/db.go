@@ -39,6 +39,7 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 	return rawDB, ormDB, cleanup, nil
 }
 
+//just to try use runlistingsmigration
 func runListingsMigration(db *sql.DB) error {
 	migrations := []string{
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'Others'`,

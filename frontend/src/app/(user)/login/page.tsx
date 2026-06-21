@@ -42,7 +42,7 @@ export default function LoginPage ()
 
 		try
 		{
-			const res = await fetch ('http://localhost:8080/api/v1/auth/resend-otp', 
+			const res = await fetch ('/api/v1/auth/resend-otp', 
 			{
 				method: 'POST',
 				headers: { 'Content-Type' : 'application/json' },
@@ -84,7 +84,7 @@ export default function LoginPage ()
 					showToast('tempToken and otpCode are required. Please request a new OTP and enter the code.', 'error');
 					return;
 				}
-				res = await fetch('http://localhost:8080/api/v1/auth/verify-otp', 
+				res = await fetch('/api/v1/auth/verify-otp', 
 				{
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -93,7 +93,7 @@ export default function LoginPage ()
 			}
 			else
 			{
-				const endpoint = isRegister ? 'http://localhost:8080/api/v1/auth/register' : 'http://localhost:8080/api/v1/auth/login';
+				const endpoint = isRegister ? '/api/v1/auth/register' : '/api/v1/auth/login';
 				res = await fetch(endpoint, 
 				{
 					method: 'POST',
@@ -152,9 +152,9 @@ export default function LoginPage ()
 						value={otpCode}
 						onChange={(e) => setOtpCode(e.target.value)}
 						required
-						className={styles.input}
+						className={styles.otpInput}
 					/>
-					<div style={{display: 'flex', gap: 8}}>
+					<div className={styles.buttonGroup}>
 						<button type="submit" className ={styles.button}>Verify Code</button>
 						<button type="button" className={styles.button} onClick={handleResendOtp} disabled={resendCd > 0}>
 							{resendCd > 0 ? `Resend OTP (${resendCd}s)` : 'Resend OTP'}

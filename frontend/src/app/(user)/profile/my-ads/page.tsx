@@ -20,7 +20,7 @@ interface Ad {
 }
 
 const ADS_PER_PAGE = 5;
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/350x450';
 
 export default function MyAdsPage() {
@@ -113,7 +113,7 @@ export default function MyAdsPage() {
     <main className={styles.main}>
       <Header/>
 
-      <div className={styles.container}>
+      <div className={styles.EmptyCartContainer}>
         <button
           className={styles.backBtn}
           onClick={() => router.push('/profile')}

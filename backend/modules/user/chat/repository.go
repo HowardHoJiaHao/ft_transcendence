@@ -32,22 +32,6 @@ func (r *Repository) CreateMessage(senderId, receiverId int, content string) (*M
 	return &msg, nil
 }
 
-func (r *Repository) GetMessagesBetween(user1Id, user2Id int) ([]Message, error) {
-	var messages []Message
-
-	err := r.GormDB.
-		Where("(sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)",
-			user1Id, user2Id, user2Id, user1Id).
-		Order("created_at ASC").
-		Find(&messages).Error
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch messages: %w", err)
-		}
-
-		return messages, nil
-}
-
 //distinct maybe unnecessary
 func (r *Repository) GetConversations(userId int) ([]Conversation, error) {
 	query := `
@@ -89,6 +73,22 @@ func (r *Repository) GetConversations(userId int) ([]Conversation, error) {
 		conversations = append(conversations, conv)
 	}
 	return conversations, nil
+}
+
+func (r *Repository) GetMessagesBetween(user1Id, user2Id int) ([]Message, error) {
+	var messages []Message
+
+	err := r.GormDB.
+		Where("(sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)",
+			user1Id, user2Id, user2Id, user1Id).
+		Order("created_at ASC").
+		Find(&messages).Error
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch messages: %w", err)
+		}
+
+		return messages, nil
 }
 
 func (r *Repository) MarkAsRead(receiverId, senderId int) error {

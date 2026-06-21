@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"transcendence/modules/user/auth"
+	"transcendence/myMiddleware"
 )
 
 type Handler struct {
@@ -22,30 +22,14 @@ func NewHandler(hub *Hub, repo *Repository, service *auth.Service) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(e *echo.Group) {
+	protected := e.Group("")
+	protected.Use(myMiddleware.JWTAuth())
+
 	e.GET("/ws", h.WebSocketHandler)
-	e.POST("/messages", h.SendMessage, h.AuthMiddleware)
-	e.GET("/conversations", h.GetConversations, h.AuthMiddleware)
-	e.DELETE("/conversations/:userId", h.DeleteConversation, h.AuthMiddleware)
-	e.GET("/messages/:userId", h.GetMessages, h.AuthMiddleware)
-}
-
-//need to create a shared function. DRY
-func (h *Handler) AuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		authHeader := c.Request().Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer") {
-			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing or invalid authorization header"})
-		}
-
-		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		claims, err := h.Service.ValidateToken(tokenStr)
-		if err != nil {
-			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
-		}
-
-		c.Set("userId", claims.UserId)
-		return next(c)
-	}
+	protected.POST("/messages", h.SendMessage)
+	protected.GET("/conversations", h.GetConversations)
+	protected.DELETE("/conversations/:userId", h.DeleteConversation)
+	protected.GET("/messages/:userId", h.GetMessages)
 }
 
 func (h *Handler) WebSocketHandler(c echo.Context) error {
@@ -54,7 +38,7 @@ func (h *Handler) WebSocketHandler(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "token required as query parameter"})
 	}
 
-	claims, err := h.Service.ValidateToken(userIdStr)
+	claims, err := auth.ValidateToken(userIdStr)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
 	}
@@ -157,3 +141,30 @@ func (h *Handler) DeleteConversation(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "deleted"})
 }
+
+// func (h *Handler) RegisterRoutes(e *echo.Group) {
+// 	e.GET("/ws", h.WebSocketHandler)
+// 	e.POST("/messages", h.SendMessage, h.AuthMiddleware)
+// 	e.GET("/conversations", h.GetConversations, h.AuthMiddleware)
+// 	e.DELETE("/conversations/:userId", h.DeleteConversation, h.AuthMiddleware)
+// 	e.GET("/messages/:userId", h.GetMessages, h.AuthMiddleware)
+// }
+
+//need to create a shared function. DRY
+// func (h *Handler) AuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+// 	return func(c echo.Context) error {
+// 		authHeader := c.Request().Header.Get("Authorization")
+// 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer") {
+// 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing or invalid authorization header"})
+// 		}
+
+// 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+// 		claims, err := auth.ValidateToken(tokenStr)
+// 		if err != nil {
+// 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
+// 		}
+
+// 		c.Set("userId", claims.UserId)
+// 		return next(c)
+// 	}
+// }

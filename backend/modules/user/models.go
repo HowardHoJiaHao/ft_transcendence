@@ -2,7 +2,6 @@ package user
 
 import (
 	"time"
-	"fmt"
 
 	"gorm.io/gorm"
 )
@@ -11,6 +10,7 @@ type User struct {
 	ID           int       `json:"id"`
 	Username     string    `json:"username"`
 	Email        string    `json:"email"`
+	PasswordHash string    `json:"-"`
 	FirstName    string    `json:"firstName"`
 	LastName     string    `json:"lastName"`
 	PhoneNo      *string    `json:"phoneNo"`
@@ -86,6 +86,6 @@ func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(&OTP{})
 }
 
-func (u *User) GenerateToken() string {
-    return fmt.Sprintf("token_%d", u.ID)
-}
+// func (u *User) GenerateToken() string {
+//     return fmt.Sprintf("token_%d", u.ID)
+// }

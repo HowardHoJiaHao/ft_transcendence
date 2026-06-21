@@ -13,7 +13,7 @@ import (
     "transcendence/modules/user/profile"
     "transcendence/modules/user/friends"
 	"transcendence/modules/user/chat"
-	authMiddleware "transcendence/middleware"
+	"transcendence/myMiddleware"
 )
 
 func main() {
@@ -30,7 +30,6 @@ func main() {
 	}
 
 	defer cleanup() //run the line before exiting fx
-
 
 	//create echo instance
 	e := echo.New()
@@ -50,20 +49,22 @@ func main() {
 	v1.POST("/ai/chat", handleAIChat)
  
 	// Product routes
-	e.GET("/api/v1/products", func(c echo.Context) error { return getProducts(c, gormDB) })
-	e.GET("/api/v1/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
-	
+	v1.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
+	v1.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
+	v1.GET("/products/:id/images", func(c echo.Context) error { return getListingImages(c, gormDB) })
+
 	// protected product routes
 	protected := e.Group("/api/v1")
-	protected.Use(authMiddleware.JWTAuth())
- 
+	protected.Use(myMiddleware.JWTAuth())
+
 	protected.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
-	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
+	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	protected.POST("/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
-	protected.GET("/orders", func(c echo.Context) error { return getOrders(c, gormDB) })
-	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) })
-	e.GET("/api/v1/products/:id/images", func(c echo.Context) error { return getListingImages(c, gormDB) })
+
+	protected.GET("/orders", func(c echo.Context) error { return getOrders(c, gormDB) }) // howai AI maybe. merge residue 21 june
+	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) }) //howai AI maybe. merge residue 21 june
+	
 	//User Module initialization
 	baseRepo := user.NewRepository(rawDB, gormDB)
 
@@ -104,12 +105,14 @@ func main() {
 	e.Logger.Fatal(e.Start(":" + port)) //start is a function that enters infinite loop, wait, listens for http request. the port given should be in this format :XXXX
 }
 
+//dummy healthcheckhandler
 func healthCheckHandler(c echo.Context) error { //everytime a user enter /health give type echo.context to c
 	return c.JSON(200, map[string]interface{}{ //use a helper of echo context that take the data and change into json string. gives 200 error status. and declare a map with key(string) and value (can be any type). interface means can be any type
 		"status": "ok",
 	})
 }
 
+//dummy statushandler
 func statusHandler(c echo.Context) error {
 	return c.JSON(200, map[string]interface{}{
 		"status": "running", //the map element

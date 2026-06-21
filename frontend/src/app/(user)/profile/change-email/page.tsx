@@ -25,7 +25,7 @@ export default function ChangeEmailPage()
 			setLoading(true);
 			const token = localStorage.getItem('token') ?? '';
 
-			const res = await fetch('http://localhost:8080/api/v1/users/update', {
+			const res = await fetch('/api/v1/users/update', {
 				method: 'PUT',
 				headers: {
 					'Content-Type': 'application/json',
