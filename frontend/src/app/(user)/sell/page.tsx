@@ -167,7 +167,7 @@ function SellPageInner() {
     const fd = new FormData();
     photos.forEach((p) => fd.append("images", p));
     // const res = await fetch(`${API_BASE}/api/v1/products/${listingId}/images`, { // conflict happen during merging. this is howaikeong code. I am taking mad code which is below
-    await fetch(`/api/v1/products/${listingId}/images`, {
+    const res = await fetch(`/api/v1/products/${listingId}/images`, { //recheck mad add
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: fd,
