@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/modules/user/components/AuthContext";
-
-const inter = Inter({ subsets: ["latin"] });
+import { WebSocketProvider } from '@/context/WebSocketContext'
+import { AuthProvider } from '@/context/AuthContext';
+import { CartProvider } from "@/context/CartContext";
+import { ToastProvider } from "@/components/Toast/ToastContext";
+import Footer from "@/components/Footer/Footer";
+import FloatingChat from "@/components/FloatingChat/FloatingChat";
+import AIFloatingChat from "@/components/AIFloatingChat/AIFloatingChat";
 
 export const metadata: Metadata = {
   title: "Transcendence Marketplace",
@@ -17,9 +20,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body>
         <AuthProvider>
-          {children}
+          <WebSocketProvider>
+            <CartProvider>
+              <ToastProvider>
+                  {children}
+              </ToastProvider> {/*suggested moving toast as parents of floating chat and footer */}
+              <FloatingChat />
+              <AIFloatingChat />
+            <Footer />
+			</CartProvider>
+          </WebSocketProvider>
         </AuthProvider>
       </body>
     </html>

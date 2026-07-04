@@ -1,7 +1,7 @@
 services:
   # PostgreSQL Database
   db:
-    image: postgres:15
+    image: pgvector/pgvector:pg15
     container_name: transcendence-postgres
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
@@ -15,45 +15,86 @@ services:
     networks:
       - transcendence-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}"] 
       timeout: 20s
       retries: 10
       interval: 10s
 
-  # Go Backend
+  # Go 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: transcendence-backend
+    env_file:
+      - .env
     environment:
       DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-transcendence}
-      DB_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
-      DB_NAME: ${DB_NAME:-transcendence}
-      SERVER_PORT: 8080
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./avatar:/app/avatar
+      - ./static/avatars:/app/static/avatars
+      - ./static/listings:/app/static/listings
     depends_on:
       db:
         condition: service_healthy
     networks:
       - transcendence-network
 
-  # Next.js Frontend
+  # NextJS
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: transcendence-frontend
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://localhost}
       NODE_ENV: ${NODE_ENV:-development}
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     depends_on:
+      - backend
+    networks:
+      - transcendence-network
+
+  # need to change wai keong
+  # Python AI Service (FastAPI + LangChain + RAG)
+  ai:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: transcendence-ai
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-transcendence}
+      - DB_PASSWORD=${DB_PASSWORD:-transcendence_pass}
+      - DB_NAME=${DB_NAME:-transcendence}
+      - BACKEND_URL=http://backend:8080 # maybe need to change
+    depends_on:
+      db:
+        condition: service_healthy
+  # end of need to change wai keong 
+
+  # Nginx
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: transcendence-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
       - backend
     networks:
       - transcendence-network

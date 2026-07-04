@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react'; //std react hook for managing local state & side effects
-import { useRouter } from 'next/navigation'; //programmatic navigation
-import { useAuth } from '@/modules/user/components/AuthContext'; //import hook to access global authentication data
+import { useAuth } from '@/context/AuthContext';; //import hook to access global authentication data
 import styles from './page.module.css'; //import CSS module for scope styling
+import Header from '@/components/Header/Header';
+import Link from 'next/link';
 
 interface Product
 {
@@ -12,67 +13,163 @@ interface Product
   price: number;
   originalPrice?: number;
   image: string;
-  category: string;
+  weightCategory: string;
+  flexibilityCategory: string;
+  balanceCategory: string;
   location: string;
-  seller: string;
+  sellerId: string;
+  sellerName: string;
   rating: number;
   reviews: number;
   isNew: boolean;
   isFeatured: boolean;
 }
 
-const CATEGORIES = [
+const WEIGHT_CATEGORIES = [
   'All',
-  'Electronics',
-  'Furniture',
-  'Fashion',
-  'Sports',
-  'Books',
-  'Vehicles',
+  '1U',
+  '2U',
+  '3U',
+  '4U',
+  '5U',
+  '6U',
+  '7U',
+  '8U',
 ];
 
-export default function Home() {
-  const router = useRouter();
+const FLEXIBILITY_CATEGORIES = [
+  'All',
+  'Stiff Shaft',
+  'Medium Flex',
+  'High Flexibility',
+];
+
+const BALANCE_CATEGORIES = [
+  'All',
+  'Head Heavy',
+  'Even Balance',
+  'Head Light',
+];
+
+export default function Home()
+{
   const { user, logout } = useAuth();
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+  const placeholderListingImageUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='900' viewBox='0 0 700 900'%3E%3Crect width='700' height='900' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%236b7280' font-family='Arial,sans-serif' font-size='32'%3ENo image%3C/text%3E%3C/svg%3E";
+  const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
+  const [selectedFlexibilities, setSelectedFlexibilities] = useState<string[]>([]);
+  const [selectedBalances, setSelectedBalances] = useState<string[]>([]);
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('featured');
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]); //declare a product array. declare the array is empty
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10;
 
-  // Fetch products from API
+//   const handleSearchWithFilters = (nextSearchQuery: string) => {
+//     setSearchQuery(nextSearchQuery);
+//   };
+
+  const resolveListingImageUrl = (url?: string) => {
+    if (!url)
+      return placeholderListingImageUrl;
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:'))
+      return url;
+    if (url.startsWith('/'))
+      return `${apiBaseUrl}${url}`;
+    return `${apiBaseUrl}/${url}`;
+  }
+
+  //			SEARH INITIALIZATION (FROM OTHER PAGE SEARCH)
   useEffect(() => {
+	const urlSearch = new URLSearchParams(window.location.search).get('search');
+	if (urlSearch)
+	{
+		setSearchInput(urlSearch);
+		setSearchQuery(urlSearch);
+	}
+  }, [])
+
+  //			TYPE SEARCH TRIGGER CD
+  useEffect(() => {
+	const timeoutId = setTimeout(() => {
+		setSearchQuery(searchInput)
+	}, 250);
+
+	return () => clearTimeout(timeoutId);
+  }, [searchInput]);
+
+  useEffect(() => {
+	setCurrentPage(1)
+  }, [selectedWeights, selectedFlexibilities, selectedBalances, searchQuery, sortBy]);
+
+
+  //			FETCH PRODUCTS FROM API
+  //new URLSearchParams(window.location.search) gives search query and get('search') gives value of search key.
+  useEffect(() =>
+	{
+    // const urlSearch = typeof window === 'undefined'
+    //             ? null : new URLSearchParams(window.location.search).get('search'); //if the search comes from url (other page), get they word from the key search
+    // const currentSearch = urlSearch ?? searchQuery; //if empty, means it dont come from url, use the searchQuery
+    // if (urlSearch && urlSearch !== searchQuery) //if both exist but different, means it come from url, update searchQuery following url
+    // {
+	//   setSearchQuery(urlSearch);
+	//   return ;
+	// }
+
     const fetchProducts = async () => {
       try {
         setLoading(true);
         const query = new URLSearchParams();
-        if (selectedCategory !== 'All') {
-          query.append('category', selectedCategory);
-        }
-        if (searchQuery) {
-          query.append('search', searchQuery);
-        }
+        if (selectedWeights.length > 0)
+		{
+			selectedWeights.forEach((w) => {
+			query.append('weightCategory', w);
+			});
+		}
+        if (selectedFlexibilities.length > 0)
+		{
+			selectedFlexibilities.forEach((f) => {
+			query.append('flexibilityCategory', f);
+			});
+		}
+		if (selectedBalances.length > 0)
+		{
+			selectedBalances.forEach((b) => {
+			query.append('balanceCategory', b);
+			});
+		}
+        if (searchQuery.trim())
+          query.append('search', searchQuery.trim());
         query.append('sort', sortBy);
 
-        const response = await fetch(
-          `http://localhost:8080/api/v1/products?${query}`
-        );
+		const offset = (currentPage - 1) * itemsPerPage;
+		query.append('limit', itemsPerPage.toString())
+		query.append('offset', offset.toString());
 
-        if (!response.ok) {
+        const res = await fetch(`${apiBaseUrl}/api/v1/products?${query}`);
+
+        if (!res.ok)
           throw new Error('Failed to fetch products');
-        }
 
-        const data = await response.json();
+        const data = await res.json();
+        const totalCount = data.total;
+		setTotalPages(Math.ceil(totalCount/ itemsPerPage));
         const mappedProducts = data.products.map((p: any) => ({ //for every single data call everything for a while then take the p and turn it into object below
           id: p.id,
           title: p.title,
           price: parseFloat(p.price),
           originalPrice: p.originalPrice ? parseFloat(p.originalPrice) : undefined,
           image: p.image,
-          category: p.category,
+          weightCategory: p.weightCategory,
+          flexibilityCategory: p.flexibilityCategory,
+		  balanceCategory: p.balanceCategory,
           location: p.location,
-          seller: p.seller,
+          sellerId: p.sellerId,
+		  sellerName: p.sellerName,
           rating: parseFloat(p.rating),
           reviews: p.reviews,
           isNew: p.isNew,
@@ -90,74 +187,92 @@ export default function Home() {
     };
 
     fetchProducts();
-  }, [selectedCategory, searchQuery, sortBy]);
+  }, [selectedWeights, selectedFlexibilities, selectedBalances, searchQuery, sortBy, currentPage]);
 
   return (
     <main className={styles.main}>
       {/* Header */}
-      <header className={styles.header}>
-        <div className="container">
-          <div className={styles.headerTop}>
-            <h1 className={styles.logo}>🛍️ Transcendence</h1>
-            <div className={styles.headerActions}>
-              {user ? (
-                <>
-                  <span className={styles.welcomeText}>Hi, {user.username}</span>
-                  <button className="btn btn-secondary btn-sm" onClick={() => router.push('/profile')}>Profile</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => router.push('/friends')}>Friends</button>
-                  <button className="btn btn-secondary btn-sm" onClick={logout}>Logout</button>
-                </>
-              ) : (
-                <button className="btn btn-secondary btn-sm" onClick={() => router.push('/login')}>Login</button>
-              )}
-              <button className="btn btn-primary btn-sm">Sell Now</button>
-            </div>
-          </div>
+      <Header
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+		onSearchSubmit={() => setSearchQuery(searchInput.trim())}
+      />
 
-          {/* Search Bar */}
-          <div className={styles.searchContainer}>
-            <div className={styles.searchBox}>
-              <input
-                type="text"
-                placeholder="Search listings, items, sellers..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={styles.searchInput}
-              />
-              <button className="btn btn-primary">Search</button>
-            </div>
-          </div>
-
-          {/* Categories */}
-          <div className={styles.categoriesNav}>
-            {CATEGORIES.map((category) => (
-              <button
-                key={category}
-                className={`${styles.categoryBtn} ${
-                  selectedCategory === category ? styles.active : ''
-                }`}
-                onClick={() => setSelectedCategory(category)}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="container">
-        <div className={styles.content}>
+        {/* Main Content */}
+	    <div className={styles.content}>
           {/* Sidebar Filters */}
           <aside className={styles.sidebar}>
             <div className={styles.filterSection}>
               <h3>Price Range</h3>
-              <input type="range" min="0" max="5000" className={styles.slider} />
-              <div className={styles.priceRange}>
-                <span>RM 0</span>
-                <span>RM 5000+</span>
-              </div>
+			  	<div className={styles.priceRange}>
+				  <div className={styles.rangeInputs}>
+					<input className={styles.priceInput} type="number" id="minPrice" placeholder="Min" min="0"/>
+					<span className={styles.separator}>-</span>
+					<input className={styles.priceInput} type="number" id="maxPrice" placeholder="Max" min="0"/>
+				  </div>
+                  <button className={styles.applyBtn}>Apply</button>
+				</div>
             </div>
+
+			<div className={styles.filterSection}>
+			  <h3>Weight</h3>
+			    <div className={styles.weightFilterOptions}>
+				  {WEIGHT_CATEGORIES.filter(c => c !== 'All').map((category) => (
+					<label key={category}>
+					  <input type="checkbox" value={category} checked={selectedWeights.includes(category)}
+						onChange={(e) => {
+						  const value = e.target.value;
+
+						  setSelectedWeights((prev) =>
+							prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+						  );
+						}}
+						/>
+						{category}
+					</label>
+				  ))}
+				</div>
+			</div>
+
+			<div className={styles.filterSection}>
+				<h3>Flexibility</h3>
+				<div className={styles.filterOptions}>
+					{FLEXIBILITY_CATEGORIES.filter(c => c !== 'All').map((category) => (
+						<label key={category}>
+							<input type="checkbox" value={category} checked={selectedFlexibilities.includes(category)}
+							onChange={(e) => {
+								const value = e.target.value;
+
+								setSelectedFlexibilities((prev) =>
+									prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+								);
+							}}
+							/>
+							{category}
+						</label>
+					))}
+				</div>
+			</div>
+
+			<div className={styles.filterSection}>
+			  <h3>Balance</h3>
+			    <div className={styles.filterOptions}>
+				  {BALANCE_CATEGORIES.filter(c => c !== 'All').map((category) => (
+					<label key={category}>
+					  <input type="checkbox" value={category} checked={selectedBalances.includes(category)}
+						onChange={(e) => {
+						  const value = e.target.value;
+
+						  setSelectedBalances((prev) =>
+							prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+						  );
+						}}
+						/>
+						{category}
+					</label>
+				  ))}
+				</div>
+			</div>
 
             <div className={styles.filterSection}>
               <h3>Location</h3>
@@ -243,7 +358,13 @@ export default function Home() {
                 {products.map((product) => (
                   <div key={product.id} className={styles.productCard}>
                     <div className={styles.productImage}>
-                      <img src={product.image} alt={product.title} />
+                      <img
+                        src={resolveListingImageUrl(product.image)}
+                        alt={product.title}
+                        onError={(event) => {
+                          (event.currentTarget as HTMLImageElement).src = placeholderListingImageUrl;
+                        }}
+                      />
                       {product.isFeatured && (
                         <span className={`badge badge-primary ${styles.badgeFeatured}`}>
                           Featured
@@ -280,12 +401,13 @@ export default function Home() {
                       </div>
 
                       <div className={styles.productSeller}>
-                        <span className={styles.sellerName}>{product.seller}</span>
+                        <span className={styles.sellerName}>{product.sellerName}</span>
                       </div>
-
-                      <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }}>
-                        View Details
-                      </button>
+					  <Link href={`/products/${product.id}`}>
+                        <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} >
+                          View Details
+                        </button>
+					  </Link>
                     </div>
                   </div>
                 ))}
@@ -297,7 +419,9 @@ export default function Home() {
                   className="btn btn-secondary"
                   onClick={() => {
                     setSearchQuery('');
-                    setSelectedCategory('All');
+                    setSelectedWeights([]);
+                    setSelectedFlexibilities([]);
+					setSelectedBalances([]);
                   }}
                 >
                   Clear Filters
@@ -305,51 +429,30 @@ export default function Home() {
               </div>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* Footer */}
-      <footer className={styles.footer}>
-        <div className="container">
-          <div className={styles.footerGrid}>
-            <div className={styles.footerCol}>
-              <h4>About Us</h4>
-              <ul>
-                <li><a href="#">About Transcendence</a></li>
-                <li><a href="#">Contact Us</a></li>
-                <li><a href="#">Blog</a></li>
-              </ul>
-            </div>
-            <div className={styles.footerCol}>
-              <h4>Support</h4>
-              <ul>
-                <li><a href="#">Help Center</a></li>
-                <li><a href="#">Safety Tips</a></li>
-                <li><a href="#">Report Item</a></li>
-              </ul>
-            </div>
-            <div className={styles.footerCol}>
-              <h4>Community</h4>
-              <ul>
-                <li><a href="#">Terms & Conditions</a></li>
-                <li><a href="#">Privacy Policy</a></li>
-                <li><a href="#">Careers</a></li>
-              </ul>
-            </div>
-            <div className={styles.footerCol}>
-              <h4>Follow Us</h4>
-              <div className={styles.socialLinks}>
-                <a href="#">Facebook</a>
-                <a href="#">Instagram</a>
-                <a href="#">Twitter</a>
-              </div>
-            </div>
-          </div>
-          <div className={styles.footerBottom}>
-            <p>&copy; 2024 Transcendence Marketplace. All rights reserved.</p>
-          </div>
+		    {!loading && !error && products.length > 0 && (
+			  <div className={styles.pagination}>
+			    <div className={styles.paginationButtons}>
+			      <button className={styles.paginationBtn} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
+			        ← Prev
+				  </button>
+				  
+				  {/*Page Numbers*/}
+				  {[...Array(totalPages)].map((_, i) => (
+				    <button key={i + 1} className={`${styles.paginationBtn} ${currentPage === i + 1 ? styles.active : ''}`} onClick={() => setCurrentPage(i + 1)}>
+				  	{i + 1}
+				    </button>
+				  ))}
+				  <button className={styles.paginationBtn} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
+				    Next →
+				  </button>
+				</div>
+				<span className={styles.pageInfo}>
+				  Page {currentPage} of {totalPages}
+				</span>
+			  </div>
+			)}
         </div>
-      </footer>
     </main>
   );
 }

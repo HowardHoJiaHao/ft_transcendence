@@ -43,11 +43,13 @@ sleep 10
 # Check health
 echo "🏥 Checking service health..."
 
-if curl -s http://localhost:8080/health > /dev/null; then
+# -s means silent. hide progress bar and error messages. 
+# > /dev/null; then is removing every output because we dont care about it. we only care it succeed or not
+if curl -s http://localhost:8080/health > /dev/null; then #if it is 0. if (condition) means if condition return 0 in bash. then execute this
     echo "✅ Backend API is healthy"
-else
+else # if it return 1
     echo "⚠️  Backend API not yet ready (check logs with: docker-compose logs -f backend)"
-fi
+fi #end if
 
 # Display service URLs
 echo ""

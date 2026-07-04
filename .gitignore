@@ -20,3 +20,8 @@ docker-compose.override.yml
 # OS
 .DS_Store
 Thumbs.db
+
+# vs code type
+node_modules/
+
+static/avatars/

@@ -1,254 +1,121 @@
 package main
 
 import (
-	"database/sql"
-	"fmt"
-	"log"
-	"os"
-	"strconv"
+	"log" //logging errors and important events
+	"os" //provide platform independent interface
 
-	_ "github.com/lib/pq"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	//"github.com/joho/godotenv"
+	"github.com/labstack/echo/v4" //echo main framework
+	"github.com/labstack/echo/v4/middleware" //middleware parts
+
 	"transcendence/modules/user"
+    "transcendence/modules/user/auth"
+    "transcendence/modules/user/profile"
+    "transcendence/modules/user/friends"
+	"transcendence/modules/user/chat"
+	"transcendence/myMiddleware"
 )
 
 func main() {
-	// Initialize database
-	db, err := initDB()
-	if err != nil {
+	//load .env file if no env loaded by docker. since we already use dockercompose to upload things from .env file to env. we only take from the existing env
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatalf("Error loading .env file") //logs info, print str, and exit
+	// }
+
+	//initialize database
+	rawDB, gormDB, cleanup, err := initDB()
+	if (err != nil) {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
-	defer db.Close()
 
-	// Create Echo instance
+	defer cleanup() //run the line before exiting fx
+
+	//create echo instance
 	e := echo.New()
 
-	// Middleware
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
+	//middleware. run things pre/post route handler
+	e.Use(middleware.Logger()) //log every incoming process
+	e.Use(middleware.Recover()) //recover will prevent panick to affect all healthy threads. it only panick current threads
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"http://localhost:3000", "http://localhost:*"},
-		AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"},
+		AllowOrigins: []string{"http://localhost:3000", "http://localhost"}, //only allow from these origins
+		AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"}, //only allow from these methods
 	}))
 
-	// Routes
-	e.GET("/health", func(c echo.Context) error {
-		return c.JSON(200, map[string]string{
-			"status": "ok",
-		})
-	})
-
-	e.GET("/api/v1/status", func(c echo.Context) error {
-		return c.JSON(200, map[string]interface{}{
-			"status": "running",
-			"version": "1.0.0",
-		})
-	})
-
-	// Product routes
-	e.GET("/api/v1/products", func(c echo.Context) error {
-		return getProducts(c, db)
-	})
-
-	e.GET("/api/v1/products/:id", func(c echo.Context) error {
-		return getProductByID(c, db)
-	})
-
-	// User Module initialization
-	userHandler := user.NewHandler(db)
+	//routes
+	e.GET("/health", healthCheckHandler)
 	v1 := e.Group("/api/v1")
-	userHandler.RegisterRoutes(v1)
+	v1.GET("/status", statusHandler)
+	v1.POST("/ai/chat", handleAIChat)
+ 
+	// Product routes
+	v1.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
+	v1.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
+	v1.GET("/products/:id/images", func(c echo.Context) error { return getListingImages(c, gormDB) })
 
-	// Start server
+	// protected product routes
+	protected := e.Group("/api/v1")
+	protected.Use(myMiddleware.JWTAuth())
+
+	protected.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
+	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
+	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
+	protected.POST("/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
+
+	protected.GET("/orders", func(c echo.Context) error { return getOrders(c, gormDB) }) // howai AI maybe. merge residue 21 june
+	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) }) //howai AI maybe. merge residue 21 june
+	
+	//User Module initialization
+	baseRepo := user.NewRepository(rawDB, gormDB)
+
+	// Initialize Auth module
+	authService := auth.NewService(baseRepo)
+	authHandler := auth.NewHandler(baseRepo, authService)
+
+	// Initialize Profile module
+	profileService := profile.NewService(baseRepo)
+	profileHandler := profile.NewHandler(baseRepo, profileService)
+
+	// Initialize Friends module
+	friendsRepo := friends.NewRepository(baseRepo)
+	friendsHandler := friends.NewHandler(friendsRepo, authService)
+
+	// Initialize Chat module
+	chatRepo := chat.NewRepository(baseRepo)
+	chatHub := chat.NewHub(chatRepo)
+	go chatHub.Run()
+	chatHandler := chat.NewHandler(chatHub, chatRepo, authService)
+
+	// Register routes
+	authHandler.RegisterRoutes(v1)
+	profileHandler.RegisterRoutes(v1)
+	friendsHandler.RegisterRoutes(v1)
+	chatHandler.RegisterRoutes(v1)
+
+	// serve static files (avatars) from ./static mapped to /static URL
+	e.Static("/static", "static")
+
+	//start server 
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
 		port = "8080"
 	}
 
 	log.Printf("Starting server on port %s", port)
-	e.Logger.Fatal(e.Start(":" + port))
+	e.Logger.Fatal(e.Start(":" + port)) //start is a function that enters infinite loop, wait, listens for http request. the port given should be in this format :XXXX
 }
 
-func initDB() (*sql.DB, error) {
-	dbUser := os.Getenv("DB_USER")
-	if dbUser == "" {
-		dbUser = "transcendence"
-	}
-
-	dbPassword := os.Getenv("DB_PASSWORD")
-	if dbPassword == "" {
-		dbPassword = "transcendence_pass"
-	}
-
-	dbHost := os.Getenv("DB_HOST")
-	if dbHost == "" {
-		dbHost = "localhost"
-	}
-
-	dbPort := os.Getenv("DB_PORT")
-	if dbPort == "" {
-		dbPort = "5432"
-	}
-
-	dbName := os.Getenv("DB_NAME")
-	if dbName == "" {
-		dbName = "transcendence"
-	}
-
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", 
-		dbHost, dbPort, dbUser, dbPassword, dbName)
-
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		return nil, err
-	}
-
-	err = db.Ping()
-	if err != nil {
-		return nil, err
-	}
-
-	log.Println("Database connected successfully")
-	return db, nil
-}
-
-// Product struct
-type Product struct {
-	ID            int     `json:"id"`
-	Title         string  `json:"title"`
-	Price         float64 `json:"price"`
-	OriginalPrice *float64 `json:"originalPrice,omitempty"`
-	Image         string  `json:"image"`
-	Category      string  `json:"category"`
-	Location      string  `json:"location"`
-	Seller        string  `json:"seller"`
-	Rating        float64 `json:"rating"`
-	Reviews       int     `json:"reviews"`
-	IsNew         bool    `json:"isNew"`
-	IsFeatured    bool    `json:"isFeatured"`
-	Description   string  `json:"description"`
-}
-
-// getProducts - fetch all products with optional filters
-func getProducts(c echo.Context, db *sql.DB) error {
-	category := c.QueryParam("category")
-	search := c.QueryParam("search")
-	sortBy := c.QueryParam("sort")
-	limit := c.QueryParam("limit")
-	offset := c.QueryParam("offset")
-
-	if limit == "" {
-		limit = "20"
-	}
-	if offset == "" {
-		offset = "0"
-	}
-
-	limitInt, _ := strconv.Atoi(limit)
-	offsetInt, _ := strconv.Atoi(offset)
-
-	query := "SELECT id, title, price, original_price, image, category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE 1=1"
-
-	var args []interface{}
-
-	if category != "" && category != "All" {
-		query += fmt.Sprintf(" AND category = $%d", len(args)+1)
-		args = append(args, category)
-	}
-
-	if search != "" {
-		query += fmt.Sprintf(" AND title LIKE $%d", len(args)+1)
-		args = append(args, "%"+search+"%")
-	}
-
-	// Add sorting
-	if sortBy == "price-low" {
-		query += " ORDER BY price ASC"
-	} else if sortBy == "price-high" {
-		query += " ORDER BY price DESC"
-	} else if sortBy == "newest" {
-		query += " ORDER BY is_new DESC, id DESC"
-	} else if sortBy == "rating" {
-		query += " ORDER BY rating DESC"
-	} else {
-		query += " ORDER BY is_featured DESC, id DESC"
-	}
-
-	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
-	args = append(args, limitInt, offsetInt)
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		log.Printf("Error querying products: %v", err)
-		return c.JSON(500, map[string]string{"error": "Failed to fetch products"})
-	}
-	defer rows.Close()
-
-	products := []Product{}
-	for rows.Next() {
-		var product Product
-		err := rows.Scan(
-			&product.ID,
-			&product.Title,
-			&product.Price,
-			&product.OriginalPrice,
-			&product.Image,
-			&product.Category,
-			&product.Location,
-			&product.Seller,
-			&product.Rating,
-			&product.Reviews,
-			&product.IsNew,
-			&product.IsFeatured,
-			&product.Description,
-		)
-		if err != nil {
-			log.Printf("Error scanning product: %v", err)
-			continue
-		}
-		products = append(products, product)
-	}
-
-	if products == nil {
-		products = []Product{}
-	}
-
-	return c.JSON(200, map[string]interface{}{
-		"products": products,
-		"total":    len(products),
+//dummy healthcheckhandler
+func healthCheckHandler(c echo.Context) error { //everytime a user enter /health give type echo.context to c
+	return c.JSON(200, map[string]interface{}{ //use a helper of echo context that take the data and change into json string. gives 200 error status. and declare a map with key(string) and value (can be any type). interface means can be any type
+		"status": "ok",
 	})
 }
 
-// getProductByID - fetch a single product by ID
-func getProductByID(c echo.Context, db *sql.DB) error {
-	id := c.Param("id")
-
-	query := "SELECT id, title, price, original_price, image, category, location, seller_name, rating, reviews, is_new, is_featured, description FROM listings WHERE id = $1"
-
-	var product Product
-	err := db.QueryRow(query, id).Scan(
-		&product.ID,
-		&product.Title,
-		&product.Price,
-		&product.OriginalPrice,
-		&product.Image,
-		&product.Category,
-		&product.Location,
-		&product.Seller,
-		&product.Rating,
-		&product.Reviews,
-		&product.IsNew,
-		&product.IsFeatured,
-		&product.Description,
-	)
-
-	if err == sql.ErrNoRows {
-		return c.JSON(404, map[string]string{"error": "Product not found"})
-	} else if err != nil {
-		log.Printf("Error querying product: %v", err)
-		return c.JSON(500, map[string]string{"error": "Failed to fetch product"})
-	}
-
-	return c.JSON(200, product)
+//dummy statushandler
+func statusHandler(c echo.Context) error {
+	return c.JSON(200, map[string]interface{}{
+		"status": "running", //the map element
+		"version": "1.0.0",
+	})
 }

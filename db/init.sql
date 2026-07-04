@@ -1,19 +1,35 @@
+-- Enable pgvector extension for embeddings
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY, --primary key means the official address of row w/ characteristics of unique and cannot be NULL
     username VARCHAR(255) UNIQUE NOT NULL, --not null means columns are mandatory
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    first_name VARCHAR(255),
-    last_name VARCHAR(255),
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
+	phone_no VARCHAR(30),
+	date_of_birth DATE,
+	gender VARCHAR(10) CHECK (gender IN ('Male', 'Female')),
     avatar_url VARCHAR(255), --link to the avatar
+    avatar_data BYTEA,
+    avatar_mime_type VARCHAR(50),
     bio TEXT, 
     is_verified BOOLEAN DEFAULT FALSE,
-    two_factor_enabled BOOLEAN DEFAULT FALSE,
+    requires_2fa BOOLEAN DEFAULT FALSE,
     oauth_id VARCHAR(255),
     oauth_provider VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP--,
+    -- CONSTRAINT users_avatar_source_check CHECK (
+    --     avatar_data IS NOT NULL
+    --     OR (avatar_url IS NOT NULL AND btrim(avatar_url) <> '')
+    -- ),
+    -- CONSTRAINT users_avatar_mime_check CHECK (
+    --     avatar_data IS NULL
+    --     OR (avatar_mime_type IS NOT NULL AND btrim(avatar_mime_type) <> '')
+    -- )
 ); 
 
 -- Create products/listings table
@@ -22,7 +38,9 @@ CREATE TABLE IF NOT EXISTS listings (
     seller_id INT NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    category VARCHAR(100),
+    weight_category VARCHAR(100),
+    flexibility_category VARCHAR(100),
+	balance_category VARCHAR(100),
     price DECIMAL(10, 2) NOT NULL,
     original_price DECIMAL(10, 2),
     currency VARCHAR(10) DEFAULT 'RM',
@@ -44,11 +62,21 @@ CREATE TABLE IF NOT EXISTS listings (
 CREATE TABLE IF NOT EXISTS listing_images (
     id SERIAL PRIMARY KEY,
     listing_id INT NOT NULL,
-    image_url VARCHAR(255) NOT NULL,
+    image_url VARCHAR(255),
+    image_data BYTEA,
+    mime_type VARCHAR(50),
     is_primary BOOLEAN DEFAULT FALSE, --the primary image to be shown first
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
-); 
+    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE,
+    CONSTRAINT listing_images_source_check CHECK (
+        image_data IS NOT NULL
+        OR (image_url IS NOT NULL AND btrim(image_url) <> '')
+    ),
+    CONSTRAINT listing_image_mime_check CHECK (
+        image_data IS NULL
+        OR (mime_type IS NOT NULL AND btrim(mime_type) <> '')
+    )
+);
 
 -- Create messages table
 CREATE TABLE IF NOT EXISTS messages (
@@ -121,34 +149,51 @@ CREATE TABLE IF NOT EXISTS friendships (
     id SERIAL PRIMARY KEY,
     user_id1 INT NOT NULL,
     user_id2 INT NOT NULL,
+    CONSTRAINT friendships_user_pair_unique UNIQUE (user_id1, user_id2),
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'blocked')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id1) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id2) REFERENCES users(id) ON DELETE CASCADE
 ); 
 
+CREATE TABLE IF NOT EXISTS messages (
+    id SERIAL PRIMARY KEY,
+    sender_id INT NOT NULL,
+	receiver_id INT NOT NULL,
+    content TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+	FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver ON messages(sender_id, receiver_id);
+CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_id, is_read);
+
 -- Seed sample users
-INSERT INTO users (username, email, password_hash, first_name, last_name, is_verified) VALUES
-('ahmad_store', 'ahmad@example.com', 'hash1', 'Ahmad', 'Store', TRUE),
-('tech_hub', 'tech@example.com', 'hash2', 'Tech', 'Hub', TRUE),
-('audio_pro', 'audio@example.com', 'hash3', 'Audio', 'Pro', TRUE),
-('home_decor', 'home@example.com', 'hash4', 'Home', 'Decor', TRUE),
-('sports_gear', 'sports@example.com', 'hash5', 'Sports', 'Gear', TRUE),
-('camera_kingdom', 'camera@example.com', 'hash6', 'Camera', 'Kingdom', TRUE),
-('gaming_masters', 'gaming@example.com', 'hash7', 'Gaming', 'Masters', TRUE),
-('furniture_palace', 'furniture@example.com', 'hash8', 'Furniture', 'Palace', TRUE)
+INSERT INTO users (username, email, password_hash, first_name, last_name, avatar_url, is_verified) VALUES
+('ahmad_store', 'ahmad@example.com', 'hash1', 'Ahmad', 'Store', 'https://ui-avatars.com/api/?name=Ahmad+Store', TRUE),
+('tech_hub', 'tech@example.com', 'hash2', 'Tech', 'Hub', 'https://ui-avatars.com/api/?name=Tech+Hub', TRUE),
+('audio_pro', 'audio@example.com', 'hash3', 'Audio', 'Pro', 'https://ui-avatars.com/api/?name=Audio+Pro', TRUE),
+('home_decor', 'home@example.com', 'hash4', 'Home', 'Decor', 'https://ui-avatars.com/api/?name=Home+Decor', TRUE),
+('sports_gear', 'sports@example.com', 'hash5', 'Sports', 'Gear', 'https://ui-avatars.com/api/?name=Sports+Gear', TRUE),
+('camera_kingdom', 'camera@example.com', 'hash6', 'Camera', 'Kingdom', 'https://ui-avatars.com/api/?name=Camera+Kingdom', TRUE),
+('gaming_masters', 'gaming@example.com', 'hash7', 'Gaming', 'Masters', 'https://ui-avatars.com/api/?name=Gaming+Masters', TRUE),
+('furniture_palace', 'furniture@example.com', 'hash8', 'Furniture', 'Palace', 'https://ui-avatars.com/api/?name=Furniture+Palace', TRUE),
+('muhamadd', 'muhamadd@example.com', 'hash9', 'Muha', 'Mad', 'https://ui-avatars.com/api/?name=Muha+Mad', TRUE)
 ON CONFLICT DO NOTHING;--handle logic do nothing for same thing & for double click problem
 
 -- Seed sample products
-INSERT INTO listings (seller_id, title, description, category, price, original_price, location, image, seller_name, rating, reviews, is_new, is_featured, status) VALUES
-(1, 'iPhone 14 Pro - Excellent Condition', 'Barely used iPhone 14 Pro in space black. Comes with original box and accessories.', 'Electronics', 2800, 3500, 'Kuala Lumpur', 'https://images.unsplash.com/photo-1592286927505-1def25115558?w=400&h=300&fit=crop', 'Ahmad Store', 4.8, 156, FALSE, TRUE, 'active'),
-(2, 'MacBook Air M1 2020', 'Powerful MacBook Air M1 with 16GB RAM and 512GB SSD. Perfect for programming and design work.', 'Electronics', 3500, NULL, 'Petaling Jaya', 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&h=300&fit=crop', 'Tech Hub', 4.9, 89, TRUE, TRUE, 'active'),
-(3, 'Sony WH-1000XM4 Headphones', 'Premium noise-cancelling headphones with excellent sound quality. Slightly scratched case.', 'Electronics', 680, 900, 'Shah Alam', 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=300&fit=crop', 'Audio Pro', 4.7, 234, FALSE, FALSE, 'active'),
-(4, 'Vintage Wooden Dining Table', 'Beautiful vintage wooden dining table that seats 6. Good condition with minor wear.', 'Furniture', 1200, NULL, 'Bangsar', 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&h=300&fit=crop', 'Home Decor Store', 4.6, 45, FALSE, FALSE, 'active'),
-(5, 'Mountain Bike - Trek Marlin', 'Trek Marlin mountain bike with 21-speed gears. Excellent for trails and casual riding.', 'Sports', 950, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop', 'Sports Gear', 4.5, 67, TRUE, FALSE, 'active'),
-(6, 'Canon EOS 5D Mark IV', 'Professional DSLR camera with 30.4MP full-frame sensor. Like new condition.', 'Electronics', 2200, 2800, 'Sentosa', 'https://images.unsplash.com/photo-1606986628025-35d57e735ae0?w=400&h=300&fit=crop', 'Camera Kingdom', 4.9, 178, FALSE, TRUE, 'active'),
-(7, 'Gaming PC - RTX 3080', 'High-end gaming PC with RTX 3080, i9 processor, 32GB RAM. Runs all games at ultra settings.', 'Electronics', 4500, NULL, 'Cyberjaya', 'https://images.unsplash.com/photo-1587829191301-dc798b83add3?w=400&h=300&fit=crop', 'Gaming Masters', 4.8, 124, TRUE, TRUE, 'active'),
-(8, 'Leather Office Chair', 'Ergonomic leather office chair in black. Perfect for long working hours.', 'Furniture', 450, NULL, 'Mid Valley', 'https://images.unsplash.com/photo-1578500494198-246f612d03b3?w=400&h=300&fit=crop', 'Furniture Palace', 4.4, 56, FALSE, FALSE, 'active')
+INSERT INTO listings (seller_id, title, description, weight_category, flexibility_category, balance_category, price, original_price, location, image, seller_name, rating, reviews, is_new, is_featured, status) VALUES
+(1, 'Yonex Astrox 99 Pro 3U', 'Power-focused racket with fast swing speed and strong rear-court attacks.', '3U', 'Stiff Shaft', 'Head Heavy', 780, 920, 'Kuala Lumpur', 'https://images.unsplash.com/photo-1542144612-1b3641ec3459?w=400&h=300&fit=crop', 'Ahmad Store', 4.8, 156, FALSE, TRUE, 'active'),
+(2, 'Victor Thruster K Falcon 4U', 'Balanced power and control, suitable for intermediate to advanced players.', '4U', 'Medium Flex', 'Even Balance', 620, NULL, 'Petaling Jaya', 'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?w=400&h=300&fit=crop', 'Tech Hub', 4.9, 89, TRUE, TRUE, 'active'),
+(3, 'Li-Ning Windstorm 72 5U', 'Ultra-light racket made for quick defense and rapid drives.', '5U', 'High Flexibility', 'Head Light', 430, 520, 'Shah Alam', 'https://images.unsplash.com/photo-1613918431703-aa508db4f50f?w=400&h=300&fit=crop', 'Audio Pro', 4.7, 234, FALSE, FALSE, 'active'),
+(4, 'Apacs Z-Ziggler 2U', 'Solid frame for players who prefer extra mass and stability on smashes.', '2U', 'Stiff Shaft', 'Head Heavy', 350, NULL, 'Bangsar', 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ad?w=400&h=300&fit=crop', 'Home Decor Store', 4.6, 45, FALSE, FALSE, 'active'),
+(5, 'Mizuno Altius 1U Training Racket', 'Heavy training racket to build swing strength and timing consistency.', '1U', 'Medium Flex', 'Head Heavy', 290, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=400&h=300&fit=crop', 'Sports Gear', 4.5, 67, TRUE, FALSE, 'active'),
+(6, 'Felet Woven 888 6U', 'Lightweight option for doubles defense and quick front-court exchanges.', '6U', 'High Flexibility', 'Head Light', 260, 320, 'Sentosa', 'https://images.unsplash.com/photo-1607627000458-210e8d2bdb1d?w=400&h=300&fit=crop', 'Camera Kingdom', 4.9, 178, FALSE, TRUE, 'active'),
+(7, 'Kawasaki Hyper Nano 7U', 'Very light frame built for speed, great for beginner and junior players.', '7U', 'Medium Flex', 'Even Balance', 220, NULL, 'Cyberjaya', 'https://images.unsplash.com/photo-1584270354949-c26b0d5b4a0c?w=400&h=300&fit=crop', 'Gaming Masters', 4.8, 124, TRUE, TRUE, 'active'),
+(8, 'Fleet Nano Power 8U', 'Extremely agile racket for rapid net play and easy maneuverability.', '8U', 'High Flexibility', 'Head Light', 180, NULL, 'Mid Valley', 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=400&h=300&fit=crop', 'Furniture Palace', 4.4, 56, FALSE, FALSE, 'active'),
+(9, 'Racket Pro Attack', 'Can smash with steep angle and strong follow-through. Ideal for attacking style.', '3U', 'Stiff Shaft', 'Head Heavy', 150, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=400&h=300&fit=crop', 'Sport Master', 4.4, 56, TRUE, TRUE, 'active')
 ON CONFLICT DO NOTHING;
 
 -- Seed basic dummy data for analytics
@@ -171,3 +216,17 @@ CREATE TABLE IF NOT EXISTS analytics (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (listing_id) REFERENCES listings(id)
 );
+
+-- Enable pgvector extension and create faq_embeddings table
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS faq_embeddings (
+    id SERIAL PRIMARY KEY,
+    source_file VARCHAR(255),
+    chunk_text TEXT NOT NULL,
+    embedding vector(1536),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_faq_embeddings_vector 
+ON faq_embeddings USING ivfflat (embedding vector_cosine_ops);
