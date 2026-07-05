@@ -2,6 +2,7 @@ import os
 import asyncio
 import json
 import re
+import traceback
 from typing import List, Dict, Any
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
@@ -226,6 +227,52 @@ def _fallback_listing_search(user_message: str):
         return None
     return _resolve_tool_action("search_listings", filters)
 
+def _fallback_faq_query(user_message: str):
+    text = user_message.lower()
+    if re.search(r"\b[1-9]u\b", text) or any(term in text for term in ("weight", "flex", "balance", "tension")):
+        return f"badminton racket specifications weight 1U 2U 3U 4U 5U flex balance tension {user_message}"
+    if any(term in text for term in ("post ad", "post an ad", "sell", "listing", "list my", "list your")):
+        return f"how to sell create listing post ad {user_message}"
+    if any(term in text for term in ("buy", "contact seller", "chat seller", "delivery", "meet up", "mailing")):
+        return f"how to buy contact seller delivery meet up mailing {user_message}"
+    return user_message
+
+def _fallback_specific_faq_answer(user_message: str):
+    weight_match = re.search(r"\b([1-8])u\b", user_message.lower())
+    if not weight_match:
+        return None
+
+    weight = f"{weight_match.group(1)}U"
+    weight_answers = {
+        "1U": "1U is an extremely heavy badminton racket category, usually 100g+. It is mostly used for training wrist and arm strength, not casual play.",
+        "2U": "2U is an extremely heavy badminton racket category, usually 100g+. It is mostly used for training wrist and arm strength, not casual play.",
+        "3U": "3U means a badminton racket weighs about 85g - 89g. It is a standard heavy weight, usually preferred by advanced attacking or singles players who want more smash power.",
+        "4U": "4U means a badminton racket weighs about 80g - 84g. It is a popular all-round weight with a good balance of power and maneuverability.",
+        "5U": "5U means a badminton racket weighs about 75g - 79g. It is light, quick to handle, and easier on the wrist.",
+        "6U": "6U is an ultra-light badminton racket category, roughly within 60g - 74g. It is good for beginners, juniors, fast defense, and net play.",
+        "7U": "7U is an ultra-light badminton racket category, roughly within 60g - 74g. It is good for beginners, juniors, fast defense, and net play.",
+        "8U": "8U is an ultra-light badminton racket category, roughly within 60g - 74g. It is good for beginners, juniors, fast defense, and net play.",
+    }
+    return f"{weight_answers[weight]}\n\nRule of thumb, Boss: the bigger the U number, the lighter the racket."
+
+def _fallback_non_llm_answer(user_message: str):
+    listing_result = _fallback_listing_search(user_message)
+    if listing_result:
+        return listing_result
+
+    specific_faq_answer = _fallback_specific_faq_answer(user_message)
+    if specific_faq_answer:
+        return specific_faq_answer
+
+    faq_context = retrieve_faq_context(_fallback_faq_query(user_message))
+    if faq_context:
+        return (
+            "I found this in the RacketDiction guide, Boss:\n\n"
+            f"{faq_context}"
+        )
+
+    return None
+
 def _should_direct_listing_search(user_message: str):
     filters = _search_filters_from_message(user_message)
     return filters
@@ -394,8 +441,16 @@ async def chat_endpoint(req: ChatRequest):
             yield "data: [DONE]\n\n"
         except Exception as e:
             print(f"Error in Agent Execution: {e}")
-            err_msg = "Maaf Boss, I encountered an issue retrieving that. Please try again or contact support lah."
-            yield f"data: {json.dumps({'token': err_msg})}\n\n"
+            traceback.print_exc()
+            fallback = await loop.run_in_executor(
+                None,
+                lambda: ctx.run(lambda: _fallback_non_llm_answer(req.message)),
+            )
+            err_msg = fallback or "Maaf Boss, I encountered an issue retrieving that. Please try again or contact support lah."
+            for i, word in enumerate(err_msg.split(" ")):
+                chunk = word + (" " if i < len(err_msg.split(" ")) - 1 else "")
+                yield f"data: {json.dumps({'token': chunk})}\n\n"
+                await asyncio.sleep(0.01)
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(response_generator(), media_type="text/event-stream")

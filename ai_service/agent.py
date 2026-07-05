@@ -60,7 +60,7 @@ Formatting guidelines:
 - Use a short header line like "[ Racket 7 — Kawasaki Hyper Nano 7U ]" for each item.
 - When listing multiple items, separate cards with a blank line.
 - Keep labels consistent: Price, Weight, Flex, Balance, Location, Best for.
-- After each card, add a line: Product link: {title} | /products/{id}
+- After each card, add a line: Product link: {{title}} | /products/{{id}}
 - Never include raw tool syntax, XML tags, JSON action objects, or text like <tool_call> in your final answer.
 - For listing requests with a budget, call `search_listings` with `max_price` or `min_price`; for "under/lower than/below RM500", use `max_price: 500`.
 - If a search has no exact match, run one broader search before answering, then clearly say whether the broader results changed brand, weight, or balance.

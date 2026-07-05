@@ -50,7 +50,10 @@ export default function AIFloatingChat() {
 
     try {
       const token = localStorage.getItem('token') || (user ? `token_${user.id}` : '');
-      const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      const configuredApiURL = process.env.NEXT_PUBLIC_API_URL?.trim() || '';
+      const apiURL = /^https?:\/\/localhost:8080\/?$/.test(configuredApiURL)
+        ? ''
+        : configuredApiURL.replace(/\/$/, '');
       
       const response = await fetch(`${apiURL}/api/v1/ai/chat`, {
         method: 'POST',
