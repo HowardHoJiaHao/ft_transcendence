@@ -1,20 +1,27 @@
 import os
 from langchain.agents import AgentExecutor, initialize_agent, AgentType
 from langchain.memory import ConversationBufferWindowMemory
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 from tools import all_tools
 
 def create_llm():
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
-    base_url = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
-    model = os.getenv("ANTHROPIC_MODEL", "ilmu-glm-5.1")
+    api_key = os.getenv("OPENROUTER_API_KEY", "")
+    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    model = os.getenv("OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
 
-    return ChatAnthropic(
-        anthropic_api_key=api_key,
-        anthropic_api_url=base_url,
-        model=model,
+    return ChatOpenAI(
+        openai_api_key=api_key,
+        openai_api_base=base_url,
+        model_name=model,
         temperature=0.3,
+        model_kwargs={
+            "extra_body": {
+                "reasoning": {
+                    "enabled": True,
+                },
+            },
+        },
     )
 
 def create_agent():
