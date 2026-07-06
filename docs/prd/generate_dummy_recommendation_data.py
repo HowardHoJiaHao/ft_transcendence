@@ -48,7 +48,11 @@ WEIGHT_CATEGORIES = ["1U", "2U", "3U", "4U", "5U", "6U", "7U", "8U"]
 FLEXIBILITY_CATEGORIES = ["Stiff Shaft", "Medium Flex", "High Flexibility"]
 BALANCE_CATEGORIES = ["Head Heavy", "Even Balance", "Head Light"]
 
-DEFAULT_OUTPUT = Path(__file__).with_name("dummy_racket_recommendation_data.csv")
+try:
+    DEFAULT_OUTPUT = Path(__file__).with_name("dummy_racket_recommendation_data.csv")
+except NameError:
+    # Google Colab/Jupyter cells do not define __file__.
+    DEFAULT_OUTPUT = Path.cwd() / "dummy_racket_recommendation_data.csv"
 
 
 @dataclass(frozen=True)
@@ -437,7 +441,8 @@ def parse_args() -> argparse.Namespace:
         default=42,
         help="Random seed for reproducible data. Default: 42.",
     )
-    return parser.parse_args()
+    args, _unknown = parser.parse_known_args()
+    return args
 
 
 def main() -> None:
