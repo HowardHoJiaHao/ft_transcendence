@@ -3,6 +3,12 @@ from contextvars import ContextVar
 import httpx
 from langchain.tools import tool
 from rag import retrieve_faq_context
+from recommender import (
+    ModelPredictionError,
+    ModelUnavailableError,
+    RecommendationProfileError,
+    predict_racket_specs,
+)
 
 # ContextVar to store current request's user ID for auth proxying
 user_id_var = ContextVar("user_id", default=0)
@@ -90,6 +96,126 @@ def _format_beginner_products(products) -> str:
         )
     return "\n\n".join(formatted)
 
+def _budget_filters(budget_range):
+    if budget_range in ("under-200", "under_200"):
+        return {"max_price": 200}
+    if budget_range == "200-400":
+        return {"min_price": 200, "max_price": 400}
+    if budget_range == "400-700":
+        return {"min_price": 400, "max_price": 700}
+    if budget_range in ("700+", "700_plus"):
+        return {"min_price": 700}
+    return {}
+
+def _profile_budget_label(budget_range):
+    labels = {
+        "under-200": "Under RM200",
+        "under_200": "Under RM200",
+        "200-400": "RM200 - RM400",
+        "400-700": "RM400 - RM700",
+        "700+": "RM700+",
+        "700_plus": "RM700+",
+    }
+    return labels.get(budget_range, budget_range or "your budget")
+
+def _profile_reason(profile, specs):
+    reasons = []
+    experience = profile.get("experience_level")
+    play_style = profile.get("play_style")
+
+    weight = specs.get("weightCategory")
+    flex = specs.get("flexibilityCategory")
+    balance = specs.get("balanceCategory")
+
+    if weight:
+        reasons.append(f"{weight} gives a practical weight target for your current profile.")
+    if flex:
+        if experience in ("less_than_6_months", "6_months-1_year", "6_months_1_year"):
+            reasons.append(f"{flex} helps make power generation easier while your timing develops.")
+        else:
+            reasons.append(f"{flex} matches a more developed swing and gives predictable shuttle feedback.")
+    if balance:
+        if play_style == "attacking":
+            reasons.append(f"{balance} supports your attacking preference without ignoring control.")
+        elif play_style == "defensive":
+            reasons.append(f"{balance} keeps handling quick enough for defensive exchanges.")
+        elif play_style == "balanced":
+            reasons.append(f"{balance} suits an all-round game.")
+        else:
+            reasons.append(f"{balance} is a sensible neutral target while you refine your style.")
+
+    return reasons[:3]
+
+def _format_profile_products(products) -> str:
+    formatted = []
+    for p in products:
+        formatted.append(
+            f"[ Racket ID: {p.get('id')} - {p.get('title')} ]\n"
+            f"Price: RM {p.get('price')}\n"
+            f"Weight: {p.get('weightCategory')}\n"
+            f"Flex: {p.get('flexibilityCategory')}\n"
+            f"Balance: {p.get('balanceCategory')}\n"
+            f"Location: {p.get('location')}\n"
+            f"Seller: {p.get('sellerName')} (Rating: {p.get('rating')}/5)\n"
+            f"Product link: {p.get('title')} | /products/{p.get('id')}"
+        )
+    return "\n\n".join(formatted)
+
+def _recommendation_search_params(specs, profile, relaxed=None):
+    relaxed = set(relaxed or [])
+    params = []
+    budget = _budget_filters(profile.get("budget_range"))
+
+    if "weight" not in relaxed and specs.get("weightCategory"):
+        params.append(("weightCategory", specs["weightCategory"]))
+    if "flex" not in relaxed and specs.get("flexibilityCategory"):
+        params.append(("flexibilityCategory", specs["flexibilityCategory"]))
+    if "balance" not in relaxed and specs.get("balanceCategory"):
+        params.append(("balanceCategory", specs["balanceCategory"]))
+    if "budget" not in relaxed:
+        if budget.get("min_price") is not None:
+            params.append(("minPrice", budget["min_price"]))
+        if budget.get("max_price") is not None:
+            params.append(("maxPrice", budget["max_price"]))
+
+    params.extend([("sort", "rating"), ("limit", 3)])
+    return params
+
+def _fetch_profile_matches(specs, profile):
+    attempts = [
+        ([], "exact"),
+        (["balance"], "same weight and flex, different balance"),
+        (["flex", "balance"], "same weight and budget, different flex or balance"),
+        (["budget"], "same specs outside your selected budget"),
+        (["flex", "balance", "budget"], "same weight with broader specs and budget"),
+    ]
+
+    for relaxed, label in attempts:
+        products, error = _fetch_products(_recommendation_search_params(specs, profile, relaxed))
+        if error:
+            return [], label, error
+        if products:
+            return products, label, None
+
+    products, error = _fetch_products([("sort", "rating"), ("limit", 3)])
+    if error:
+        return [], "broader marketplace alternatives", error
+    return products or [], "broader marketplace alternatives", None
+
+def _fallback_profile_recommendations(profile, message):
+    budget = _budget_filters(profile.get("budget_range"))
+    max_price = budget.get("max_price") or 300
+    fallback = get_beginner_recommendations.invoke(
+        {
+            "max_price": max_price,
+            "limit": 3,
+            "avoid_limit": 0,
+            "include_guide": True,
+            "include_avoid": False,
+        }
+    )
+    return f"{message}\n\n{fallback}"
+
 def get_auth_headers():
     uid = user_id_var.get()
     headers = {}
@@ -174,6 +300,87 @@ def search_listings(
         return "No listings match the given search criteria."
     except Exception as e:
         return f"Error contacting product backend: {e}"
+
+@tool
+def get_profile_based_recommendations(
+    age_group: str,
+    gender: str,
+    experience_level: str,
+    play_style: str,
+    budget_range: str,
+) -> str:
+    """
+    Recommend marketplace rackets from a completed structured assessment profile.
+    Arguments:
+    - age_group: controlled age group value from the chatbot assessment
+    - gender: controlled gender value from the chatbot assessment
+    - experience_level: controlled experience value from the chatbot assessment
+    - play_style: controlled play style value from the chatbot assessment
+    - budget_range: controlled budget value from the chatbot assessment
+    """
+    profile = {
+        "age_group": age_group,
+        "gender": gender,
+        "experience_level": experience_level,
+        "play_style": play_style,
+        "budget_range": budget_range,
+    }
+
+    try:
+        specs = predict_racket_specs(profile)
+    except RecommendationProfileError as exc:
+        return f"I need a complete assessment profile before recommending a racket, Boss. {exc}"
+    except ModelUnavailableError as exc:
+        print(f"Racket recommender unavailable: {exc}")
+        return _fallback_profile_recommendations(
+            profile,
+            "The ML recommender is not available yet, Boss. I will use the basic racket guide for now.",
+        )
+    except ModelPredictionError as exc:
+        print(f"Racket recommender prediction failed: {exc}")
+        return _fallback_profile_recommendations(
+            profile,
+            "The ML recommender had trouble reading that profile, Boss. I will use the basic racket guide for now.",
+        )
+    except Exception as exc:
+        print(f"Unexpected racket recommender error: {exc}")
+        return _fallback_profile_recommendations(
+            profile,
+            "The ML recommender hit an issue, Boss. I will use the basic racket guide for now.",
+        )
+
+    products, match_label, error = _fetch_profile_matches(specs, profile)
+    if error:
+        return f"Your profile points to {specs.get('weightCategory')}, {specs.get('flexibilityCategory')}, {specs.get('balanceCategory')}, but I could not search listings right now. {error}"
+
+    confidence = specs.get("confidence")
+    confidence_line = f"\nConfidence: {confidence}" if confidence is not None else ""
+    reasons = "\n".join(f"- {reason}" for reason in _profile_reason(profile, specs))
+    budget_label = _profile_budget_label(profile.get("budget_range"))
+
+    sections = [
+        "Based on your assessment, I recommend:",
+        f"Weight: {specs.get('weightCategory')}\nFlex: {specs.get('flexibilityCategory')}\nBalance: {specs.get('balanceCategory')}{confidence_line}",
+        f"Budget considered: {budget_label}",
+        f"Why this fits:\n{reasons}",
+    ]
+
+    if not products:
+        sections.append(
+            "I could not find matching rackets in the marketplace right now. Try a broader budget or check again later lah."
+        )
+        return "\n\n".join(sections)
+
+    if match_label != "exact":
+        sections.append(
+            "I could not find an exact match right now, so here are the closest available rackets "
+            f"({match_label})."
+        )
+    else:
+        sections.append("Recommended marketplace listings:")
+
+    sections.append(_format_profile_products(products))
+    return "\n\n".join(sections)
 
 @tool
 def get_beginner_recommendations(
@@ -410,6 +617,7 @@ def get_faq_policies(query: str) -> str:
 # List of all tools available to the agent
 all_tools = [
     search_listings,
+    get_profile_based_recommendations,
     get_listing_detail,
     get_seller_info,
     get_user_profile,

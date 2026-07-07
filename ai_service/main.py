@@ -3,8 +3,8 @@ import asyncio
 import json
 import re
 import traceback
-from typing import List, Dict, Any
-from fastapi import FastAPI, Request
+from typing import Any, Dict, List, Optional
+from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from contextvars import copy_context
@@ -18,6 +18,7 @@ from tools import (
     get_order_status,
     get_my_orders,
     get_beginner_recommendations,
+    get_profile_based_recommendations,
     get_faq_policies,
 )
 from agent import (
@@ -55,6 +56,7 @@ class ChatRequest(BaseModel):
     message: str
     history: List[ChatMessage] = []
     userId: int = 0
+    recommendationProfile: Optional[Dict[str, str]] = None
 
 def _resolve_tool_action(action, action_input):
     tool_map = {
@@ -65,6 +67,7 @@ def _resolve_tool_action(action, action_input):
         "get_order_status": get_order_status,
         "get_my_orders": get_my_orders,
         "get_beginner_recommendations": get_beginner_recommendations,
+        "get_profile_based_recommendations": get_profile_based_recommendations,
         "get_faq_policies": get_faq_policies,
     }
     tool_fn = tool_map.get(action)
@@ -364,7 +367,17 @@ async def chat_endpoint(req: ChatRequest):
             
         loop = asyncio.get_event_loop()
         try:
-            if _is_beginner_recommendation(req.message):
+            if req.recommendationProfile:
+                ans = await loop.run_in_executor(
+                    None,
+                    lambda: ctx.run(
+                        lambda: _resolve_tool_action(
+                            "get_profile_based_recommendations",
+                            req.recommendationProfile,
+                        )
+                    ),
+                )
+            elif _is_beginner_recommendation(req.message):
                 guide_context = retrieve_faq_context("beginner badminton racket specs weight flex balance string tension")
                 requested_count = _extract_requested_count(req.message)
                 limit = requested_count if isinstance(requested_count, int) and requested_count > 0 else None
