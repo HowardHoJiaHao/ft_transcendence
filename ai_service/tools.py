@@ -118,6 +118,24 @@ def _profile_budget_label(budget_range):
     }
     return labels.get(budget_range, budget_range or "your budget")
 
+def _dedupe_products(products):
+    seen = set()
+    deduped = []
+    for product in products:
+        key = (
+            str(product.get("title") or "").strip().lower(),
+            str(product.get("weightCategory") or "").strip().lower(),
+            str(product.get("flexibilityCategory") or "").strip().lower(),
+            str(product.get("balanceCategory") or "").strip().lower(),
+            str(product.get("price") or "").strip(),
+            str(product.get("sellerName") or "").strip().lower(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(product)
+    return deduped
+
 def _profile_reason(profile, specs):
     reasons = []
     experience = profile.get("experience_level")
@@ -184,23 +202,58 @@ def _recommendation_search_params(specs, profile, relaxed=None):
 def _fetch_profile_matches(specs, profile):
     attempts = [
         ([], "exact"),
-        (["balance"], "same weight and flex, different balance"),
-        (["flex", "balance"], "same weight and budget, different flex or balance"),
-        (["budget"], "same specs outside your selected budget"),
-        (["flex", "balance", "budget"], "same weight with broader specs and budget"),
+        (["balance"], "balance_differs"),
+        (["flex", "balance"], "flex_or_balance_differs"),
+        (["budget"], "budget_differs"),
+        (["flex", "balance", "budget"], "loose_alternatives"),
     ]
 
     for relaxed, label in attempts:
         products, error = _fetch_products(_recommendation_search_params(specs, profile, relaxed))
         if error:
             return [], label, error
-        if products:
-            return products, label, None
+        deduped_products = _dedupe_products(products)
+        if deduped_products:
+            return deduped_products, label, None
 
     products, error = _fetch_products([("sort", "rating"), ("limit", 3)])
     if error:
         return [], "broader marketplace alternatives", error
-    return products or [], "broader marketplace alternatives", None
+    return _dedupe_products(products or []), "broader_marketplace", None
+
+def _fallback_tradeoff_message(match_label, specs, profile):
+    spec_text = (
+        f"{specs.get('weightCategory')}, "
+        f"{specs.get('flexibilityCategory')}, "
+        f"{specs.get('balanceCategory')}"
+    )
+    budget_text = _profile_budget_label(profile.get("budget_range"))
+    messages = {
+        "balance_differs": (
+            f"I could not find an exact {spec_text} racket within {budget_text}. "
+            "The closest options keep your recommended weight and flex, but use a different balance."
+        ),
+        "flex_or_balance_differs": (
+            f"I could not find an exact {spec_text} racket within {budget_text}. "
+            "The closest options stay near your recommended weight and budget, but flex or balance may differ."
+        ),
+        "budget_differs": (
+            f"I could not find an exact {spec_text} racket within {budget_text}. "
+            "The closest options match the recommended specs, but sit outside your selected budget."
+        ),
+        "loose_alternatives": (
+            f"I could not find a strong match for {spec_text} within {budget_text}. "
+            "These only keep the recommended weight, so treat them as loose alternatives."
+        ),
+        "broader_marketplace": (
+            f"I could not find a close match for {spec_text} within {budget_text}. "
+            "Here are broader marketplace alternatives."
+        ),
+    }
+    return messages.get(
+        match_label,
+        "I could not find an exact match right now, so here are the closest available rackets.",
+    )
 
 def _fallback_profile_recommendations(profile, message):
     budget = _budget_filters(profile.get("budget_range"))
@@ -372,10 +425,7 @@ def get_profile_based_recommendations(
         return "\n\n".join(sections)
 
     if match_label != "exact":
-        sections.append(
-            "I could not find an exact match right now, so here are the closest available rackets "
-            f"({match_label})."
-        )
+        sections.append(_fallback_tradeoff_message(match_label, specs, profile))
     else:
         sections.append("Recommended marketplace listings:")
 

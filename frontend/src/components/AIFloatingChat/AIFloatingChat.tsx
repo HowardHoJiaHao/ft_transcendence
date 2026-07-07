@@ -286,6 +286,7 @@ export default function AIFloatingChat() {
     // Find Racket ID matches (e.g. "Racket ID: 3")
     const racketMatch = content.match(/Racket ID:\s*(\d+)/i);
     const orderMatch = content.match(/Order #\s*(\d+)/i);
+    const hasProductLinks = /^Product link:/im.test(content);
     const postAdMatch = /\b(post an ad|create (?:a )?listing|list (?:my|your) racket|start selling|sell (?:my|your) racket)\b/i.test(content);
     
     const lines = content.split('\n');
@@ -369,7 +370,7 @@ export default function AIFloatingChat() {
         {formattedText}
         
         {/* Render quick navigation actions based on AI suggestions */}
-        {racketMatch && (
+        {racketMatch && !hasProductLinks && (
           <a
             href={`/products/${racketMatch[1]}`}
             className={styles.actionBtn}
