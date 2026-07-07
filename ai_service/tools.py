@@ -457,7 +457,7 @@ def get_beginner_recommendations(
         if not products:
             return "No beginner-friendly listings found within that budget right now."
 
-        ranked = sorted(products, key=_beginner_score, reverse=True)
+        ranked = sorted(_dedupe_products(products), key=_beginner_score, reverse=True)
         if isinstance(limit, int) and limit > 0:
             safe_limit = limit
         else:

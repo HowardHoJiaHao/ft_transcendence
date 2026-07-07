@@ -58,6 +58,126 @@ class ChatRequest(BaseModel):
     userId: int = 0
     recommendationProfile: Optional[Dict[str, str]] = None
 
+def _normalized_text(message: str) -> str:
+    text = message.lower().strip()
+    replacements = {
+        "racquet": "racket",
+        "racquets": "rackets",
+        "begineer": "beginner",
+        "newbee": "newbie",
+    }
+    for old, new in replacements.items():
+        text = re.sub(rf"\b{re.escape(old)}\b", new, text)
+    return re.sub(r"\s+", " ", text)
+
+def _has_any(text: str, terms) -> bool:
+    return any(term in text for term in terms)
+
+def _is_greeting(message: str) -> bool:
+    text = _normalized_text(message)
+    if _is_beginner_recommendation(message) or _search_filters_from_message(message):
+        return False
+
+    task_terms = (
+        "recommend", "search", "show", "find", "buy", "sell", "order", "racket",
+        "product", "listing", "scam", "cheat", "fraud", "refund", "payment",
+        "seller", "account", "password", "2fa",
+    )
+    if _has_any(text, task_terms):
+        return False
+
+    greetings = (
+        "hi", "hello", "hey", "good morning", "good afternoon", "good evening",
+        "how are you", "how r u", "sup",
+    )
+    return _has_any(text, greetings) and len(text.split()) <= 8
+
+def _is_marketplace_safety_intent(message: str) -> bool:
+    text = _normalized_text(message)
+    safety_terms = (
+        "scam", "scammed", "cheat", "cheated", "fraud", "fraudulent",
+        "fake seller", "suspicious seller", "seller suspicious", "paid but no item",
+        "paid already", "no item", "did not receive", "never receive",
+        "report seller", "report listing", "fake racket", "clone racket",
+    )
+    return _has_any(text, safety_terms)
+
+def _is_account_security_intent(message: str) -> bool:
+    text = _normalized_text(message)
+    account_terms = (
+        "hacked", "unauthorized login", "unauthorised login", "password",
+        "reset password", "forgot password", "2fa", "two factor", "verification code",
+    )
+    return _has_any(text, account_terms) and _has_any(text, ("account", "login", "password", "2fa", "code"))
+
+def _is_payment_dispute_intent(message: str) -> bool:
+    text = _normalized_text(message)
+    payment_terms = (
+        "refund", "payment problem", "payment issue", "deposit", "dispute",
+        "paid seller", "paid already", "money back", "transfer money",
+    )
+    return _has_any(text, payment_terms)
+
+def _is_supported_faq_intent(message: str) -> bool:
+    text = _normalized_text(message)
+    return (
+        bool(re.search(r"\b[1-9]u\b", text))
+        or _has_any(text, ("weight", "flex", "balance", "tension"))
+        or _has_any(text, ("post ad", "post an ad", "sell", "listing", "list my", "list your"))
+        or _has_any(text, ("buy", "contact seller", "chat seller", "delivery", "meet up", "mailing"))
+        or _has_any(text, ("2fa", "two factor", "account security", "verify email", "verification"))
+        or _is_marketplace_safety_intent(message)
+        or _is_account_security_intent(message)
+        or _is_payment_dispute_intent(message)
+    )
+
+def _greeting_answer() -> str:
+    return (
+        "Hi Boss, I am good. I can help you find rackets, compare listings, "
+        "recommend beginner-friendly options, or answer RacketDiction marketplace questions."
+    )
+
+def _marketplace_safety_answer() -> str:
+    return (
+        "Sorry that happened, Boss. Please stop sending money or moving the conversation outside RacketDiction.\n\n"
+        "What to do now:\n"
+        "- Keep screenshots of the chat, payment proof, listing, and seller profile.\n"
+        "- Report the seller or listing from the product/seller page.\n"
+        "- Contact platform support so they can investigate.\n"
+        "- If money was transferred, contact your bank or payment provider quickly too."
+    )
+
+def _account_security_answer() -> str:
+    return (
+        "That sounds like an account security issue, Boss.\n\n"
+        "Please change your password, enable 2FA if you can still access the account, "
+        "and contact platform support if you notice unknown logins or cannot sign in."
+    )
+
+def _payment_dispute_answer() -> str:
+    return (
+        "I cannot process refunds or payment disputes directly, Boss.\n\n"
+        "Please keep your payment proof and chat screenshots, then contact platform support. "
+        "If you paid outside the platform, contact your bank or payment provider as soon as possible."
+    )
+
+def _capability_answer() -> str:
+    return (
+        "Sorry Boss, I can mainly help with racket recommendations, marketplace listings, "
+        "buying/selling guidance, order questions, and RacketDiction account or safety topics."
+    )
+
+def _deterministic_intent_answer(message: str) -> Optional[str]:
+    if _is_marketplace_safety_intent(message):
+        return _marketplace_safety_answer()
+    if _is_account_security_intent(message):
+        return _account_security_answer()
+    if _is_payment_dispute_intent(message):
+        return _payment_dispute_answer()
+    if _is_greeting(message):
+        return _greeting_answer()
+    return None
+
 def _resolve_tool_action(action, action_input):
     tool_map = {
         "search_listings": search_listings,
@@ -125,7 +245,7 @@ def _strip_pseudo_tool_calls(text: str) -> str:
     return stripped or "Sorry Boss, I had trouble completing that search. Please try again lah."
 
 def _extract_price_filters(message: str):
-    text = message.lower()
+    text = _normalized_text(message)
     max_match = re.search(
         r"(?:under|below|less than|lower than|not more than|<=)\s*(?:rm\s*)?(\d+(?:\.\d+)?)|(?:rm\s*)?(\d+(?:\.\d+)?)\s*(?:rm)?\s*(?:or less|and below|or below)",
         text,
@@ -144,7 +264,7 @@ def _extract_price_filters(message: str):
     return filters
 
 def _extract_requested_count(message: str):
-    text = message.lower()
+    text = _normalized_text(message)
     if re.search(r"\b(one|single|only one|just one)\b", text):
         return 1
 
@@ -188,7 +308,7 @@ def _extract_requested_count(message: str):
     return None
 
 def _search_filters_from_message(message: str):
-    text = message.lower()
+    text = _normalized_text(message)
     is_listing_request = any(word in text for word in ("racket", "racquet", "listing", "product"))
     if not is_listing_request:
         return None
@@ -231,7 +351,13 @@ def _fallback_listing_search(user_message: str):
     return _resolve_tool_action("search_listings", filters)
 
 def _fallback_faq_query(user_message: str):
-    text = user_message.lower()
+    text = _normalized_text(user_message)
+    if _is_marketplace_safety_intent(user_message):
+        return f"marketplace safety scams report seller suspicious fake racket payment evidence {user_message}"
+    if _is_account_security_intent(user_message):
+        return f"account security 2FA password login email verification {user_message}"
+    if _is_payment_dispute_intent(user_message):
+        return f"payment dispute refund deposit support evidence report seller {user_message}"
     if re.search(r"\b[1-9]u\b", text) or any(term in text for term in ("weight", "flex", "balance", "tension")):
         return f"badminton racket specifications weight 1U 2U 3U 4U 5U flex balance tension {user_message}"
     if any(term in text for term in ("post ad", "post an ad", "sell", "listing", "list my", "list your")):
@@ -241,7 +367,7 @@ def _fallback_faq_query(user_message: str):
     return user_message
 
 def _fallback_specific_faq_answer(user_message: str):
-    weight_match = re.search(r"\b([1-8])u\b", user_message.lower())
+    weight_match = re.search(r"\b([1-8])u\b", _normalized_text(user_message))
     if not weight_match:
         return None
 
@@ -259,6 +385,10 @@ def _fallback_specific_faq_answer(user_message: str):
     return f"{weight_answers[weight]}\n\nRule of thumb, Boss: the bigger the U number, the lighter the racket."
 
 def _fallback_non_llm_answer(user_message: str):
+    deterministic_answer = _deterministic_intent_answer(user_message)
+    if deterministic_answer:
+        return deterministic_answer
+
     listing_result = _fallback_listing_search(user_message)
     if listing_result:
         return listing_result
@@ -267,6 +397,9 @@ def _fallback_non_llm_answer(user_message: str):
     if specific_faq_answer:
         return specific_faq_answer
 
+    if not _is_supported_faq_intent(user_message):
+        return _capability_answer()
+
     faq_context = retrieve_faq_context(_fallback_faq_query(user_message))
     if faq_context:
         return (
@@ -274,20 +407,20 @@ def _fallback_non_llm_answer(user_message: str):
             f"{faq_context}"
         )
 
-    return None
+    return _capability_answer()
 
 def _should_direct_listing_search(user_message: str):
     filters = _search_filters_from_message(user_message)
     return filters
 
 def _is_beginner_recommendation(user_message: str):
-    text = user_message.lower()
-    beginner_terms = ("beginner", "begineer", "newbie", "new player", "start badminton")
+    text = _normalized_text(user_message)
+    beginner_terms = ("beginner", "newbie", "new player", "start badminton")
     recommendation_terms = ("recommend", "best", "suggest", "what should", "which racket", "racket", "racquet")
     return any(term in text for term in beginner_terms) and any(term in text for term in recommendation_terms)
 
 def _wants_single_pick(user_message: str):
-    text = user_message.lower()
+    text = _normalized_text(user_message)
     single_terms = ("one", "single", "only one", "just one", "best pick", "top pick")
     expert_terms = ("expert", "advanced", "pro", "professional")
     return any(term in text for term in single_terms) or ("best" in text and any(term in text for term in expert_terms))
@@ -377,6 +510,8 @@ async def chat_endpoint(req: ChatRequest):
                         )
                     ),
                 )
+            elif deterministic_answer := _deterministic_intent_answer(req.message):
+                ans = deterministic_answer
             elif _is_beginner_recommendation(req.message):
                 guide_context = retrieve_faq_context("beginner badminton racket specs weight flex balance string tension")
                 requested_count = _extract_requested_count(req.message)
