@@ -321,6 +321,7 @@ def search_listings(
         products, error = _fetch_products(params)
         if error:
             return error
+        products = _dedupe_products(products or [])
         if products:
             return _format_products(products, limit=limit)
 
@@ -332,18 +333,24 @@ def search_listings(
             spec_products, spec_error = _fetch_products(spec_params)
             if spec_error:
                 return spec_error
+            spec_products = _dedupe_products(spec_products or [])
             if spec_products:
                 fallback_sections.append(
                     "No exact brand match found. Similar rackets matching your specs:\n"
                     + _format_products(spec_products, limit=limit)
                 )
 
-            brand_products, brand_error = _fetch_products([("search", query)])
+            brand_params = [("search", query)]
+            for key, value in params:
+                if key in ("minPrice", "maxPrice"):
+                    brand_params.append((key, value))
+            brand_products, brand_error = _fetch_products(brand_params)
             if brand_error:
                 return brand_error
+            brand_products = _dedupe_products(brand_products or [])
             if brand_products:
                 fallback_sections.append(
-                    f"Available {query} rackets with different specs:\n"
+                    f"Available {query} rackets within your budget but with different specs:\n"
                     + _format_products(brand_products, limit=limit)
                 )
 

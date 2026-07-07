@@ -121,7 +121,7 @@ def _is_payment_dispute_intent(message: str) -> bool:
 def _is_supported_faq_intent(message: str) -> bool:
     text = _normalized_text(message)
     return (
-        bool(re.search(r"\b[1-9]u\b", text))
+        bool(re.search(r"\b\d+u\b", text))
         or _has_any(text, ("weight", "flex", "balance", "tension"))
         or _has_any(text, ("post ad", "post an ad", "sell", "listing", "list my", "list your"))
         or _has_any(text, ("buy", "contact seller", "chat seller", "delivery", "meet up", "mailing"))
@@ -174,6 +174,11 @@ def _deterministic_intent_answer(message: str) -> Optional[str]:
         return _account_security_answer()
     if _is_payment_dispute_intent(message):
         return _payment_dispute_answer()
+    specific_faq_answer = None
+    if _search_filters_from_message(message) is None:
+        specific_faq_answer = _fallback_specific_faq_answer(message)
+    if specific_faq_answer:
+        return specific_faq_answer
     if _is_greeting(message):
         return _greeting_answer()
     return None
@@ -358,7 +363,7 @@ def _fallback_faq_query(user_message: str):
         return f"account security 2FA password login email verification {user_message}"
     if _is_payment_dispute_intent(user_message):
         return f"payment dispute refund deposit support evidence report seller {user_message}"
-    if re.search(r"\b[1-9]u\b", text) or any(term in text for term in ("weight", "flex", "balance", "tension")):
+    if re.search(r"\b\d+u\b", text) or any(term in text for term in ("weight", "flex", "balance", "tension")):
         return f"badminton racket specifications weight 1U 2U 3U 4U 5U flex balance tension {user_message}"
     if any(term in text for term in ("post ad", "post an ad", "sell", "listing", "list my", "list your")):
         return f"how to sell create listing post ad {user_message}"
@@ -367,7 +372,7 @@ def _fallback_faq_query(user_message: str):
     return user_message
 
 def _fallback_specific_faq_answer(user_message: str):
-    weight_match = re.search(r"\b([1-8])u\b", _normalized_text(user_message))
+    weight_match = re.search(r"\b(\d+)u\b", _normalized_text(user_message))
     if not weight_match:
         return None
 
@@ -382,7 +387,38 @@ def _fallback_specific_faq_answer(user_message: str):
         "7U": "7U is an ultra-light badminton racket category, roughly within 60g - 74g. It is good for beginners, juniors, fast defense, and net play.",
         "8U": "8U is an ultra-light badminton racket category, roughly within 60g - 74g. It is good for beginners, juniors, fast defense, and net play.",
     }
+    if weight not in weight_answers:
+        return (
+            f"{weight} is not a common racket weight category in this marketplace guide, Boss. "
+            "Most listings here use 1U to 8U.\n\n"
+            "Rule of thumb: the bigger the U number, the lighter the racket. "
+            "If you are buying from a seller, double-check the actual weight in grams too."
+        )
     return f"{weight_answers[weight]}\n\nRule of thumb, Boss: the bigger the U number, the lighter the racket."
+
+def _faq_sources_for_message(user_message: str):
+    text = _normalized_text(user_message)
+    if re.search(r"\b\d+u\b", text) or any(term in text for term in ("weight", "flex", "balance", "tension")):
+        return {"badminton_guide.md"}
+    if any(term in text for term in ("post ad", "post an ad", "sell", "listing", "list my", "list your")):
+        return {"how_to_sell.md"}
+    if any(term in text for term in ("buy", "contact seller", "chat seller", "delivery", "meet up", "mailing")):
+        return {"how_to_buy.md", "dealing_methods.md"}
+    if _is_marketplace_safety_intent(user_message) or _is_account_security_intent(user_message) or _is_payment_dispute_intent(user_message):
+        return {"account_and_safety.md"}
+    return set()
+
+def _filter_faq_context(context: str, allowed_sources) -> str:
+    if not context or not allowed_sources:
+        return context
+
+    chunks = re.split(r"\n\n(?=\[Source: )", context.strip())
+    filtered = []
+    for chunk in chunks:
+        source_match = re.match(r"\[Source: ([^\]]+)\]", chunk)
+        if source_match and source_match.group(1) in allowed_sources:
+            filtered.append(chunk)
+    return "\n\n".join(filtered)
 
 def _fallback_non_llm_answer(user_message: str):
     deterministic_answer = _deterministic_intent_answer(user_message)
@@ -401,6 +437,7 @@ def _fallback_non_llm_answer(user_message: str):
         return _capability_answer()
 
     faq_context = retrieve_faq_context(_fallback_faq_query(user_message))
+    faq_context = _filter_faq_context(faq_context, _faq_sources_for_message(user_message))
     if faq_context:
         return (
             "I found this in the RacketDiction guide, Boss:\n\n"
@@ -417,7 +454,15 @@ def _is_beginner_recommendation(user_message: str):
     text = _normalized_text(user_message)
     beginner_terms = ("beginner", "newbie", "new player", "start badminton")
     recommendation_terms = ("recommend", "best", "suggest", "what should", "which racket", "racket", "racquet")
-    return any(term in text for term in beginner_terms) and any(term in text for term in recommendation_terms)
+    racket_context_terms = ("racket", "rackets", "badminton", "racquet", "racquets", "shuttle")
+    off_domain_terms = ("guitar", "shoe", "shoes", "football", "basketball", "tennis", "laptop", "phone")
+    if _has_any(text, off_domain_terms) and not _has_any(text, racket_context_terms):
+        return False
+    return (
+        any(term in text for term in beginner_terms)
+        and any(term in text for term in recommendation_terms)
+        and _has_any(text, racket_context_terms)
+    )
 
 def _wants_single_pick(user_message: str):
     text = _normalized_text(user_message)
