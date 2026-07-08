@@ -62,10 +62,13 @@ func main() {
 	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	protected.POST("/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
 
+	protected.POST("/orders", func(c echo.Context) error { return createOrders(c, gormDB) })
 	protected.GET("/orders", func(c echo.Context) error { return getOrders(c, gormDB) }) // howai AI maybe. merge residue 21 june
+	protected.PUT("/orders/:id/complete", func(c echo.Context) error { return completeOrder(c, gormDB) })
 	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) }) //howai AI maybe. merge residue 21 june
 
 	// Seller dashboard routes
+	protected.GET("/seller/orders", func(c echo.Context) error { return getSellerOrders(c, gormDB) })
 	protected.GET("/seller/dashboard/items", func(c echo.Context) error { return getSellerDashboardItems(c, gormDB) })
 	protected.GET("/seller/dashboard/summary", func(c echo.Context) error { return getSellerDashboardSummary(c, gormDB) })
 	

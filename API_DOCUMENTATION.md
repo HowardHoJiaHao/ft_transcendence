@@ -320,8 +320,13 @@ Create an order.
 **Request Body:**
 ```json
 {
-  "listing_id": 1,
-  "quantity": 1
+  "items": [
+    {
+      "listingId": 1,
+      "quantity": 1
+    }
+  ],
+  "paymentMethod": "meetup"
 }
 ```
 
@@ -333,8 +338,21 @@ Get user orders.
 - `page`: Page number
 - `limit`: Items per page
 
+Returns buyer orders with listing and seller display details for purchase
+history.
+
 #### GET /api/v1/orders/:id
 Get order details.
+
+#### GET /api/v1/seller/orders
+Get orders for the authenticated seller.
+
+**Query Parameters:**
+- `status`: pending, completed, cancelled, refunded. Defaults to `pending`.
+
+#### PUT /api/v1/orders/:id/complete
+Mark a pending order as delivered/completed. Only the seller for that order can
+complete it.
 
 #### PUT /api/v1/orders/:id/cancel
 Cancel order.

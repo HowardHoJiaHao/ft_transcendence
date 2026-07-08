@@ -23,6 +23,158 @@ type Order struct {
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
+type EnrichedOrder struct {
+	Order
+	ListingTitle    string  `json:"listingTitle"`
+	ListingImage    string  `json:"listingImage"`
+	ListingCategory string  `json:"listingCategory"`
+	ListingPrice    float64 `json:"listingPrice"`
+	SellerName      string  `json:"sellerName,omitempty"`
+	BuyerUsername   string  `json:"buyerUsername,omitempty"`
+	BuyerEmail      string  `json:"buyerEmail,omitempty"`
+}
+
+type CreateOrderItemRequest struct {
+	ListingID int `json:"listingId"`
+	Quantity  int `json:"quantity"`
+}
+
+type CreateOrdersRequest struct {
+	Items         []CreateOrderItemRequest `json:"items"`
+	PaymentMethod string                   `json:"paymentMethod"`
+}
+
+type CreateOrdersResponse struct {
+	Orders     []Order `json:"orders"`
+	TotalPrice float64 `json:"totalPrice"`
+}
+
+func createOrders(c echo.Context, gormDB *gorm.DB) error {
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Database connection error"})
+	}
+
+	buyerID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(401, map[string]string{"error": "Unauthorized"})
+	}
+
+	var req CreateOrdersRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "Invalid request body"})
+	}
+	if len(req.Items) == 0 {
+		return c.JSON(400, map[string]string{"error": "items cannot be empty"})
+	}
+
+	seenListings := map[int]bool{}
+	for _, item := range req.Items {
+		if item.ListingID <= 0 {
+			return c.JSON(400, map[string]string{"error": "listingId must be valid"})
+		}
+		if item.Quantity <= 0 {
+			return c.JSON(400, map[string]string{"error": "quantity must be greater than 0"})
+		}
+		if seenListings[item.ListingID] {
+			return c.JSON(400, map[string]string{"error": "duplicate listingId in checkout"})
+		}
+		seenListings[item.ListingID] = true
+	}
+
+	paymentMethod := req.PaymentMethod
+	if paymentMethod == "" {
+		paymentMethod = "meetup"
+	}
+
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed to start checkout"})
+	}
+	defer tx.Rollback()
+
+	createdOrders := []Order{}
+	var checkoutTotal float64
+
+	for _, item := range req.Items {
+		var sellerID int
+		var price float64
+		var status string
+		var stockQuantity int
+
+		err = tx.QueryRow(`
+			SELECT seller_id, price, status, stock_quantity
+			FROM listings
+			WHERE id = $1
+			FOR UPDATE`,
+			item.ListingID,
+		).Scan(&sellerID, &price, &status, &stockQuantity)
+		if err == sql.ErrNoRows {
+			return c.JSON(404, map[string]string{"error": "Listing not found"})
+		}
+		if err != nil {
+			log.Printf("Error locking listing for checkout: %v", err)
+			return c.JSON(500, map[string]string{"error": "Failed to validate listing"})
+		}
+
+		if sellerID == buyerID {
+			return c.JSON(403, map[string]string{"error": "You cannot buy your own listing"})
+		}
+		if status != "active" {
+			return c.JSON(409, map[string]string{"error": "Listing is not available"})
+		}
+		if stockQuantity < item.Quantity {
+			return c.JSON(409, map[string]string{"error": "Insufficient stock for listing"})
+		}
+
+		totalPrice := price * float64(item.Quantity)
+		var order Order
+		err = tx.QueryRow(`
+			INSERT INTO orders (
+				buyer_id, seller_id, listing_id, quantity, total_price, status, payment_method
+			)
+			VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+			RETURNING id, buyer_id, seller_id, listing_id, quantity, total_price, status, payment_method, created_at, updated_at`,
+			buyerID, sellerID, item.ListingID, item.Quantity, totalPrice, paymentMethod,
+		).Scan(
+			&order.ID, &order.BuyerID, &order.SellerID, &order.ListingID, &order.Quantity,
+			&order.TotalPrice, &order.Status, &order.PaymentMethod, &order.CreatedAt, &order.UpdatedAt,
+		)
+		if err != nil {
+			log.Printf("Error creating order: %v", err)
+			return c.JSON(500, map[string]string{"error": "Failed to create order"})
+		}
+
+		remainingStock := stockQuantity - item.Quantity
+		listingStatus := "active"
+		if remainingStock == 0 {
+			listingStatus = "sold"
+		}
+		if _, err = tx.Exec(`
+			UPDATE listings
+			SET stock_quantity = $1, status = $2, updated_at = CURRENT_TIMESTAMP
+			WHERE id = $3`,
+			remainingStock, listingStatus, item.ListingID,
+		); err != nil {
+			log.Printf("Error updating listing stock: %v", err)
+			return c.JSON(500, map[string]string{"error": "Failed to update listing stock"})
+		}
+
+		checkoutTotal += totalPrice
+		createdOrders = append(createdOrders, order)
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.Printf("Error committing checkout: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to complete checkout"})
+	}
+
+	return c.JSON(201, CreateOrdersResponse{
+		Orders:     createdOrders,
+		TotalPrice: checkoutTotal,
+	})
+}
+
 func getOrders(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -35,25 +187,41 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(401, map[string]string{"error": "Unauthorized"})
 	}
 
-	query := `SELECT id, buyer_id, seller_id, listing_id, quantity, total_price, status, payment_method, created_at, updated_at 
-	          FROM orders 
-	          WHERE buyer_id = $1 
-	          ORDER BY id DESC`
+	status := c.QueryParam("status")
+	if status != "" && !isValidOrderStatus(status) {
+		return c.JSON(400, map[string]string{"error": "Invalid order status"})
+	}
 
-	rows, err := sqlDB.Query(query, userID)
+	query := `SELECT
+			o.id, o.buyer_id, o.seller_id, o.listing_id, o.quantity, o.total_price,
+			o.status, o.payment_method, o.created_at, o.updated_at,
+			COALESCE(l.title, ''), COALESCE(l.image, ''), COALESCE(l.category, 'Others'),
+			COALESCE(l.price, 0), COALESCE(l.seller_name, '')
+		FROM orders o
+		JOIN listings l ON l.id = o.listing_id
+		WHERE o.buyer_id = $1`
+	args := []interface{}{userID}
+	if status != "" {
+		query += " AND o.status = $2"
+		args = append(args, status)
+	}
+	query += " ORDER BY o.id DESC"
+
+	rows, err := sqlDB.Query(query, args...)
 	if err != nil {
 		log.Printf("Error querying user orders: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to fetch orders"})
 	}
 	defer rows.Close()
 
-	orders := []Order{}
+	orders := []EnrichedOrder{}
 	for rows.Next() {
-		var o Order
+		var o EnrichedOrder
 		var paymentMethod sql.NullString
 		err := rows.Scan(
 			&o.ID, &o.BuyerID, &o.SellerID, &o.ListingID, &o.Quantity,
 			&o.TotalPrice, &o.Status, &paymentMethod, &o.CreatedAt, &o.UpdatedAt,
+			&o.ListingTitle, &o.ListingImage, &o.ListingCategory, &o.ListingPrice, &o.SellerName,
 		)
 		if err != nil {
 			log.Printf("Error scanning order: %v", err)
@@ -70,6 +238,108 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	return c.JSON(200, orders)
+}
+
+func getSellerOrders(c echo.Context, gormDB *gorm.DB) error {
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Database connection error"})
+	}
+
+	sellerID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(401, map[string]string{"error": "Unauthorized"})
+	}
+
+	status := c.QueryParam("status")
+	if status == "" {
+		status = "pending"
+	}
+	if !isValidOrderStatus(status) {
+		return c.JSON(400, map[string]string{"error": "Invalid order status"})
+	}
+
+	rows, err := sqlDB.Query(`
+		SELECT
+			o.id, o.buyer_id, o.seller_id, o.listing_id, o.quantity, o.total_price,
+			o.status, o.payment_method, o.created_at, o.updated_at,
+			COALESCE(l.title, ''), COALESCE(l.image, ''), COALESCE(l.category, 'Others'),
+			COALESCE(l.price, 0), COALESCE(l.seller_name, ''),
+			COALESCE(u.username, ''), COALESCE(u.email, '')
+		FROM orders o
+		JOIN listings l ON l.id = o.listing_id
+		JOIN users u ON u.id = o.buyer_id
+		WHERE o.seller_id = $1 AND o.status = $2
+		ORDER BY o.id DESC`,
+		sellerID, status,
+	)
+	if err != nil {
+		log.Printf("Error querying seller orders: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to fetch seller orders"})
+	}
+	defer rows.Close()
+
+	orders := []EnrichedOrder{}
+	for rows.Next() {
+		var o EnrichedOrder
+		var paymentMethod sql.NullString
+		err := rows.Scan(
+			&o.ID, &o.BuyerID, &o.SellerID, &o.ListingID, &o.Quantity,
+			&o.TotalPrice, &o.Status, &paymentMethod, &o.CreatedAt, &o.UpdatedAt,
+			&o.ListingTitle, &o.ListingImage, &o.ListingCategory, &o.ListingPrice, &o.SellerName,
+			&o.BuyerUsername, &o.BuyerEmail,
+		)
+		if err != nil {
+			log.Printf("Error scanning seller order: %v", err)
+			continue
+		}
+		if paymentMethod.Valid {
+			o.PaymentMethod = paymentMethod.String
+		}
+		orders = append(orders, o)
+	}
+	if err := rows.Err(); err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed scanning seller orders"})
+	}
+
+	return c.JSON(200, map[string]interface{}{"orders": orders})
+}
+
+func completeOrder(c echo.Context, gormDB *gorm.DB) error {
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Database connection error"})
+	}
+
+	sellerID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(401, map[string]string{"error": "Unauthorized"})
+	}
+
+	orderID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "Invalid order ID"})
+	}
+
+	result, err := sqlDB.Exec(`
+		UPDATE orders
+		SET status = 'completed', updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1 AND seller_id = $2 AND status = 'pending'`,
+		orderID, sellerID,
+	)
+	if err != nil {
+		log.Printf("Error completing order: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
+	}
+	if affected == 0 {
+		return c.JSON(409, map[string]string{"error": "Order is not pending or you do not own it"})
+	}
+
+	return c.JSON(200, map[string]string{"message": "Order marked as delivered"})
 }
 
 func getOrderByID(c echo.Context, gormDB *gorm.DB) error {
@@ -117,4 +387,13 @@ func getOrderByID(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	return c.JSON(200, o)
+}
+
+func isValidOrderStatus(status string) bool {
+	switch status {
+	case "pending", "completed", "cancelled", "refunded":
+		return true
+	default:
+		return false
+	}
 }

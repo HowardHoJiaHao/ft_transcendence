@@ -21,6 +21,7 @@ type User = {
 
 interface AuthContextType {
 	user: User | null;
+	loading: boolean;
 	login: (userData: User) => void;
 	logout: () => void;
 	updateUser: (updates: Partial<User>) => void;
@@ -32,6 +33,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined); //<> 
 export function AuthProvider({ children }: { children: React.ReactNode }) //by putting  { children } it defines whatever i put inside the <AuthProvider>  .... <AuthProvider> is a child. { children: React} the child be can be any react component
 {
 	const [user, setUser] = useState<User | null>(null); //typescript version <User | null> means can only hold these two types. null is the initial value
+	const [loading, setLoading] = useState(true);
 
 	//			RUN WHEN IT LOADS
 	useEffect(() =>
@@ -39,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) //by p
 		const storedUser = localStorage.getItem('user') //goes to browser storage and see is there a string labeled user
 		if (storedUser)
 			setUser(JSON.parse(storedUser)); //translate string into live javascript object
+		setLoading(false);
 	}, []); //run the code exactly
 
 	const login = (userData: User) =>
@@ -63,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) //by p
 	};
 
 	return (
-		<AuthContext.Provider value={{ user, login, logout, updateUser}}>
+		<AuthContext.Provider value={{ user, loading, login, logout, updateUser}}>
 			{children}
 		</AuthContext.Provider>
 	) //renders context and passes user, login, logout to descendants

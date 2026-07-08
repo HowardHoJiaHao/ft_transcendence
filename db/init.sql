@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS listings (
     reviews INT DEFAULT 0,
     is_new BOOLEAN DEFAULT FALSE,
     is_featured BOOLEAN DEFAULT FALSE,
+    stock_quantity INT NOT NULL DEFAULT 1 CHECK (stock_quantity >= 0),
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'sold', 'archived')),
     views_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

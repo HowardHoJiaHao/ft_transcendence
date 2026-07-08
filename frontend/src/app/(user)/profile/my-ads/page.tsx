@@ -29,6 +29,20 @@ interface Ad {
   createdAt: string;
 }
 
+interface SellerOrder {
+  id: number;
+  listingId: number;
+  quantity: number;
+  totalPrice: number;
+  status: string;
+  paymentMethod: string;
+  createdAt: string;
+  listingTitle: string;
+  listingImage: string;
+  buyerUsername: string;
+  buyerEmail: string;
+}
+
 interface SellerItemStat {
   listingId: number;
   title: string;
@@ -111,15 +125,18 @@ const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/350x450';
 
 export default function MyAdsPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { showToast } = useToast();
 
 //   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'active' | 'sold' | 'archived' | 'analytics'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'pending' | 'sold' | 'archived' | 'analytics'>('active');
   const [publishedAds, setPublishedAds] = useState<Ad[]>([]);
+  const [pendingOrders, setPendingOrders] = useState<SellerOrder[]>([]);
   const [soldAds, setSoldAds] = useState<Ad[]>([]);
   const [archivedAds, setArchivedAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [completingOrderId, setCompletingOrderId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
 
   const [itemStats, setItemStats] = useState<SellerItemStat[]>([]);
@@ -379,11 +396,15 @@ export default function MyAdsPage() {
 //   };
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
     if (!user) {
       router.push('/login');
       return;
     }
     setLoading(true);
+    const token = localStorage.getItem('token') || '';
     Promise.all([
       fetch(
         `${API_BASE}/api/v1/products?sellerId=${user.id}&status=active&limit=100`,
@@ -394,18 +415,22 @@ export default function MyAdsPage() {
       fetch(
         `${API_BASE}/api/v1/products?sellerId=${user.id}&status=archived&limit=100`,
       ).then((r) => r.json()),
+      fetch(`${API_BASE}/api/v1/seller/orders?status=pending`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then((r) => r.json()),
     ])
-      .then(([activeData, soldData, archivedData]) => {
+      .then(([activeData, soldData, archivedData, pendingData]) => {
         setPublishedAds(activeData.products || []);
         setSoldAds(soldData.products || []);
         setArchivedAds(archivedData.products || []);
+        setPendingOrders(pendingData.orders || []);
       })
       .catch(() => showToast('Failed to load your ads', 'error'))
       .finally(() => setLoading(false));
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authLoading, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (activeTab !== 'analytics' || analyticsLoaded || !user) return;
+    if (authLoading || activeTab !== 'analytics' || analyticsLoaded || !user) return;
     const token = localStorage.getItem('token') || '';
     setAnalyticsLoading(true);
     Promise.all([
@@ -429,7 +454,7 @@ export default function MyAdsPage() {
       })
       .catch(() => showToast('Failed to load analytics', 'error'))
       .finally(() => setAnalyticsLoading(false));
-  }, [activeTab, analyticsLoaded, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authLoading, activeTab, analyticsLoaded, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentAds =
     activeTab === 'active' ? publishedAds : activeTab === 'sold' ? soldAds : archivedAds;
@@ -486,6 +511,70 @@ export default function MyAdsPage() {
     if (ad.image.startsWith('/')) return `${API_BASE}${ad.image}`;
     return `${API_BASE}/${ad.image}`;
   };
+  const orderImgSrc = (order: SellerOrder) => {
+    if (!order.listingImage) return PLACEHOLDER_IMAGE;
+    if (order.listingImage.startsWith('http://') || order.listingImage.startsWith('https://') || order.listingImage.startsWith('data:'))
+      return order.listingImage;
+    if (order.listingImage.startsWith('/')) return `${API_BASE}${order.listingImage}`;
+    return `${API_BASE}/${order.listingImage}`;
+  };
+  const fetchPendingOrders = async () => {
+    const token = localStorage.getItem('token') || '';
+    setPendingLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/seller/orders?status=pending`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error || 'Failed to load pending orders');
+      }
+      const data = await res.json();
+      setPendingOrders(data.orders || []);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to load pending orders', 'error');
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+  const refreshSellerData = async () => {
+    if (!user) return;
+    const [activeData, soldData, archivedData] = await Promise.all([
+      fetch(`${API_BASE}/api/v1/products?sellerId=${user.id}&status=active&limit=100`).then((r) => r.json()),
+      fetch(`${API_BASE}/api/v1/products?sellerId=${user.id}&status=sold&limit=100`).then((r) => r.json()),
+      fetch(`${API_BASE}/api/v1/products?sellerId=${user.id}&status=archived&limit=100`).then((r) => r.json()),
+    ]);
+    setPublishedAds(activeData.products || []);
+    setSoldAds(soldData.products || []);
+    setArchivedAds(archivedData.products || []);
+  };
+  const handleCompleteOrder = async (orderId: number) => {
+    const token = localStorage.getItem('token') || '';
+    setCompletingOrderId(orderId);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/orders/${orderId}/complete`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error || 'Failed to mark order delivered');
+      }
+      setPendingOrders((prev) => prev.filter((order) => order.id !== orderId));
+      setAnalyticsLoaded(false);
+      setItemStats([]);
+      setSummary(null);
+      await refreshSellerData();
+      if (activeTab === 'analytics') {
+        setActiveTab('analytics');
+      }
+      showToast('Order marked as delivered', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to mark order delivered', 'error');
+    } finally {
+      setCompletingOrderId(null);
+    }
+  };
 
   return (
     <main className={styles.main}>
@@ -517,6 +606,12 @@ export default function MyAdsPage() {
               onClick={() => { setActiveTab('active'); setPage(1); }}
             >
               Published ({publishedAds.length})
+            </button>
+            <button
+              className={`${styles.tab} ${activeTab === 'pending' ? styles.tabActive : ''}`}
+              onClick={() => { setActiveTab('pending'); setPage(1); fetchPendingOrders(); }}
+            >
+              Pending Orders ({pendingOrders.length})
             </button>
             <button
               className={`${styles.tab} ${activeTab === 'sold' ? styles.tabActive : ''}`}
@@ -1107,6 +1202,55 @@ export default function MyAdsPage() {
                 </>
               )}
             </div>
+          ) : activeTab === 'pending' ? (
+            pendingLoading ? (
+              <p className={styles.emptyText}>Loading pending orders…</p>
+            ) : pendingOrders.length === 0 ? (
+              <div className={styles.emptyState}>
+                <p className={styles.emptyText}>No pending orders to deliver.</p>
+              </div>
+            ) : (
+              <div className={styles.pendingList}>
+                {pendingOrders.map((order, i) => (
+                  <div key={order.id} className={styles.pendingOrderItem}>
+                    <span className={styles.adIndex}>{i + 1}</span>
+                    <div className={styles.adImageWrap}>
+                      <img
+                        src={orderImgSrc(order)}
+                        alt={order.listingTitle}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
+                        }}
+                      />
+                    </div>
+                    <div className={styles.adInfo}>
+                      <p className={styles.adPrice}>RM {order.totalPrice.toFixed(2)}</p>
+                      <Link href={`/products/${order.listingId}`} className={styles.adTitle}>
+                        {order.listingTitle}
+                      </Link>
+                      <p className={styles.adMeta}>
+                        Buyer: {order.buyerUsername || order.buyerEmail || 'Buyer'}
+                      </p>
+                      <p className={styles.adViews}>
+                        Ordered {formatDate(order.createdAt)} · Qty {order.quantity} · {order.paymentMethod || 'meetup'}
+                      </p>
+                    </div>
+                    <div className={styles.adSide}>
+                      <span className={`${styles.statusChip} ${styles.statusPending}`}>
+                        Pending
+                      </span>
+                      <button
+                        className={styles.completeOrderBtn}
+                        onClick={() => handleCompleteOrder(order.id)}
+                        disabled={completingOrderId === order.id}
+                      >
+                        {completingOrderId === order.id ? 'Saving…' : 'Mark as Delivered'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           ) : loading ? (
             <p className={styles.emptyText}>Loading your ads…</p>
           ) : paginatedAds.length === 0 ? (

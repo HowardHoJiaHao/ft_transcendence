@@ -678,6 +678,7 @@
 .statusActive { background: #e6f4ea; color: #1a7f37; }
 .statusSold { background: #e3edfb; color: #1c5cab; }
 .statusArchived { background: #efefec; color: #6e6d68; }
+.statusPending { background: #fff8e1; color: #8d6e00; }
 
 .adDays {
   font-size: 12px;
@@ -726,4 +727,43 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.3px;
+}
+
+.pendingList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pendingOrderItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-bottom: 1px solid #f0f0ed;
+}
+
+.pendingOrderItem:last-child {
+  border-bottom: none;
+}
+
+.completeOrderBtn {
+  border: none;
+  border-radius: 6px;
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 14px;
+  white-space: nowrap;
+}
+
+.completeOrderBtn:hover {
+  background: #333;
+}
+
+.completeOrderBtn:disabled {
+  background: #a3a3a3;
+  cursor: not-allowed;
 }

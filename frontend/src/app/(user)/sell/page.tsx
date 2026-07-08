@@ -66,6 +66,7 @@ function SellPageInner() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [stockQuantity, setStockQuantity] = useState("1");
   const [location, setLocation] = useState("");
   const [dealingMethods, setDealingMethods] = useState<string[]>([]);
   const [weightCategory, setWeightCategory] = useState("4U");
@@ -92,6 +93,7 @@ function SellPageInner() {
         setTitle(p.title || "");
         setDescription(p.description || "");
         setPrice(p.price?.toString() || "");
+        setStockQuantity((p.stockQuantity ?? 1).toString());
         setLocation(p.location || "");
         setDealingMethods(
           p.dealingMethod ? p.dealingMethod.split(", ").filter(Boolean) : [],
@@ -122,6 +124,7 @@ function SellPageInner() {
     setTitle("");
     setDescription("");
     setPrice("");
+    setStockQuantity("1");
     setLocation("");
     setDealingMethods([]);
     setPhoneNumber("");
@@ -193,6 +196,11 @@ function SellPageInner() {
       showToast("Please enter a valid price", "error");
       return;
     }
+    const parsedStockQuantity = Number.parseInt(stockQuantity, 10);
+    if (!Number.isInteger(parsedStockQuantity) || parsedStockQuantity < 1) {
+      showToast("Please enter a valid stock quantity", "error");
+      return;
+    }
     if (!dealingMethods.length) {
       showToast("Please select at least one dealing method", "error");
       return;
@@ -230,6 +238,7 @@ function SellPageInner() {
               title: title.trim(),
               description: description.trim(),
               price: parsedPrice,
+              stockQuantity: parsedStockQuantity,
               location: location.trim() || "Malaysia",
               weightCategory,
               flexibilityCategory,
@@ -264,6 +273,7 @@ function SellPageInner() {
             title: title.trim(),
             description: description.trim(),
             price: parsedPrice,
+            stockQuantity: parsedStockQuantity,
             location: location.trim() || "Malaysia",
             weightCategory,
             flexibilityCategory,
@@ -551,6 +561,23 @@ function SellPageInner() {
                       onChange={(e) => setPrice(e.target.value)}
                     />
                   </div>
+                </div>
+
+                {/* Stock */}
+                <div className={styles.fieldGroup}>
+                  <input
+                    type="number"
+                    className={styles.input}
+                    placeholder="Stock quantity"
+                    min="1"
+                    step="1"
+                    value={stockQuantity}
+                    onChange={(e) => setStockQuantity(e.target.value.replace(/[^\d]/g, ""))}
+                  />
+                  <p className={styles.charCountSmall}>
+                    Use 1 for a single second-hand item, or more if you have
+                    identical units available.
+                  </p>
                 </div>
 
                 {/* Location */}

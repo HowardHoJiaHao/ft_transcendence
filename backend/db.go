@@ -3,8 +3,8 @@ package main
 import (
 	"database/sql" //postgres
 	"fmt"
-	"os"
 	"log"
+	"os"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/driver/postgres"
@@ -51,6 +51,19 @@ func runListingsMigration(db *sql.DB) error {
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS condition VARCHAR(50) DEFAULT 'Second-hand (Used)'`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS dealing_method VARCHAR(100) DEFAULT 'Meet Up'`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20) DEFAULT ''`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS stock_quantity INT NOT NULL DEFAULT 1`,
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1
+				FROM pg_constraint
+				WHERE conname = 'listings_stock_quantity_nonnegative'
+			) THEN
+				ALTER TABLE listings
+				ADD CONSTRAINT listings_stock_quantity_nonnegative
+				CHECK (stock_quantity >= 0);
+			END IF;
+		END $$`,
 	}
 	for _, m := range migrations {
 		if _, err := db.Exec(m); err != nil {

@@ -38,6 +38,7 @@ type Product struct {
 	Reviews             int       `json:"reviews"`
 	IsNew               bool      `json:"isNew"`
 	IsFeatured          bool      `json:"isFeatured"`
+	StockQuantity       int       `json:"stockQuantity"`
 	Status              string    `json:"status"`
 	ViewsCount          int       `json:"viewsCount"`
 	CreatedAt           time.Time `json:"createdAt"`
@@ -62,6 +63,7 @@ type CreateProductRequest struct {
 	Image               string   `json:"image"`
 	IsNew               bool     `json:"isNew"`
 	IsFeatured          bool     `json:"isFeatured"`
+	StockQuantity       *int     `json:"stockQuantity,omitempty"`
 }
 
 type UpdateProductRequest struct {
@@ -77,6 +79,7 @@ type UpdateProductRequest struct {
 	Price               float64  `json:"price"`
 	OriginalPrice       *float64 `json:"originalPrice,omitempty"`
 	Location            string   `json:"location"`
+	StockQuantity       *int     `json:"stockQuantity,omitempty"`
 	Status              string   `json:"status"`
 }
 
@@ -89,7 +92,8 @@ const listingSelectCols = `l.id, l.title, l.price, l.original_price, COALESCE(l.
 	COALESCE(l.weight_category, ''), COALESCE(l.flexibility_category, ''), COALESCE(l.balance_category, ''),
 	COALESCE(l.location, ''), l.seller_id, COALESCE(l.seller_name, ''), COALESCE(u.avatar_url, ''),
 	COALESCE(l.rating, 0), COALESCE(l.reviews, 0), l.is_new, l.is_featured,
-	COALESCE(l.status, 'active'), COALESCE(l.views_count, 0), l.created_at, COALESCE(l.description, '')`
+	COALESCE(l.stock_quantity, 0), COALESCE(l.status, 'active'), COALESCE(l.views_count, 0),
+	l.created_at, COALESCE(l.description, '')`
 
 // list all products with filters
 func getProducts(c echo.Context, gormDB *gorm.DB) error {
@@ -251,7 +255,7 @@ func scanProducts(rows *sql.Rows) ([]Product, error) {
 			&p.Category, &p.Condition, &p.DealingMethod, &p.PhoneNumber,
 			&p.WeightCategory, &p.FlexibilityCategory, &p.BalanceCategory,
 			&p.Location, &p.SellerId, &p.SellerName, &p.SellerAvatar, &p.Rating, &p.Reviews,
-			&p.IsNew, &p.IsFeatured, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
+			&p.IsNew, &p.IsFeatured, &p.StockQuantity, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
 		)
 		if err != nil {
 			log.Printf("Error scanning product: %v", err)
@@ -333,6 +337,13 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	if req.Price <= 0 {
 		return c.JSON(400, map[string]string{"error": "price must be greater than 0"})
 	}
+	stockQuantity := 1
+	if req.StockQuantity != nil {
+		stockQuantity = *req.StockQuantity
+	}
+	if stockQuantity < 1 {
+		return c.JSON(400, map[string]string{"error": "stockQuantity must be at least 1"})
+	}
 
 	if req.SellerName == "" {
 		req.SellerName = "Unknown Seller"
@@ -362,8 +373,8 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	insertQuery := `INSERT INTO listings (
 		seller_id, title, description, weight_category, flexibility_category, balance_category,
 		price, original_price, location, image, seller_name, is_new, is_featured, status,
-		category, condition, dealing_method, phone_number
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'active',$14,$15,$16,$17)
+		category, condition, dealing_method, phone_number, stock_quantity
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'active',$14,$15,$16,$17,$18)
 	RETURNING id`
 
 	var productID int
@@ -371,6 +382,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		req.SellerID, req.Title, req.Description, req.WeightCategory, req.FlexibilityCategory,
 		req.BalanceCategory, req.Price, req.OriginalPrice, req.Location, req.Image, req.SellerName,
 		req.IsNew, req.IsFeatured, req.Category, req.Condition, req.DealingMethod, req.PhoneNumber,
+		stockQuantity,
 	).Scan(&productID)
 	if err != nil {
 		log.Printf("Error creating product: %v", err)
@@ -435,7 +447,8 @@ func updateProduct(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	var sellerID int
-	qErr := sqlDB.QueryRow("SELECT seller_id FROM listings WHERE id = $1", id).Scan(&sellerID)
+	var currentStockQuantity int
+	qErr := sqlDB.QueryRow("SELECT seller_id, stock_quantity FROM listings WHERE id = $1", id).Scan(&sellerID, &currentStockQuantity)
 	if qErr == sql.ErrNoRows {
 		return c.JSON(404, map[string]string{"error": "Product not found"})
 	} else if qErr != nil {
@@ -458,15 +471,25 @@ func updateProduct(c echo.Context, gormDB *gorm.DB) error {
 	if req.Status == "" {
 		req.Status = "active"
 	}
+	stockQuantity := currentStockQuantity
+	if req.StockQuantity != nil {
+		stockQuantity = *req.StockQuantity
+	}
+	if stockQuantity < 0 {
+		return c.JSON(400, map[string]string{"error": "stockQuantity cannot be negative"})
+	}
+	if req.Status == "active" && stockQuantity == 0 {
+		req.Status = "sold"
+	}
 
 	_, err = sqlDB.Exec(`UPDATE listings SET
 		title=$1, description=$2, price=$3, original_price=$4, location=$5,
 		category=$6, condition=$7, dealing_method=$8, phone_number=$9,
 		weight_category=$10, flexibility_category=$11, balance_category=$12,
-		status=$13, updated_at=CURRENT_TIMESTAMP WHERE id=$14`,
+		status=$13, stock_quantity=$14, updated_at=CURRENT_TIMESTAMP WHERE id=$15`,
 		req.Title, req.Description, req.Price, req.OriginalPrice, req.Location,
 		req.Category, req.Condition, req.DealingMethod, req.PhoneNumber,
-		req.WeightCategory, req.FlexibilityCategory, req.BalanceCategory, req.Status, id)
+		req.WeightCategory, req.FlexibilityCategory, req.BalanceCategory, req.Status, stockQuantity, id)
 	if err != nil {
 		log.Printf("Error updating product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to update product"})
@@ -665,7 +688,7 @@ func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {
 		&p.Category, &p.Condition, &p.DealingMethod, &p.PhoneNumber,
 		&p.WeightCategory, &p.FlexibilityCategory, &p.BalanceCategory,
 		&p.Location, &p.SellerId, &p.SellerName, &p.SellerAvatar, &p.Rating, &p.Reviews,
-		&p.IsNew, &p.IsFeatured, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
+		&p.IsNew, &p.IsFeatured, &p.StockQuantity, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
 	)
 	return p, err
 }
