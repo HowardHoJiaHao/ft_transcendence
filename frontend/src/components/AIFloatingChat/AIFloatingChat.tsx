@@ -9,14 +9,91 @@ interface Message {
   content: string;
 }
 
+type RecommendationProfile = {
+  age_group?: string;
+  gender?: string;
+  experience_level?: string;
+  play_style?: string;
+  budget_range?: string;
+};
+
+type AssessmentStep = {
+  key: keyof RecommendationProfile;
+  question: string;
+  options: Array<{
+    label: string;
+    value: string;
+  }>;
+};
+
+const RECOMMENDATION_COMPLETE_MESSAGE = '__recommendation_assessment_complete__';
+
+const assessmentSteps: AssessmentStep[] = [
+  {
+    key: 'age_group',
+    question: 'What is your age group?',
+    options: [
+      { label: 'Under 13', value: 'under-13' },
+      { label: '13-17', value: '13-17' },
+      { label: '18-25', value: '18-25' },
+      { label: '26-35', value: '26-35' },
+      { label: '36-45', value: '36-45' },
+      { label: '46+', value: '46+' },
+    ],
+  },
+  {
+    key: 'gender',
+    question: 'What is your gender?',
+    options: [
+      { label: 'Male', value: 'male' },
+      { label: 'Female', value: 'female' },
+      { label: 'Prefer not to say', value: 'prefer_not_to_say' },
+    ],
+  },
+  {
+    key: 'experience_level',
+    question: 'How long have you been playing badminton?',
+    options: [
+      { label: 'Less than 6 months', value: 'less_than_6_months' },
+      { label: '6 months - 1 year', value: '6_months-1_year' },
+      { label: '1 - 3 years', value: '1-3_years' },
+      { label: '3 - 5 years', value: '3-5_years' },
+      { label: 'More than 5 years', value: 'more_than_5_years' },
+    ],
+  },
+  {
+    key: 'play_style',
+    question: 'What is your play style?',
+    options: [
+      { label: 'Attacking', value: 'attacking' },
+      { label: 'Defensive', value: 'defensive' },
+      { label: 'Balanced', value: 'balanced' },
+      { label: 'Not sure', value: 'not_sure' },
+    ],
+  },
+  {
+    key: 'budget_range',
+    question: 'What budget range should I stay within?',
+    options: [
+      { label: 'Under RM200', value: 'under-200' },
+      { label: 'RM200 - RM400', value: '200-400' },
+      { label: 'RM400 - RM700', value: '400-700' },
+      { label: 'RM700+', value: '700+' },
+    ],
+  },
+];
+
 export default function AIFloatingChat() {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [assessmentStepIndex, setAssessmentStepIndex] = useState<number | null>(null);
+  const [recommendationProfile, setRecommendationProfile] = useState<RecommendationProfile>({});
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const currentAssessmentStep = assessmentStepIndex === null ? null : assessmentSteps[assessmentStepIndex];
 
   // Auto-scroll to latest message
   const scrollToBottom = () => {
@@ -36,21 +113,17 @@ export default function AIFloatingChat() {
     "How do I post an ad?"
   ];
 
-  const handleSendMessage = async (text: string) => {
-    if (!text.trim() || isLoading) return;
-
-    // 1. Add User Message
-    const updatedMessages: Message[] = [...messages, { role: 'user', content: text }];
-    setMessages(updatedMessages);
-    setInputValue('');
-    setIsLoading(true);
-
-    // Add placeholder for streaming AI response
-    setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
-
+  const streamChatResponse = async (
+    requestMessage: string,
+    visibleHistory: Message[],
+    profile?: RecommendationProfile
+  ) => {
     try {
       const token = localStorage.getItem('token') || (user ? `token_${user.id}` : '');
-      const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      const configuredApiURL = process.env.NEXT_PUBLIC_API_URL?.trim() || '';
+      const apiURL = /^https?:\/\/localhost:8080\/?$/.test(configuredApiURL)
+        ? ''
+        : configuredApiURL.replace(/\/$/, '');
       
       const response = await fetch(`${apiURL}/api/v1/ai/chat`, {
         method: 'POST',
@@ -59,9 +132,10 @@ export default function AIFloatingChat() {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
-          message: text,
+          message: requestMessage,
           // Send last 10 messages as history context (windowing)
-          history: updatedMessages.slice(-10)
+          history: visibleHistory.slice(-10),
+          ...(profile ? { recommendationProfile: profile } : {})
         })
       });
 
@@ -133,6 +207,65 @@ export default function AIFloatingChat() {
     }
   };
 
+  const handleSendMessage = async (text: string) => {
+    if (!text.trim() || isLoading || assessmentStepIndex !== null) return;
+
+    const updatedMessages: Message[] = [...messages, { role: 'user', content: text }];
+    setMessages([...updatedMessages, { role: 'assistant', content: '' }]);
+    setInputValue('');
+    setIsLoading(true);
+
+    await streamChatResponse(text, updatedMessages);
+  };
+
+  const startAssessment = () => {
+    if (isLoading) return;
+
+    setRecommendationProfile({});
+    setAssessmentStepIndex(0);
+    setInputValue('');
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: 'assistant',
+        content: `Let's find the right racket for you, Boss.\n\n${assessmentSteps[0].question}`,
+      },
+    ]);
+  };
+
+  const handleAssessmentAnswer = async (option: { label: string; value: string }) => {
+    if (assessmentStepIndex === null || isLoading) return;
+
+    const step = assessmentSteps[assessmentStepIndex];
+    const nextProfile = {
+      ...recommendationProfile,
+      [step.key]: option.value,
+    };
+    const withAnswer: Message[] = [...messages, { role: 'user', content: option.label }];
+    const nextStepIndex = assessmentStepIndex + 1;
+
+    setRecommendationProfile(nextProfile);
+
+    if (nextStepIndex < assessmentSteps.length) {
+      setAssessmentStepIndex(nextStepIndex);
+      setMessages([
+        ...withAnswer,
+        { role: 'assistant', content: assessmentSteps[nextStepIndex].question },
+      ]);
+      return;
+    }
+
+    setAssessmentStepIndex(null);
+    setMessages([
+      ...withAnswer,
+      { role: 'assistant', content: 'Thanks Boss. I am matching your profile with current marketplace rackets now.' },
+      { role: 'assistant', content: '' },
+    ]);
+    setIsLoading(true);
+
+    await streamChatResponse(RECOMMENDATION_COMPLETE_MESSAGE, withAnswer, nextProfile);
+  };
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSendMessage(inputValue);
@@ -153,6 +286,7 @@ export default function AIFloatingChat() {
     // Find Racket ID matches (e.g. "Racket ID: 3")
     const racketMatch = content.match(/Racket ID:\s*(\d+)/i);
     const orderMatch = content.match(/Order #\s*(\d+)/i);
+    const hasProductLinks = /^Product link:/im.test(content);
     const postAdMatch = /\b(post an ad|create (?:a )?listing|list (?:my|your) racket|start selling|sell (?:my|your) racket)\b/i.test(content);
     
     const lines = content.split('\n');
@@ -236,7 +370,7 @@ export default function AIFloatingChat() {
         {formattedText}
         
         {/* Render quick navigation actions based on AI suggestions */}
-        {racketMatch && (
+        {racketMatch && !hasProductLinks && (
           <a
             href={`/products/${racketMatch[1]}`}
             className={styles.actionBtn}
@@ -302,6 +436,14 @@ export default function AIFloatingChat() {
                 I am RacketBot, your badminton assistant. Ask me to find rackets, 
                 explain weight metrics (3U vs 4U), check order status, or explain how platform buying works lah!
               </p>
+              <button
+                type="button"
+                className={styles.recommendButton}
+                onClick={startAssessment}
+                disabled={isLoading}
+              >
+                Recommend Me a Racket
+              </button>
               
               <div className={styles.suggestedPromptsContainer}>
                 <p className={styles.suggestedTitle}>Suggested Prompts</p>
@@ -338,6 +480,22 @@ export default function AIFloatingChat() {
               </div>
             ))
           )}
+
+          {currentAssessmentStep && (
+            <div className={styles.assessmentOptions}>
+              {currentAssessmentStep.options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={styles.assessmentOption}
+                  onClick={() => handleAssessmentAnswer(option)}
+                  disabled={isLoading}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
           
           {isLoading && messages[messages.length - 1]?.content === '' && (
             <div className={`${styles.messageRow} ${styles.rowAI}`}>
@@ -356,19 +514,29 @@ export default function AIFloatingChat() {
 
         {/* Chat Box Input Footer */}
         <div className={styles.inputFooter}>
+          {assessmentStepIndex === null && (
+            <button
+              type="button"
+              className={styles.footerRecommendButton}
+              onClick={startAssessment}
+              disabled={isLoading}
+            >
+              Recommend Me a Racket
+            </button>
+          )}
           <form onSubmit={handleFormSubmit} className={styles.inputForm}>
             <input 
               type="text" 
               className={styles.textInput}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Ask RacketBot anything, Boss..."
-              disabled={isLoading}
+              placeholder={assessmentStepIndex === null ? 'Ask RacketBot anything, Boss...' : 'Choose an assessment option above...'}
+              disabled={isLoading || assessmentStepIndex !== null}
             />
             <button 
               type="submit" 
               className={styles.sendButton}
-              disabled={!inputValue.trim() || isLoading}
+              disabled={!inputValue.trim() || isLoading || assessmentStepIndex !== null}
             >
               🚀
             </button>

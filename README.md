@@ -90,6 +90,12 @@ NODE_ENV=development
 # Backend
 ENVIRONMENT=development
 SERVER_PORT=8080
+
+# OpenRouter API
+OPENROUTER_API_KEY=your_api_key_here
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=google/gemma-4-31b-it:free
+OPENROUTER_EMBEDDING_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2:free
 ```
 
 ## Database Tables

@@ -17,15 +17,17 @@ type AIChatMessage struct {
 }
 
 type AIChatRequest struct {
-	Message string          `json:"message"`
-	History []AIChatMessage `json:"history"`
-	UserID  int             `json:"userId"`
+	Message               string            `json:"message"`
+	History               []AIChatMessage   `json:"history"`
+	UserID                int               `json:"userId"`
+	RecommendationProfile map[string]string `json:"recommendationProfile,omitempty"`
 }
 
 func handleAIChat(c echo.Context) error {
 	var userReq struct {
-		Message string          `json:"message"`
-		History []AIChatMessage `json:"history"`
+		Message               string            `json:"message"`
+		History               []AIChatMessage   `json:"history"`
+		RecommendationProfile map[string]string `json:"recommendationProfile"`
 	}
 
 	if err := c.Bind(&userReq); err != nil {
@@ -37,9 +39,10 @@ func handleAIChat(c echo.Context) error {
 
 	// 2. Prepare payload to Python AI Service
 	aiReq := AIChatRequest{
-		Message: userReq.Message,
-		History: userReq.History,
-		UserID:  userID,
+		Message:               userReq.Message,
+		History:               userReq.History,
+		UserID:                userID,
+		RecommendationProfile: userReq.RecommendationProfile,
 	}
 
 	jsonData, err := json.Marshal(aiReq)

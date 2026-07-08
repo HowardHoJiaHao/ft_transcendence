@@ -1,0 +1,18 @@
+{
+  "model_name": "racket_recommender",
+  "model_type": "MultiOutput Random Forest Classifier",
+  "version": "1.0.0",
+  "features": [
+    "age_group",
+    "gender",
+    "experience_level",
+    "play_style",
+    "budget_range"
+  ],
+  "outputs": [
+    "weightCategory",
+    "flexibilityCategory",
+    "balanceCategory"
+  ],
+  "trained_at": "YYYY-MM-DD"
+}

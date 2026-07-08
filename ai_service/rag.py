@@ -11,9 +11,13 @@ def get_db_connection():
         password=os.getenv("DB_PASSWORD", "transcendence_pass"),
         dbname=os.getenv("DB_NAME", "transcendence")
     )
-    # Register vector type in psycopg2
-    register_vector(conn)
     return conn
+
+def ensure_vector_extension(conn):
+    with conn.cursor() as cur:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    conn.commit()
+    register_vector(conn)
 
 def _retrieve_local_faq_context(query: str) -> str:
     faq_dir = "faq_docs"
@@ -46,8 +50,11 @@ def retrieve_faq_context(query: str) -> str:
     try:
         embeddings = get_embeddings()
         query_vector = embeddings.embed_query(query)
+        if not query_vector:
+            raise ValueError("Embedding provider returned an empty query vector")
         
         conn = get_db_connection()
+        register_vector(conn)
         cur = conn.cursor()
         
         # Calculate cosine similarity using pgvector distance operator <=>
@@ -76,16 +83,16 @@ def retrieve_faq_context(query: str) -> str:
                 
         return "\n\n".join(context_chunks)
     except Exception as e:
-        print(f"Error retrieving FAQ context: {e}")
+        print(f"FAQ vector retrieval unavailable, using local FAQ fallback: {e}")
         return _retrieve_local_faq_context(query)
 
 def ingest_faqs():
     try:
         conn = get_db_connection()
+        ensure_vector_extension(conn)
         cur = conn.cursor()
         
         # Ensure extension and table exist
-        cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS faq_embeddings (
@@ -148,7 +155,15 @@ def ingest_faqs():
                 chunks = [c.strip() for c in chunks if len(c.strip()) > 20]
                 
                 for chunk in chunks:
-                    vector = embeddings.embed_query(chunk)
+                    try:
+                        vector = embeddings.embed_query(chunk)
+                        if not vector:
+                            raise ValueError("Embedding provider returned an empty vector")
+                    except Exception as e:
+                        print(f"FAQ vector ingestion unavailable, using local FAQ fallback: {e}")
+                        cur.close()
+                        conn.close()
+                        return
                     cur.execute(
                         "INSERT INTO faq_embeddings (source_file, chunk_text, embedding) VALUES (%s, %s, %s);",
                         (filename, chunk, vector)
