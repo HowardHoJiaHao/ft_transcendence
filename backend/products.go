@@ -328,6 +328,11 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "Invalid request body"})
 	}
+	// The listing always belongs to the authenticated user — a client cannot
+	// create products under someone else's account by spoofing sellerId.
+	if uid, ok := c.Get("userId").(int); ok && uid > 0 {
+		req.SellerID = uid
+	}
 	if req.SellerID <= 0 {
 		return c.JSON(400, map[string]string{"error": "sellerId is required"})
 	}

@@ -600,6 +600,9 @@ export default function MyAdsPage() {
             <Link href="/sell" className={styles.postAdBtn}>
               + Post an Ad
             </Link>
+            <Link href="/profile/developer-api" className={styles.docsBtn}>
+              Developer API
+            </Link>
             <span className={styles.tabDivider} />
             <button
               className={`${styles.tab} ${activeTab === 'active' ? styles.tabActive : ''}`}

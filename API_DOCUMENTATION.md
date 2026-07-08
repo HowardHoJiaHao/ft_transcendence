@@ -1,203 +1,85 @@
-# Transcendence API Documentation
+# Transcendence Public API
 
-## Overview
-
-The Transcendence marketplace API is built with Go Echo framework and provides RESTful endpoints for marketplace operations. The API is versioned and includes rate limiting and authentication.
+A secured, rate-limited REST API for programmatic access to marketplace
+listings. Authenticate with an API key you generate from your account; every
+request is rate-limited per key and recorded to an audit log you can review.
 
 ## Base URL
 
 ```
-http://localhost:8080/api/v1
+https://localhost/api/public/v1
 ```
+
+(Behind nginx TLS. The Go backend serves it on `:8080` internally.)
+
+---
 
 ## Authentication
 
-API authentication will be implemented using:
-- JWT tokens for user sessions
-- API keys for service-to-service communication
-- OAuth 2.0 for third-party providers (Google, 42)
+All public endpoints require an **API key** sent in the `X-API-Key` header:
 
-## Rate Limiting
-
-Rate limiting will be implemented per API key:
-- Default: 100 requests/minute
-- Premium: 1000 requests/minute
-
-## Response Format
-
-All responses follow a consistent JSON format:
-
-### Success Response
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": 1,
-    "name": "Example"
-  },
-  "message": "Operation successful"
-}
+```
+X-API-Key: sk_live_<your-api-key>xxxxxxxx
 ```
 
-### Error Response
+- The key identifies **which user** the request acts on behalf of.
+- Only a SHA-256 **hash** of the key is stored server-side — the plaintext is
+  shown exactly once, at creation, and can never be retrieved again.
+- A missing key → `401`. An unknown key → `401`. A revoked key → `403`.
 
-```json
-{
-  "success": false,
-  "error": "RESOURCE_NOT_FOUND",
-  "message": "The requested resource was not found",
-  "code": 404
-}
+### Managing your keys (JWT-authenticated, via the web app / user session)
+
+These live under `/api/v1` and require your normal login token
+(`Authorization: Bearer <JWT>`), not an API key:
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/api-keys` | Generate a new key. Body: `{"name":"My Bot"}`. Returns the plaintext key **once**. |
+| GET | `/api/v1/api-keys` | List your keys — metadata only (id, name, active, rateLimit, createdAt, lastUsedAt). Never returns the secret. |
+| DELETE | `/api/v1/api-keys/:id` | Revoke a key (sets `is_active=false`; row kept so its logs stay attributable). |
+| GET | `/api/v1/api-keys/logs?limit=100` | Your API request audit log (see Safety / audit log below). |
+
+**Create key example:**
+```bash
+curl -X POST https://localhost/api/v1/api-keys \
+  -H "Authorization: Bearer <JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"My Inventory Bot"}'
 ```
-
-## Endpoints (To Be Implemented)
-
-### Health & Status
-
-#### GET /health
-Check API health status.
-
-**Response:**
-```json
-{
-  "status": "ok"
-}
-```
-
-#### GET /api/v1/status
-Get API version and status information.
-
-**Response:**
-```json
-{
-  "status": "running",
-  "version": "1.0.0"
-}
-```
-
-### Authentication
-
-#### POST /api/v1/auth/register
-Register a new user account.
-
-**Request Body:**
-```json
-{
-  "username": "john_doe",
-  "email": "john@example.com",
-  "password": "secure_password",
-  "first_name": "John",
-  "last_name": "Doe"
-}
-```
-
-**Response:** `201 Created`
 ```json
 {
   "id": 1,
-  "username": "john_doe",
-  "email": "john@example.com",
-  "token": "jwt_token_here"
+  "name": "My Inventory Bot",
+  "apiKey": "sk_live_7ba8b2f9...c3ce5aa8",
+  "warning": "Copy this key now — it will not be shown again."
 }
 ```
 
-#### POST /api/v1/auth/login
-Login to account.
+---
 
-**Request Body:**
-```json
-{
-  "email": "john@example.com",
-  "password": "secure_password"
-}
+## Rate limiting
+
+Each key has a `rate_limit` (default **100 requests/minute**). Requests are
+counted in a fixed one-minute window per key. Exceeding it returns:
+
+```
+HTTP 429 Too Many Requests
+{ "error": "Rate limit exceeded" }
 ```
 
-**Response:** `200 OK`
+The window resets at the start of the next minute.
+
+---
+
+## Safety / audit log
+
+Every request made with an API key is recorded to `api_request_logs`:
+the key used, the acting user, HTTP method, path, response status, caller IP,
+and timestamp. Review it any time with `GET /api/v1/api-keys/logs`:
+
 ```json
 {
-  "token": "jwt_token_here",
-  "user": {
-    "id": 1,
-    "username": "john_doe",
-    "email": "john@example.com"
-  }
-}
-```
-
-#### POST /api/v1/auth/oauth
-OAuth authentication endpoint.
-
-**Query Parameters:**
-- `provider`: `google` or `42`
-- `code`: OAuth authorization code
-
-#### POST /api/v1/auth/2fa/setup
-Setup two-factor authentication.
-
-**Response:**
-```json
-{
-  "qr_code": "data:image/png;base64,...",
-  "secret": "XXXXXXXXXXXXXXXX",
-  "backup_codes": ["code1", "code2", ...]
-}
-```
-
-### Users
-
-#### GET /api/v1/users/:id
-Get user profile information.
-
-**Response:**
-```json
-{
-  "id": 1,
-  "username": "john_doe",
-  "email": "john@example.com",
-  "first_name": "John",
-  "last_name": "Doe",
-  "avatar_url": "https://...",
-  "bio": "I love trading!",
-  "rating": 4.8,
-  "total_reviews": 42,
-  "is_verified": true,
-  "created_at": "2024-01-15T10:30:00Z"
-}
-```
-
-#### PUT /api/v1/users/:id
-Update user profile.
-
-**Request Body:**
-```json
-{
-  "first_name": "John",
-  "last_name": "Doe",
-  "bio": "Updated bio",
-  "avatar_url": "https://..."
-}
-```
-
-### Listings
-
-#### GET /api/v1/listings
-Get all listings with filtering, sorting, and pagination.
-
-**Query Parameters:**
-- `page`: Page number (default: 1)
-- `limit`: Items per page (default: 20)
-- `sort`: Sort field (price, created_at, rating)
-- `order`: asc or desc
-- `category`: Filter by category
-- `min_price`: Minimum price
-- `max_price`: Maximum price
-- `search`: Full-text search
-
-**Response:**
-```json
-{
-  "data": [
+  "logs": [
     {
       "id": 1,
       "title": "Laptop",
@@ -380,68 +262,93 @@ Get analytics dashboard data.
 }
 ```
 
-## Error Codes
+This lets you spot unexpected usage (unfamiliar IPs, unusual paths, error
+spikes) and revoke a key if it looks compromised.
 
-| Code | Error | Description |
-|------|-------|-------------|
-| 400 | BAD_REQUEST | Invalid request parameters |
-| 401 | UNAUTHORIZED | Authentication required |
-| 403 | FORBIDDEN | Insufficient permissions |
-| 404 | NOT_FOUND | Resource not found |
-| 409 | CONFLICT | Resource already exists |
-| 429 | RATE_LIMITED | Too many requests |
-| 500 | INTERNAL_ERROR | Server error |
+---
 
-## Rate Limiting Headers
+## Endpoints (5)
 
+All under `/api/public/v1`, all require `X-API-Key`.
+
+### GET /products
+List listings. Optional query params: `limit`, `offset`, `search`, `sort`
+(`price-low`|`price-high`|`newest`|`rating`), `minPrice`, `maxPrice`,
+`sellerId`, `status`, `weightCategory`, `flexibilityCategory`,
+`balanceCategory`.
+
+```bash
+curl "https://localhost/api/public/v1/products?limit=2&sort=price-high" \
+  -H "X-API-Key: sk_live_..."
 ```
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1642256400
-```
-
-## CORS
-
-The API allows requests from:
-- `http://localhost:3000` (development)
-- Other configured origins in production
-
-## Pagination
-
-List endpoints support pagination:
-
 ```json
-{
-  "page": 1,
-  "limit": 20,
-  "total": 500,
-  "pages": 25
-}
+{ "products": [ { "id": 55, "title": "Yonex Astrox 100ZZ 4U", "price": 950, "..." : "..." } ], "total": 40 }
 ```
 
-## Filtering & Sorting
+### GET /products/:id
+Fetch a single listing by id. `404` if not found.
 
-Most list endpoints support:
-- **Filtering**: `?category=electronics&min_price=100&max_price=2000`
-- **Sorting**: `?sort=price&order=asc`
-- **Search**: `?search=gaming%20laptop`
-- **Pagination**: `?page=1&limit=50`
+```bash
+curl "https://localhost/api/public/v1/products/55" -H "X-API-Key: sk_live_..."
+```
 
-## Webhooks (Future)
+### POST /products
+Create a listing. It is **always owned by the key's user** — any `sellerId`
+in the body is ignored and overridden with the authenticated user's id.
 
-Webhooks will be implemented for:
-- Order status changes
-- Review posted
-- Message received
-- Listing sold
+Body fields: `title` (required), `price` (required, > 0), `description`,
+`category`, `condition`, `dealingMethod`, `phoneNumber`, `location`,
+`weightCategory`, `flexibilityCategory`, `balanceCategory`, `originalPrice`,
+`isNew`, `isFeatured`.
 
-## SDK/Client Libraries
+```bash
+curl -X POST "https://localhost/api/public/v1/products" \
+  -H "X-API-Key: sk_live_..." -H "Content-Type: application/json" \
+  -d '{"title":"My Racket","price":123,"category":"Rackets"}'
+```
+Returns `201` with the created listing.
 
-Official client libraries will be available for:
-- JavaScript/TypeScript
-- Python
-- Go
+### PUT /products/:id
+Update a listing. Only the owner (the key's user) may update it, else `403`.
+Body: `title` (required), `price` (required), `status`
+(`active`|`sold`|`archived`), plus the same optional fields as POST.
 
-## Support
+```bash
+curl -X PUT "https://localhost/api/public/v1/products/60" \
+  -H "X-API-Key: sk_live_..." -H "Content-Type: application/json" \
+  -d '{"title":"Updated","price":150,"status":"active"}'
+```
 
-For API issues, contact: api-support@transcendence.42school.com
+### DELETE /products/:id
+Delete a listing. Only the owner may delete it, else `403`.
+
+```bash
+curl -X DELETE "https://localhost/api/public/v1/products/60" -H "X-API-Key: sk_live_..."
+```
+```json
+{ "message": "Product deleted" }
+```
+
+---
+
+## Status codes
+
+| Code | Meaning |
+|---|---|
+| 200 | OK |
+| 201 | Created (POST) |
+| 400 | Bad request (missing/invalid body fields) |
+| 401 | Missing or invalid API key |
+| 403 | Key revoked, or you don't own the target listing |
+| 404 | Listing not found |
+| 429 | Rate limit exceeded |
+| 500 | Server error |
+
+---
+
+## Implementation notes
+
+- API-key auth + rate limiting + logging: `backend/myMiddleware/apikey.go`
+- Key management handlers: `backend/api_keys.go`
+- Route registration: `backend/main.go` (`/api/public/v1` group)
+- Tables: `api_keys` (keys), `api_request_logs` (audit log) — see `db/SCHEMA.md`

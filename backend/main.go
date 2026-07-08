@@ -71,6 +71,22 @@ func main() {
 	protected.GET("/seller/orders", func(c echo.Context) error { return getSellerOrders(c, gormDB) })
 	protected.GET("/seller/dashboard/items", func(c echo.Context) error { return getSellerDashboardItems(c, gormDB) })
 	protected.GET("/seller/dashboard/summary", func(c echo.Context) error { return getSellerDashboardSummary(c, gormDB) })
+
+	// API key management (JWT-authed): generate/list/revoke keys, view request logs
+	protected.POST("/api-keys", func(c echo.Context) error { return createAPIKey(c, gormDB) })
+	protected.GET("/api-keys", func(c echo.Context) error { return listAPIKeys(c, gormDB) })
+	protected.DELETE("/api-keys/:id", func(c echo.Context) error { return revokeAPIKey(c, gormDB) })
+	protected.GET("/api-keys/logs", func(c echo.Context) error { return getAPIKeyLogs(c, gormDB) })
+
+	// Public developer API: authenticated by X-API-Key header, rate limited
+	// per key, every request logged to api_request_logs.
+	public := e.Group("/api/public/v1")
+	public.Use(myMiddleware.APIKeyAuth(rawDB))
+	public.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
+	public.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
+	public.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
+	public.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
+	public.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	
 	//User Module initialization
 	baseRepo := user.NewRepository(rawDB, gormDB)

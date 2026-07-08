@@ -78,6 +78,17 @@ func runAnalyticsEventsMigration(db *sql.DB) error {
 	migrations := []string{
 		`ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS listing_id INT`,
 		`CREATE INDEX IF NOT EXISTS idx_analytics_events_listing_id ON analytics_events(listing_id)`,
+		`CREATE TABLE IF NOT EXISTS api_request_logs (
+			id SERIAL PRIMARY KEY,
+			api_key_id INT,
+			user_id INT,
+			method VARCHAR(10),
+			path VARCHAR(255),
+			status INT,
+			ip_address VARCHAR(64),
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_api_request_logs_key ON api_request_logs(api_key_id, created_at)`,
 	}
 	for _, m := range migrations {
 		if _, err := db.Exec(m); err != nil {
