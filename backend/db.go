@@ -29,6 +29,11 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 		return nil, nil, nil, fmt.Errorf("listings migration failed: %w", err)
 	}
 
+	if err := runAnalyticsEventsMigration(rawDB); err != nil {
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("analytics_events migration failed: %w", err)
+	}
+
 	log.Println("Database connected successfully")
 
 	cleanup := func() {
@@ -53,6 +58,20 @@ func runListingsMigration(db *sql.DB) error {
 		}
 	}
 	log.Println("Listings migration completed")
+	return nil
+}
+
+func runAnalyticsEventsMigration(db *sql.DB) error {
+	migrations := []string{
+		`ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS listing_id INT`,
+		`CREATE INDEX IF NOT EXISTS idx_analytics_events_listing_id ON analytics_events(listing_id)`,
+	}
+	for _, m := range migrations {
+		if _, err := db.Exec(m); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("analytics_events migration completed")
 	return nil
 }
 

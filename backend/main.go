@@ -64,6 +64,10 @@ func main() {
 
 	protected.GET("/orders", func(c echo.Context) error { return getOrders(c, gormDB) }) // howai AI maybe. merge residue 21 june
 	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) }) //howai AI maybe. merge residue 21 june
+
+	// Seller dashboard routes
+	protected.GET("/seller/dashboard/items", func(c echo.Context) error { return getSellerDashboardItems(c, gormDB) })
+	protected.GET("/seller/dashboard/summary", func(c echo.Context) error { return getSellerDashboardSummary(c, gormDB) })
 	
 	//User Module initialization
 	baseRepo := user.NewRepository(rawDB, gormDB)

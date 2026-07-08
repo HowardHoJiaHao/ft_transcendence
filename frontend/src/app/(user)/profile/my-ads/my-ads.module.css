@@ -4,26 +4,39 @@
 }
 
 .container {
-  max-width: 900px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 24px 16px 56px;
+  padding: 28px 32px 64px;
+}
+
+.subheading {
+  color: #898781;
+  font-size: 14px;
+  margin: -8px 0 18px;
 }
 
 .backBtn {
-  background: none;
-  border: none;
-  color: #333;
-  font-size: 14px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  color: #444;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 0;
-  margin-bottom: 12px;
+  padding: 7px 16px;
+  margin-bottom: 14px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  transition: color 0.15s;
+  gap: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.15s;
 }
 
-.backBtn:hover { color: #111; }
+.backBtn:hover {
+  border-color: #888;
+  color: #111;
+  transform: translateX(-2px);
+}
 
 .heading {
   font-size: 26px;
@@ -226,4 +239,491 @@
 @media (max-width: 600px) {
   .adItem { flex-direction: column; }
   .adImageWrap { width: 100%; height: 200px; }
+}
+
+/* ── Analytics tab ── */
+.analyticsSection {
+  padding: 20px;
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.statTile {
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: #888;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.statValue {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111;
+  margin: 0;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #222;
+  margin: 0 0 12px;
+}
+
+.sectionTitle::before {
+  content: '';
+  width: 4px;
+  height: 18px;
+  background: #2a78d6;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.sectionCard {
+  background: #fff;
+  border: 1px solid #e8e8e6;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.sectionCard:last-child { margin-bottom: 0; }
+
+.chartWrap {
+  width: 100%;
+  height: 280px;
+  margin-bottom: 32px;
+}
+
+.tableWrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.statsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.statsTable th {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 2px solid #eee;
+  color: #666;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.statsTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  white-space: nowrap;
+}
+
+.statsTable tr:last-child td { border-bottom: none; }
+
+.sortableTh {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortableTh:hover { color: #222; }
+
+/* ── Chart panel & toolbar ── */
+.chartPanel {
+  border: 1px solid #ececec;
+  border-radius: 10px;
+  padding: 16px 14px 8px;
+  margin-bottom: 28px;
+  background: #fdfdfc;
+}
+
+.chartToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+
+.segmented {
+  display: inline-flex;
+  background: #f1f1ef;
+  border: 1px solid #e3e2dd;
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.segmentBtn {
+  border: none;
+  background: transparent;
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.segmentBtn:hover { color: #222; }
+
+.segmentBtnActive {
+  background: #fff;
+  color: #111;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.exportBtn {
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.exportBtn:hover { border-color: #888; }
+
+/* ── Filter chips ── */
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+}
+
+.filterLabel {
+  font-size: 11px;
+  color: #898781;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 700;
+  margin-right: 2px;
+}
+
+.filterLabel:not(:first-child) { margin-left: 12px; }
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: #444;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.filterChip:hover { border-color: #999; }
+
+.filterChipActive {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+  font-weight: 600;
+}
+
+.chipDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* multi-select on/off chip states */
+.filterChipOn {
+  background: #f5f5f3;
+  border-color: #999;
+  color: #111;
+  font-weight: 600;
+}
+
+.filterChipOff {
+  opacity: 0.45;
+}
+
+.filterChipOff:hover { opacity: 0.8; }
+
+.chipState {
+  font-size: 11px;
+  width: 12px;
+  text-align: center;
+  color: #0a7a0a;
+}
+
+.monthSelect {
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+}
+
+.monthSelect:hover { border-color: #999; }
+
+/* ── Expandable category rows ── */
+.expandableRow { cursor: pointer; }
+.expandableRow:hover td { background: #fafaf8; }
+
+.chevron {
+  display: inline-block;
+  width: 16px;
+  color: #898781;
+  font-size: 12px;
+}
+
+.detailRow td {
+  background: #fbfbf9;
+  padding: 8px 12px 14px 28px;
+}
+
+.subTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.subTable th {
+  text-align: left;
+  padding: 6px 10px;
+  color: #898781;
+  font-weight: 600;
+  font-size: 12px;
+  border-bottom: 1px solid #ececea;
+  white-space: nowrap;
+}
+
+.subTable td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #f2f2f0;
+  white-space: nowrap;
+}
+
+.subTable tr:last-child td { border-bottom: none; }
+
+.subEmpty {
+  color: #898781;
+  font-size: 13px;
+  margin: 4px 0;
+}
+
+/* ── My Items filter panel ── */
+.sectionActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.filterBtnActive {
+  border-color: #111;
+  background: #111;
+  color: #fff;
+}
+
+.filterPanel {
+  border: 1px solid #ececec;
+  border-radius: 10px;
+  background: #fdfdfc;
+  padding: 14px;
+  margin: 0 0 16px;
+}
+
+.filterGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.filterField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filterFieldLabel {
+  font-size: 11px;
+  color: #898781;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 700;
+}
+
+.filterInput {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #333;
+  width: 100%;
+  min-width: 0;
+  background: #fff;
+}
+
+.filterInput:focus {
+  outline: none;
+  border-color: #888;
+}
+
+.rangePair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rangeDash { color: #aaa; }
+
+.clearFiltersBtn {
+  border: none;
+  background: none;
+  color: #c2185b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: auto;
+  padding: 4px 8px;
+}
+
+.clearFiltersBtn:hover { text-decoration: underline; }
+
+.filterResultCount {
+  font-size: 12px;
+  color: #898781;
+  margin: 8px 0 0;
+}
+
+/* ── Post an Ad in tab row ── */
+.postAdBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 18px;
+  border-radius: 20px;
+  background: #111;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.postAdBtn:hover { background: #333; }
+
+.tabDivider {
+  width: 1px;
+  align-self: stretch;
+  background: #e5e5e2;
+  margin: 0 4px;
+}
+
+/* ── Ad row extras ── */
+.adIndex {
+  width: 28px;
+  flex-shrink: 0;
+  color: #898781;
+  font-size: 13px;
+  font-weight: 600;
+  padding-top: 4px;
+  text-align: right;
+}
+
+.adSide {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 130px;
+}
+
+.statusChip {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.statusActive { background: #e6f4ea; color: #1a7f37; }
+.statusSold { background: #e3edfb; color: #1c5cab; }
+.statusArchived { background: #efefec; color: #6e6d68; }
+
+.adDays {
+  font-size: 12px;
+  color: #898781;
+}
+
+/* ── Index column ── */
+.indexCol {
+  width: 36px;
+  color: #898781;
+  font-size: 12px;
+  text-align: right;
+}
+
+/* ── Section header with action ── */
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.sectionHeader .sectionTitle { margin: 0; }
+
+.staleBanner {
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 6px;
+  color: #8d6e00;
+  font-size: 14px;
+  padding: 10px 14px;
+  margin: 0 0 20px;
+}
+
+.staleRow td { background: #fffdf5; }
+
+.staleTag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #fff3cd;
+  color: #8d6e00;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }

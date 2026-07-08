@@ -354,27 +354,6 @@ export default function ProfilePage() {
             <h1>My profile</h1>
             <p>Manage and protect your account</p>
 
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                margin: "12px 0 20px",
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                className="btn btn-secondary"
-                onClick={() => router.push("/profile/my-ads")}
-              >
-                📋 My Ads
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={() => router.push("/sell")}
-              >
-                + Post an Ad
-              </button>
-            </div>
             <hr className={styles.divider} />
             <div className={styles.avatarContainer}>
               <img

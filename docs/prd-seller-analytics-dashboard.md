@@ -1,6 +1,6 @@
 # PRD: Seller Analytics Dashboard
 
-Status: **Draft for review** — no code written yet.
+Status: **Implemented (rev 2)** — see §9 for the revision applied during implementation.
 
 ## 1. Problem / goal
 
@@ -93,3 +93,37 @@ Single PR, additive only:
 - New backend endpoints (read-only, no writes except the view-increment change)
 - Frontend: new "Analytics" tab + two components on existing `my-ads` page
 - No changes to existing Published/Sold behavior
+
+## 9. Revision 2 — single-unit marketplace reframing
+
+During implementation we recognized that listings here are single secondhand items,
+each sold at most once — so "units sold" and "revenue per unit" per listing are
+misleading (always 0 or 1). The dashboard was reframed accordingly:
+
+**Stat tiles (replacing rev-1 tiles):**
+- **Sell-through rate** = sold ÷ (sold + active) listings — headline metric
+- Total revenue (completed orders)
+- Items sold / active / archived (3-way funnel, by listing status)
+- Average days-to-sell = avg(order date − listing created date) over completed orders
+
+**Component A ("My Items" table), replacing units/revenue-per-unit columns:**
+Item | Price | Status | Days listed | Views (30d) | Sold (✓ + date)
+
+- "Days listed" = time to completed order if sold; time to `updated_at` if
+  manually marked sold with no order row; time to now if still active.
+- **Stale flag**: active, unsold, listed ≥ 30 days → row highlighted with a
+  "stale" tag and a banner above the tables suggesting a reprice/refresh.
+
+**New: Sales by Category table** — items sold + revenue grouped by
+`listings.category`, shown only when sales exist. Tells a multi-item seller
+which kind of item sells best.
+
+**Component B (monthly revenue chart)** — unchanged from rev 1.
+
+**Dropped:** average rating tile (the `reviews` table has no live write path, so
+`listings.rating` is seed data); units sold / revenue-per-unit columns.
+
+**Known data caveat:** no checkout flow exists yet (nothing inserts into
+`orders`), so revenue/time-to-sell reflect seed or manually created orders until
+a purchase endpoint ships. The listing funnel (sold/active/archived) works today
+via sellers marking items sold in the edit flow.

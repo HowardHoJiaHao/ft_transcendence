@@ -47,9 +47,9 @@ export default function Header({
               <Link href="/cart" className={styles.cartBtn}>🛒{itemCount > 0 && (<span className={styles.cartBadge}>{itemCount}</span>)}</Link>
               <button
               className="btn btn-primary btn-sm"
-              onClick={() => router.push(user ? '/sell' : '/login')}
+              onClick={() => router.push(user ? '/profile/my-ads' : '/login')}
               >
-              Sell Now
+              🏪 My Shop
               </button>
             </div>
           </div>

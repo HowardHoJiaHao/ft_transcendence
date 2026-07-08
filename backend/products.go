@@ -83,13 +83,13 @@ type UpdateProductRequest struct {
 const maxListingImageSize = 10 * 1024 * 1024
 
 // listingSelectCols is the shared SELECT column list used in all product queries.
-const listingSelectCols = `l.id, l.title, l.price, l.original_price, l.image,
+const listingSelectCols = `l.id, l.title, l.price, l.original_price, COALESCE(l.image, ''),
 	COALESCE(l.category, 'Others'), COALESCE(l.condition, 'Second-hand (Used)'),
 	COALESCE(l.dealing_method, ''), COALESCE(l.phone_number, ''),
-	l.weight_category, l.flexibility_category, l.balance_category,
-	l.location, l.seller_id, l.seller_name, COALESCE(u.avatar_url, ''),
-	l.rating, l.reviews, l.is_new, l.is_featured,
-	COALESCE(l.status, 'active'), COALESCE(l.views_count, 0), l.created_at, l.description`
+	COALESCE(l.weight_category, ''), COALESCE(l.flexibility_category, ''), COALESCE(l.balance_category, ''),
+	COALESCE(l.location, ''), l.seller_id, COALESCE(l.seller_name, ''), COALESCE(u.avatar_url, ''),
+	COALESCE(l.rating, 0), COALESCE(l.reviews, 0), l.is_new, l.is_featured,
+	COALESCE(l.status, 'active'), COALESCE(l.views_count, 0), l.created_at, COALESCE(l.description, '')`
 
 // list all products with filters
 func getProducts(c echo.Context, gormDB *gorm.DB) error {
@@ -282,7 +282,36 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 		log.Printf("Error querying product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to fetch product"})
 	}
+
+	recordListingView(sqlDB, product.ID, product.SellerId, c)
+
 	return c.JSON(200, product)
+}
+
+// recordListingView increments the listing's view counter and logs an analytics
+// event, skipping the seller viewing their own listing to avoid inflating counts.
+func recordListingView(sqlDB *sql.DB, listingID int, sellerID int, c echo.Context) {
+	viewerID, err := extractUserID(c)
+	if err == nil && viewerID == sellerID {
+		return
+	}
+
+	if _, err := sqlDB.Exec(
+		"UPDATE listings SET views_count = views_count + 1 WHERE id = $1", listingID,
+	); err != nil {
+		log.Printf("Error incrementing views_count for listing %d: %v", listingID, err)
+	}
+
+	var userIDArg interface{}
+	if err == nil {
+		userIDArg = viewerID
+	}
+	if _, err := sqlDB.Exec(
+		"INSERT INTO analytics_events (user_id, event_type, listing_id) VALUES ($1, 'listing_viewed', $2)",
+		userIDArg, listingID,
+	); err != nil {
+		log.Printf("Error logging listing_viewed event for listing %d: %v", listingID, err)
+	}
 }
 
 func createProduct(c echo.Context, gormDB *gorm.DB) error {
