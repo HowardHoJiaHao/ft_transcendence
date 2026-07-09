@@ -78,6 +78,7 @@ interface MonthlyCategoryStat {
 
 interface SellerSummary {
   totalRevenue: number;
+  pendingOrders: number;
   itemsSold: number;
   itemsActive: number;
   itemsArchived: number;
@@ -170,7 +171,7 @@ export default function MyAdsPage() {
     () => Array.from(new Set(itemStats.map((it) => it.category))).sort(),
     [itemStats],
   );
-  const ITEM_STATUSES = ['active', 'sold', 'archived'];
+  const ITEM_STATUSES = ['active', 'pending', 'sold', 'archived'];
 
   const toggleFilterList = (field: 'cats' | 'statuses', value: string, full: string[]) =>
     setItemFilters((f) => {
@@ -655,12 +656,16 @@ export default function MyAdsPage() {
                       <p className={styles.statValue}>RM {(summary?.totalRevenue ?? 0).toFixed(2)}</p>
                     </div>
                     <div className={styles.statTile}>
-                      <p className={styles.statLabel}>Items Sold</p>
-                      <p className={styles.statValue}>{summary?.itemsSold ?? 0}</p>
-                    </div>
-                    <div className={styles.statTile}>
                       <p className={styles.statLabel}>Active Listings</p>
                       <p className={styles.statValue}>{summary?.itemsActive ?? 0}</p>
+                    </div>
+                    <div className={styles.statTile}>
+                      <p className={styles.statLabel}>Pending Orders</p>
+                      <p className={styles.statValue}>{summary?.pendingOrders ?? 0}</p>
+                    </div>
+                    <div className={styles.statTile}>
+                      <p className={styles.statLabel}>Items Sold</p>
+                      <p className={styles.statValue}>{summary?.itemsSold ?? 0}</p>
                     </div>
                     <div className={styles.statTile}>
                       <p className={styles.statLabel}>Archived</p>

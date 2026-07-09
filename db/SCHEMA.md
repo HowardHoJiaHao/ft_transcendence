@@ -61,7 +61,7 @@ secondhand item, sold at most once.
 | `rating`, `reviews` | numeric/int | Cached average rating + count shown on the card — **not** computed from the `reviews` table; static/seed values |
 | `is_new` | boolean | "Brand new" badge |
 | `is_featured` | boolean | Promotes to featured/homepage sections |
-| `status` | varchar(20), default `'active'` | `active` / `sold` / `archived` — drives My Shop tabs and the seller dashboard funnel |
+| `status` | varchar(20), default `'active'` | **DB-level values are only** `active` / `sold` / `archived` (CHECK constraint) — drives My Shop tabs and the seller dashboard funnel. **Not stored in the DB:** the seller dashboard API (`getSellerDashboardItems` in `backend/seller_dashboard.go`) computes a fourth, display-only value — `pending` — at query time, overriding `active` whenever a listing has an order in `orders.status='pending'` against it. This lets a listing that's mid-sale show as "pending" in My Items/Analytics without ever writing that value to this column. |
 | `views_count` | int, default 0 | Page-view counter, incremented by `recordListingView()` in `backend/products.go` on each `GET /products/:id` (skipped if the viewer is the seller) |
 | `created_at`, `updated_at` | timestamp | Audit timestamps; `created_at` is also "date posted" and the anchor for days-listed/time-to-sell calculations |
 
@@ -96,15 +96,53 @@ Purchase records — one row per transaction against a listing.
 | `buyer_id` | int FK → users | Who bought it |
 | `seller_id` | int FK → users | Who sold it (denormalized copy of the listing's seller) |
 | `listing_id` | int FK → listings | What was bought |
-| `quantity` | int, default 1 | Units in this order — generic e-commerce field; doesn't really apply since each listing is a unique single item |
+| `quantity` | int, default 1 | Units in this order — decremented from `listings.stock_quantity` at checkout (`createOrders` in `backend/orders.go`) |
 | `total_price` | numeric(10,2) | Amount charged for this order |
-| `status` | varchar(20), default `'pending'` | `pending` / `completed` / `cancelled` / `refunded` — the seller dashboard only counts `completed` as real revenue |
-| `payment_method` | varchar(50) | Free text, e.g. "cash", "card" |
+| `status` | varchar(20), default `'pending'` | `pending` / `completed` / `cancelled` / `refunded`. `pending` = created at checkout, awaiting the seller marking it complete (`PUT /orders/:id/complete`); only `completed` counts as real revenue on the seller dashboard, and only `pending` counts toward the dashboard's "Pending Orders" tile. |
+| `payment_method` | varchar(50) | Free text, e.g. "cash", "card"; defaults to `"meetup"` at checkout if omitted |
 | `created_at`, `updated_at` | timestamp | `created_at` anchors the monthly revenue chart and time-to-sell calc |
 
-**Note:** no live checkout/purchase handler exists in the Go backend — only
-`getOrders`/`getOrderByID` (read). Rows here currently come from seed data,
-not a real "Buy Now" flow.
+**Live checkout flow (added since the schema doc's first pass):**
+`POST /api/v1/orders` (`createOrders`) locks the target listing row
+(`SELECT ... FOR UPDATE`), rejects self-purchases and out-of-stock/inactive
+listings, inserts the order as `status='pending'`, and decrements
+`listings.stock_quantity` — auto-flipping the listing to `status='sold'` if
+stock hits zero. The seller later confirms via
+`PUT /api/v1/orders/:id/complete` (`completeOrder`), which flips the order to
+`completed`. **Note:** the seller dashboard's *displayed* listing status
+(`getSellerDashboardItems`) shows `pending` — a value never written to
+`listings.status` — for any listing with a `pending` order against it; see
+the `listings.status` row above.
+
+### Why `orders.status` exists separately from `listings.status`
+
+These look redundant at first — `listings.status` is `active`/`sold`/`archived`,
+`orders.status` is `pending`/`completed`/`cancelled`/`refunded` — but they
+track two different things and **one listing can have many orders**:
+
+- `listings.status` answers *"is this item still for sale?"* — necessarily
+  one value per listing.
+- `orders.status` answers *"what happened to this specific transaction?"* —
+  one value **per order**, and a listing can accumulate several orders over
+  time (e.g. `stock_quantity > 1`, or a cancelled/refunded attempt followed by
+  a successful one).
+
+Concretely: a listing with `stock_quantity = 5` can have three different
+buyers order 1 unit each. The listing stays `status = 'active'` throughout
+(stock hasn't hit zero), but the three orders can independently be
+`completed`, `pending`, and `cancelled`. There's no way to encode that on the
+listing alone — `listings.status` would show the same single value ("active")
+for all three, telling you nothing about which specific order still needs
+the seller's attention. `orders.status` is also the only place `cancelled`
+and `refunded` can be represented at all — those are outcomes of one
+transaction, not states a listing itself can be in.
+
+This is also exactly why `getSellerDashboardItems` counts **pending orders**
+(`COUNT(*) FROM orders WHERE listing_id = ... AND status = 'pending'`) rather
+than reading anything off `listings.status` — the real, authoritative
+"pending" state lives only in the `orders` table, and the dashboard's display
+override is derived from it fresh on every request instead of being copied
+into `listings.status`.
 
 ---
 
@@ -261,9 +299,9 @@ One-time passcodes for email verification / login 2FA. Not declared in
 
 ## Quick reference — used vs. unused
 
-**Fully wired and live:** `users`, `listings`, `orders` (read-only, no
-checkout flow yet), `messages`, `friendships`, `otps`, `faq_embeddings`,
-`analytics_events`
+**Fully wired and live:** `users`, `listings`, `orders` (real checkout via
+`POST /orders` + `PUT /orders/:id/complete`), `messages`, `friendships`,
+`otps`, `faq_embeddings`, `analytics_events`
 
 **Schema exists, nothing uses it yet:** `listing_images` (images tracked by
 filename convention instead), `reviews`, `analytics` (dead duplicate of

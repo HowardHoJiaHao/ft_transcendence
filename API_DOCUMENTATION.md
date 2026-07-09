@@ -1,335 +1,207 @@
-# Transcendence Public API
+# Transcendence API Documentation
 
-A secured, rate-limited REST API for programmatic access to marketplace
-listings. Authenticate with an API key you generate from your account; every
-request is rate-limited per key and recorded to an audit log you can review.
+Two APIs live in this project:
 
-## Base URL
+1. **Public Developer API** — for external developers/scripts. Authenticated
+   with an **API key** (`X-API-Key` header), rate limited per key, and every
+   request is recorded to an audit log.
+2. **Internal app API** — what the website's own frontend uses. Authenticated
+   with a **JWT** from login (`Authorization: Bearer <token>`).
+
+Everything goes through nginx over HTTPS:
 
 ```
-https://localhost/api/public/v1
+Base URL (public API):  https://localhost/api/public/v1
+Base URL (internal):    https://localhost/api/v1
 ```
 
-(Behind nginx TLS. The Go backend serves it on `:8080` internally.)
+> Local TLS uses a self-signed certificate — add `-k` to curl examples.
 
 ---
 
-## Authentication
+# Part 1 — Public Developer API
 
-All public endpoints require an **API key** sent in the `X-API-Key` header:
+## Quickstart (3 steps)
 
-```
-X-API-Key: sk_live_<your-api-key>xxxxxxxx
-```
-
-- The key identifies **which user** the request acts on behalf of.
-- Only a SHA-256 **hash** of the key is stored server-side — the plaintext is
-  shown exactly once, at creation, and can never be retrieved again.
-- A missing key → `401`. An unknown key → `401`. A revoked key → `403`.
-
-### Managing your keys (JWT-authenticated, via the web app / user session)
-
-These live under `/api/v1` and require your normal login token
-(`Authorization: Bearer <JWT>`), not an API key:
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/api-keys` | Generate a new key. Body: `{"name":"My Bot"}`. Returns the plaintext key **once**. |
-| GET | `/api/v1/api-keys` | List your keys — metadata only (id, name, active, rateLimit, createdAt, lastUsedAt). Never returns the secret. |
-| DELETE | `/api/v1/api-keys/:id` | Revoke a key (sets `is_active=false`; row kept so its logs stay attributable). |
-| GET | `/api/v1/api-keys/logs?limit=100` | Your API request audit log (see Safety / audit log below). |
-
-**Create key example:**
-```bash
-curl -X POST https://localhost/api/v1/api-keys \
-  -H "Authorization: Bearer <JWT>" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"My Inventory Bot"}'
-```
-```json
-{
-  "id": 1,
-  "name": "My Inventory Bot",
-  "apiKey": "sk_live_7ba8b2f9...c3ce5aa8",
-  "warning": "Copy this key now — it will not be shown again."
-}
-```
-
----
+1. **Get a key.** Log in on the website → **My Shop → Developer API →
+   Create Secret Key**. Copy the key immediately — it is shown **once** and
+   can never be displayed again (only its SHA-256 hash is stored).
+2. **Send it on every request** as a header:
+   ```
+   X-API-Key: sk_live_<your-api-key>
+   ```
+3. **Call the endpoints below.** The key identifies your account: write
+   operations act as you, and you can only modify your own listings.
 
 ## Rate limiting
 
-Each key has a `rate_limit` (default **100 requests/minute**). Requests are
-counted in a fixed one-minute window per key. Exceeding it returns:
+Each key allows **100 requests per minute** by default (per-key `rate_limit`).
+Exceeding it returns `429 Too Many Requests` until the next minute window.
 
-```
-HTTP 429 Too Many Requests
-{ "error": "Rate limit exceeded" }
-```
+## Audit log (safety)
 
-The window resets at the start of the next minute.
+Every request made with a key is recorded: method, path, response status,
+caller IP, and timestamp. Review it in the **Request Log** tab of the
+Developer API page, or via `GET /api/v1/api-keys/logs`. If you see unfamiliar
+activity, revoke the key — it stops working immediately.
 
----
+## Endpoints
 
-## Safety / audit log
+### 1. GET /api/public/v1/products — list listings
 
-Every request made with an API key is recorded to `api_request_logs`:
-the key used, the acting user, HTTP method, path, response status, caller IP,
-and timestamp. Review it any time with `GET /api/v1/api-keys/logs`:
+Optional query parameters:
 
-```json
-{
-  "logs": [
-    {
-      "id": 1,
-      "title": "Laptop",
-      "description": "Gaming laptop",
-      "price": 1200.00,
-      "currency": "USD",
-      "category": "electronics",
-      "seller": {
-        "id": 5,
-        "username": "seller_name",
-        "rating": 4.5
-      },
-      "images": [
-        {
-          "id": 1,
-          "url": "https://...",
-          "is_primary": true
-        }
-      ],
-      "views_count": 156,
-      "created_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 150,
-    "pages": 8
-  }
-}
-```
-
-#### POST /api/v1/listings
-Create new listing.
-
-**Authorization Required**
-
-**Request Body:**
-```json
-{
-  "title": "Laptop",
-  "description": "Gaming laptop for sale",
-  "category": "electronics",
-  "price": 1200.00,
-  "currency": "USD"
-}
-```
-
-**Response:** `201 Created`
-
-#### GET /api/v1/listings/:id
-Get listing details.
-
-#### PUT /api/v1/listings/:id
-Update listing.
-
-**Authorization Required** (Seller only)
-
-#### DELETE /api/v1/listings/:id
-Delete listing.
-
-**Authorization Required** (Seller only)
-
-### Messages
-
-#### POST /api/v1/messages
-Send a message.
-
-**Authorization Required**
-
-**Request Body:**
-```json
-{
-  "receiver_id": 2,
-  "content": "Are you interested in selling?"
-}
-```
-
-#### GET /api/v1/messages
-Get user messages.
-
-**Query Parameters:**
-- `user_id`: Filter by user
-- `unread_only`: true/false
-
-#### PUT /api/v1/messages/:id/read
-Mark message as read.
-
-### Reviews
-
-#### POST /api/v1/reviews
-Create a review.
-
-**Authorization Required**
-
-**Request Body:**
-```json
-{
-  "reviewee_id": 2,
-  "listing_id": 1,
-  "rating": 5,
-  "comment": "Great seller!"
-}
-```
-
-#### GET /api/v1/reviews/:user_id
-Get user reviews.
-
-**Query Parameters:**
-- `limit`: Number of reviews
-- `offset`: Pagination offset
-
-### Orders
-
-#### POST /api/v1/orders
-Create an order.
-
-**Authorization Required**
-
-**Request Body:**
-```json
-{
-  "items": [
-    {
-      "listingId": 1,
-      "quantity": 1
-    }
-  ],
-  "paymentMethod": "meetup"
-}
-```
-
-#### GET /api/v1/orders
-Get user orders.
-
-**Query Parameters:**
-- `status`: pending, completed, cancelled, refunded
-- `page`: Page number
-- `limit`: Items per page
-
-Returns buyer orders with listing and seller display details for purchase
-history.
-
-#### GET /api/v1/orders/:id
-Get order details.
-
-#### GET /api/v1/seller/orders
-Get orders for the authenticated seller.
-
-**Query Parameters:**
-- `status`: pending, completed, cancelled, refunded. Defaults to `pending`.
-
-#### PUT /api/v1/orders/:id/complete
-Mark a pending order as delivered/completed. Only the seller for that order can
-complete it.
-
-#### PUT /api/v1/orders/:id/cancel
-Cancel order.
-
-### Analytics
-
-#### GET /api/v1/analytics/dashboard
-Get analytics dashboard data.
-
-**Authorization Required** (Seller)
-
-**Response:**
-```json
-{
-  "total_sales": 15000.00,
-  "total_orders": 25,
-  "average_rating": 4.8,
-  "total_views": 3500,
-  "monthly_revenue": [
-    {
-      "month": "2024-01",
-      "revenue": 5000.00
-    }
-  ]
-}
-```
-
-This lets you spot unexpected usage (unfamiliar IPs, unusual paths, error
-spikes) and revoke a key if it looks compromised.
-
----
-
-## Endpoints (5)
-
-All under `/api/public/v1`, all require `X-API-Key`.
-
-### GET /products
-List listings. Optional query params: `limit`, `offset`, `search`, `sort`
-(`price-low`|`price-high`|`newest`|`rating`), `minPrice`, `maxPrice`,
-`sellerId`, `status`, `weightCategory`, `flexibilityCategory`,
-`balanceCategory`.
+| Param | Meaning |
+|---|---|
+| `limit`, `offset` | pagination (limit max 100, default 20) |
+| `search` | title contains |
+| `sort` | `price-low` \| `price-high` \| `newest` \| `rating` |
+| `minPrice`, `maxPrice` | price range |
+| `sellerId` | only this seller's listings |
+| `status` | `active` \| `sold` \| `archived` |
+| `weightCategory`, `flexibilityCategory`, `balanceCategory` | racket specs |
 
 ```bash
-curl "https://localhost/api/public/v1/products?limit=2&sort=price-high" \
+curl -k "https://localhost/api/public/v1/products?limit=2&sort=price-high" \
   -H "X-API-Key: sk_live_..."
 ```
 ```json
-{ "products": [ { "id": 55, "title": "Yonex Astrox 100ZZ 4U", "price": 950, "..." : "..." } ], "total": 40 }
+{
+  "products": [
+    { "id": 55, "title": "Yonex Astrox 100ZZ 4U", "price": 950, "category": "Rackets", "status": "active", "...": "..." }
+  ],
+  "total": 40
+}
 ```
 
-### GET /products/:id
-Fetch a single listing by id. `404` if not found.
-
-```bash
-curl "https://localhost/api/public/v1/products/55" -H "X-API-Key: sk_live_..."
+JavaScript:
+```js
+const res = await fetch('https://localhost/api/public/v1/products?limit=2', {
+  headers: { 'X-API-Key': 'sk_live_...' },
+});
+const { products, total } = await res.json();
 ```
 
-### POST /products
-Create a listing. It is **always owned by the key's user** — any `sellerId`
-in the body is ignored and overridden with the authenticated user's id.
-
-Body fields: `title` (required), `price` (required, > 0), `description`,
-`category`, `condition`, `dealingMethod`, `phoneNumber`, `location`,
-`weightCategory`, `flexibilityCategory`, `balanceCategory`, `originalPrice`,
-`isNew`, `isFeatured`.
+### 2. GET /api/public/v1/products/:id — one listing
 
 ```bash
-curl -X POST "https://localhost/api/public/v1/products" \
+curl -k https://localhost/api/public/v1/products/55 -H "X-API-Key: sk_live_..."
+```
+Returns the listing object, or `404` if it doesn't exist.
+
+### 3. POST /api/public/v1/products — create a listing
+
+The listing is **always owned by the key's account** — any `sellerId` in the
+body is ignored and replaced with yours.
+
+**Required:**
+
+| Field | Type | Constraint |
+|---|---|---|
+| `title` | string | non-empty |
+| `price` | number | must be `> 0` |
+
+**Free text — not validated by the API, but these are the values the site's own UI uses (default shown if omitted):**
+
+| Field | Default | Values used by the site |
+|---|---|---|
+| `category` | `"Others"` | `Rackets`, `Footwear`, `Apparel`, `Strings`, `Accessories`, `Bags`, `Others` |
+| `condition` | `"Second-hand (Used)"` | `New`, `Second-hand (Used)` |
+| `dealingMethod` | `"Meet Up"` | `Meet Up`, `Delivery` |
+| `weightCategory` | `"4U"` | `1U`–`8U` (badminton racket weight class) |
+| `flexibilityCategory` | `"Medium Flex"` | `Stiff Shaft`, `Medium Flex`, `High Flexibility` |
+| `balanceCategory` | `"Even Balance"` | `Head Heavy`, `Even Balance`, `Head Light` |
+| `phoneNumber` | `""` | any string |
+| `location` | `"Malaysia"` | any string |
+| `description` | `""` | any string |
+
+Since these have no server-side validation, sending an unlisted value (e.g.
+`"category":"Toys"`) is accepted and stored as-is — it just won't match any
+filter chip in the site's own UI.
+
+**Other optional fields:**
+
+| Field | Type | Constraint |
+|---|---|---|
+| `originalPrice` | number \| null | none |
+| `stockQuantity` | integer | defaults to `1`; if provided, must be `≥ 1` |
+| `isNew` | boolean | `true` / `false` |
+| `isFeatured` | boolean | `true` / `false` |
+
+```bash
+curl -k -X POST https://localhost/api/public/v1/products \
   -H "X-API-Key: sk_live_..." -H "Content-Type: application/json" \
-  -d '{"title":"My Racket","price":123,"category":"Rackets"}'
+  -d '{"title":"My Racket","price":123,"category":"Rackets","stockQuantity":1}'
 ```
-Returns `201` with the created listing.
+Returns `201` with the created listing (including its new `id`).
 
-### PUT /products/:id
-Update a listing. Only the owner (the key's user) may update it, else `403`.
-Body: `title` (required), `price` (required), `status`
-(`active`|`sold`|`archived`), plus the same optional fields as POST.
+### 4. PUT /api/public/v1/products/:id — update a listing
+
+Only the owner may update (else `403`); `404` if the listing doesn't exist.
+
+**⚠ This is a full replace, not a partial patch.** Every field you omit is
+written as empty/zero — it does **not** keep its previous value. Always
+re-send the complete listing (fetch it first with `GET /products/:id` if
+you're changing just one field).
+
+**Required:**
+
+| Field | Type | Constraint |
+|---|---|---|
+| `title` | string | non-empty (`400` otherwise) |
+| `price` | number | must be `> 0` (`400` otherwise) |
+
+**Everything else — same fields as POST** (`description`, `category`,
+`condition`, `dealingMethod`, `phoneNumber`, `location`, `weightCategory`,
+`flexibilityCategory`, `balanceCategory`, `originalPrice`) — free text, not
+validated, omitted = saved as empty string.
+
+**Fields with special handling on update:**
+
+| Field | Type | Behavior |
+|---|---|---|
+| `status` | string | `active` \| `sold` \| `archived`. Omitted/empty → defaults to `active`. **If you set/leave it `active` but `stockQuantity` resolves to `0`, the server auto-corrects it to `sold`.** |
+| `stockQuantity` | integer | Omitted → keeps the listing's *current* stock quantity (this one field does NOT reset to empty when omitted). If provided, must be `≥ 0` (`400` if negative). Setting it to `0` triggers the auto-`sold` behavior above. |
 
 ```bash
-curl -X PUT "https://localhost/api/public/v1/products/60" \
+# Full example — price drop, still active, stock untouched
+curl -k -X PUT https://localhost/api/public/v1/products/60 \
   -H "X-API-Key: sk_live_..." -H "Content-Type: application/json" \
-  -d '{"title":"Updated","price":150,"status":"active"}'
+  -d '{
+    "title": "My Racket (price drop)",
+    "price": 99,
+    "description": "Lightly used, great condition",
+    "category": "Rackets",
+    "condition": "Second-hand (Used)",
+    "dealingMethod": "Meet Up",
+    "location": "Kuala Lumpur",
+    "status": "active"
+  }'
 ```
 
-### DELETE /products/:id
-Delete a listing. Only the owner may delete it, else `403`.
+```bash
+# Mark it sold out by zeroing stock — status auto-flips to "sold"
+curl -k -X PUT https://localhost/api/public/v1/products/60 \
+  -H "X-API-Key: sk_live_..." -H "Content-Type: application/json" \
+  -d '{"title":"My Racket","price":99,"stockQuantity":0}'
+```
+```json
+{ "id": 60, "title": "My Racket", "price": 99, "status": "sold", "stockQuantity": 0, "...": "..." }
+```
+
+### 5. DELETE /api/public/v1/products/:id — delete a listing
+
+Only the owner may delete (else `403`); `404` if it doesn't exist. No request
+body. This permanently removes the listing — there is no undo, and any
+associated orders reference a listing that no longer exists.
 
 ```bash
-curl -X DELETE "https://localhost/api/public/v1/products/60" -H "X-API-Key: sk_live_..."
+curl -k -X DELETE https://localhost/api/public/v1/products/60 \
+  -H "X-API-Key: sk_live_..."
 ```
 ```json
 { "message": "Product deleted" }
 ```
-
----
 
 ## Status codes
 
@@ -337,18 +209,128 @@ curl -X DELETE "https://localhost/api/public/v1/products/60" -H "X-API-Key: sk_l
 |---|---|
 | 200 | OK |
 | 201 | Created (POST) |
-| 400 | Bad request (missing/invalid body fields) |
+| 400 | Bad request — missing/invalid fields |
 | 401 | Missing or invalid API key |
 | 403 | Key revoked, or you don't own the target listing |
-| 404 | Listing not found |
+| 404 | Not found |
 | 429 | Rate limit exceeded |
 | 500 | Server error |
 
 ---
 
-## Implementation notes
+# Part 2 — API key management (JWT)
 
-- API-key auth + rate limiting + logging: `backend/myMiddleware/apikey.go`
-- Key management handlers: `backend/api_keys.go`
-- Route registration: `backend/main.go` (`/api/public/v1` group)
-- Tables: `api_keys` (keys), `api_request_logs` (audit log) — see `db/SCHEMA.md`
+These use your normal login session, not an API key. The **Developer API**
+page in the app is a UI over exactly these endpoints.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/api-keys` | Generate a key. Body: `{"name":"My Bot"}`. Returns the plaintext key **once**. |
+| GET | `/api/v1/api-keys` | List your keys — metadata only (never the secret). |
+| DELETE | `/api/v1/api-keys/:id` | Revoke a key (kept in DB so its logs stay attributable). |
+| GET | `/api/v1/api-keys/logs?limit=100` | Audit log for all your keys (limit 1–500). |
+
+## Getting a JWT to call these endpoints
+
+Every request above needs `Authorization: Bearer <JWT>`. Three ways to get one:
+
+**A. Log in via the API:**
+```bash
+curl -k -X POST https://localhost/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"..."}'
+```
+The response's `"token"` field is your JWT.
+
+**B. From the browser console, while already logged into the site (fastest):**
+1. Open the site (`https://localhost`) and log in normally.
+2. Open DevTools → **Console** tab (F12, or right-click → Inspect).
+3. Run:
+   ```js
+   localStorage.getItem('token')
+   ```
+4. Copy the printed string (without the surrounding quotes) — that's your JWT.
+
+**C. From DevTools → Network tab:** click any request the site makes to
+`/api/v1/...` and check its Request Headers — `Authorization: Bearer ...` is
+already attached there by the frontend.
+
+> If you use the **Developer API** page in the app itself (My Shop →
+> Developer API), you never need to do this manually — the page reads
+> `localStorage.getItem('token')` and attaches it to every call for you. This
+> is only needed for calling these endpoints directly with curl/Postman.
+
+```bash
+# 1) login to get a JWT (or grab it from the console, method B above)
+curl -k -X POST https://localhost/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"..."}'
+
+# 2) create a key with it
+curl -k -X POST https://localhost/api/v1/api-keys \
+  -H "Authorization: Bearer <JWT>" -H "Content-Type: application/json" \
+  -d '{"name":"My Inventory Bot"}'
+```
+
+---
+
+# Part 3 — Internal app API (JWT) — summary
+
+Used by the website frontend. All `protected` routes need
+`Authorization: Bearer <JWT>` from login.
+
+### Auth
+| Method | Endpoint | Notes |
+|---|---|---|
+| POST | `/api/v1/auth/register` | username, email, password |
+| POST | `/api/v1/auth/login` | Returns JWT, or `202` + `needOtp` when 2FA is on |
+| POST | `/api/v1/auth/verify-otp` | tempToken + otpCode → JWT |
+| POST | `/api/v1/auth/resend-otp` | email → new OTP |
+
+### Products
+| Method | Endpoint | Auth |
+|---|---|---|
+| GET | `/api/v1/products` (+ same filters as public API) | none |
+| GET | `/api/v1/products/:id` | none (counts a view) |
+| GET | `/api/v1/products/:id/images` | none |
+| POST | `/api/v1/products` | JWT — owned by the caller |
+| PUT | `/api/v1/products/:id` | JWT — owner only |
+| DELETE | `/api/v1/products/:id` | JWT — owner only |
+| POST | `/api/v1/products/:id/images` | JWT — owner only, multipart `images` |
+
+### Orders
+| Method | Endpoint | Notes |
+|---|---|---|
+| POST | `/api/v1/orders` | Checkout. Body: `{"items":[{"listingId":1,"quantity":1}],"paymentMethod":"..."}` — returns created orders + total |
+| GET | `/api/v1/orders` | Buyer's own orders |
+| GET | `/api/v1/orders/:id` | One order — buyer or seller only |
+| PUT | `/api/v1/orders/:id/complete` | Seller marks a pending order completed |
+| GET | `/api/v1/seller/orders?status=pending` | Orders for the authenticated seller |
+
+### Seller analytics dashboard
+| Method | Endpoint | Notes |
+|---|---|---|
+| GET | `/api/v1/seller/dashboard/items` | Per-listing stats (views, days listed, sold, stale) |
+| GET | `/api/v1/seller/dashboard/summary?months=12` | Revenue, sell-through, monthly + category breakdowns |
+
+### Other
+| Method | Endpoint | Notes |
+|---|---|---|
+| POST | `/api/v1/ai/chat` | AI FAQ chatbot (proxied to the Python RAG service) |
+| GET | `/health`, `/api/v1/status` | Health checks |
+
+Plus user profile / friends / chat routes registered by their modules
+(`backend/modules/user/...`).
+
+---
+
+## Implementation map
+
+| Piece | File |
+|---|---|
+| API-key auth + rate limiting + request logging | `backend/myMiddleware/apikey.go` |
+| Key management handlers | `backend/api_keys.go` |
+| Public + internal route registration | `backend/main.go` |
+| Products / orders handlers | `backend/products.go`, `backend/orders.go` |
+| Tables (`api_keys`, `api_request_logs`, …) | `db/init.sql`, reference in `db/SCHEMA.md` |
+| Developer API UI (create key / docs / logs) | `frontend/src/app/(user)/profile/developer-api/` |
