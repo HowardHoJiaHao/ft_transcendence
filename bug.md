@@ -1,6 +1,7 @@
 # Bug Findings
 
 Date: 2026-07-07
+Last checked: 2026-07-09
 
 This file documents the bugs found during a lightweight project scan of the
 Next.js frontend, Go Echo backend, FastAPI AI service, PostgreSQL schema,
@@ -17,40 +18,67 @@ Docker Compose, and nginx configuration.
 
 ## Ranked Summary
 
-| Rank | Severity | Bug | Main Area |
-| --- | --- | --- | --- |
-| 1 | High | Listing creation can spoof another seller | Backend auth / products |
-| 2 | High | Login scans user columns in the wrong order | Backend auth / repository |
-| 3 | High | AI authenticated tools still use old `token_<id>` auth | Backend AI proxy / AI service |
-| 4 | High | Uploaded `/static/...` files are not proxied by nginx | Backend static files / nginx |
-| 5 | Medium | Missing `JWT_SECRET` is silently accepted | Backend auth config |
-| 6 | Medium | WebSocket URL is hardcoded to `wss://localhost` | Frontend chat |
-| 7 | Medium | WebSocket writer can concatenate multiple JSON messages into one frame | Backend chat |
-| 8 | Medium | Profile email/phone OTP is enforced only in frontend flow | Profile security |
-| 9 | Low | Checkout button has no behavior and there is no order creation route | Cart/orders |
+Static re-check on 2026-07-09 found that bugs 1-8 still existed in the current
+code. Bugs 1, 2, 3, 4, and 5 have since been fixed. Bugs 6, 7, and 8 are
+intentionally deferred for now. Bug 9 is no longer current because
+checkout/order creation has since been implemented.
+
+| Rank | Severity | Status | Difficulty | Bug | Main Area |
+| --- | --- | --- | --- | --- | --- |
+| 1 | High | Fixed | Simple | Listing creation can spoof another seller | Backend auth / products |
+| 2 | High | Fixed | Very simple | Login scans user columns in the wrong order | Backend auth / repository |
+| 3 | High | Fixed | Medium / complicated | AI authenticated tools still use old `token_<id>` auth | Backend AI proxy / AI service |
+| 4 | High | Fixed | Simple | Uploaded `/static/...` files are not proxied by nginx | Backend static files / nginx |
+| 5 | Medium | Fixed | Simple | Missing `JWT_SECRET` is silently accepted | Backend auth config |
+| 6 | Medium | Deferred | Simple | WebSocket URL is hardcoded to `wss://localhost` | Frontend chat |
+| 7 | Medium | Deferred | Simple / medium | WebSocket writer can concatenate multiple JSON messages into one frame | Backend chat |
+| 8 | Medium | Deferred | Complicated | Profile email/phone OTP is enforced only in frontend flow | Profile security |
+| 9 | Low | Fixed / no longer current | Done | Checkout button has no behavior and there is no order creation route | Cart/orders |
+
+## Suggested Fix Order
+
+No active fix is currently selected. Bugs 6, 7, and 8 are deferred.
+
+Deferred:
+
+- Fix WebSocket URL (`#6`): current MVP demo setup works; revisit before
+  deployment or broader non-local network testing.
+- Fix WebSocket writer batching (`#7`): rare/timing-based chat reliability bug;
+  deferred for now. Ask Mohammad to review this later.
+- Enforce OTP on backend for email/phone updates (`#8`): larger security flow
+  change; intentionally deferred for now.
 
 ## 1. Listing Creation Can Spoof Another Seller
 
 Severity: High
+Status: Fixed
+Difficulty: Simple
 
-Evidence:
+Fixed on 2026-07-09:
 
-- `backend/products.go:294` binds `CreateProductRequest` directly from the
-  request body.
-- `backend/products.go:298` only checks that `req.SellerID > 0`.
-- `backend/products.go:341` inserts `req.SellerID` into `listings.seller_id`.
-- `frontend/src/app/(user)/sell/page.tsx:257` sends `sellerId: user.id` from
-  client state.
-- Update/delete/upload paths correctly use `c.Get("userId")`, but create does
-  not.
+- `backend/products.go` now reads the seller ID from `c.Get("userId")`, which
+  is set by JWT middleware, instead of using `sellerId` from the request body.
+- `backend/products.go` now fetches the seller name from the `users` table.
+- `frontend/src/app/(user)/sell/page.tsx` no longer sends `sellerId` or
+  `sellerName` when creating a listing.
 
-Why this is a bug:
+Current evidence:
 
-The route is protected by JWT middleware, but the authenticated user ID is not
-used when creating the listing. Any authenticated user can alter the JSON body
-and create an ad that belongs to a different user ID.
+- `backend/products.go:48` no longer accepts `sellerId` or `sellerName` in
+  `CreateProductRequest`.
+- `backend/products.go:329` reads `sellerID` from `c.Get("userId")`.
+- `backend/products.go:348` fetches the seller name from the `users` table.
+- `backend/products.go:389` inserts the authenticated `sellerID`.
+- `frontend/src/app/(user)/sell/page.tsx:266` creates listings without sending
+  `sellerId` or `sellerName`.
 
-How to trigger:
+Why this was a bug:
+
+The route was protected by JWT middleware, but the authenticated user ID was not
+used when creating the listing. Any authenticated user could alter the JSON body
+and create an ad that belonged to a different user ID.
+
+Original trigger before fix:
 
 1. Login as user A and copy the JWT from browser local storage.
 2. Pick another existing user ID, for example user B with ID `2`.
@@ -73,21 +101,22 @@ curl -k -X POST https://localhost/api/v1/products \
   }'
 ```
 
-Expected result:
+Expected/current result:
 
 The backend should ignore `sellerId` from the request body and use the
 authenticated JWT user ID.
 
-Actual result:
+Fixed result:
 
-The backend inserts the client-provided `sellerId`.
+The backend inserts the seller ID from the authenticated JWT context. A forged
+`sellerId` in the request body is ignored.
 
 Impact:
 
 Users can impersonate other sellers, pollute another seller's profile, and
 create moderation/accountability problems.
 
-Suggested fix:
+Implemented fix:
 
 In `createProduct`, read `userID := c.Get("userId").(int)` and use that as the
 seller ID. Fetch seller name from the users table or trust only server-side user
@@ -96,21 +125,29 @@ data.
 ## 2. Login Scans User Columns In The Wrong Order
 
 Severity: High
+Status: Fixed
+Difficulty: Very simple
 
-Evidence:
+Fixed on 2026-07-09:
+
+- `backend/modules/user/repository.go` now selects login columns in the same
+  order that `Scan` expects: `phone_no`, `date_of_birth`, `gender`,
+  `avatar_url`, then avatar/bio/2FA metadata.
+
+Current evidence:
 
 - `backend/modules/user/repository.go:41` selects:
-  `avatar_url, phone_no, date_of_birth, gender, avatar_data, avatar_mime_type,
-  bio, requires_2fa, created_at`.
-- `backend/modules/user/repository.go:43` scans those selected fields into:
+  `phone_no, date_of_birth, gender, avatar_url, avatar_data,
+  avatar_mime_type, bio, requires_2fa, created_at`.
+- `backend/modules/user/repository.go:43` scans those fields into:
   `PhoneNo, DateOfBirth, Gender, avatarURL, avatarData, avatarMime, bio,
   Requires2FA, CreatedAt`.
 
-Why this is a bug:
+Why this was a bug:
 
-The selected columns and scan destinations do not match. For example,
-`avatar_url` is scanned into `PhoneNo`, `phone_no` is scanned into
-`DateOfBirth`, and `gender` is scanned into `avatarURL`.
+The selected columns and scan destinations did not match. For example,
+`avatar_url` was scanned into `PhoneNo`, `phone_no` was scanned into
+`DateOfBirth`, and `gender` was scanned into `avatarURL`.
 
 How to trigger:
 
@@ -126,46 +163,60 @@ SET phone_no = '01212345678', date_of_birth = '2000-01-01', gender = 'Male'
 WHERE email = '<USER_EMAIL>';
 ```
 
-Expected result:
+Expected/current result:
 
 Login should compare the password and return a valid user object.
 
-Actual result:
+Fixed result:
 
-The SQL scan can fail because values are scanned into incompatible fields, or it
-can return corrupted user data if the types happen to scan.
+The SQL scan receives each value in the matching destination field, so populated
+profile fields no longer corrupt the login user object.
 
-Impact:
+Original impact:
 
-Login can fail for users with profile fields populated, especially phone number
-or date of birth. Returned profile data may also be wrong.
+Login could fail for users with profile fields populated, especially phone
+number or date of birth. Returned profile data could also be wrong.
 
-Suggested fix:
+Implemented fix:
 
-Make the SELECT order match the Scan order, or preferably scan into named model
-fields using a safer abstraction. Also add a login test for users with
-`phone_no`, `date_of_birth`, `gender`, and `avatar_url`.
+The SELECT order now matches the Scan order. A future regression test should
+cover login for users with `phone_no`, `date_of_birth`, `gender`, and
+`avatar_url`.
 
 ## 3. AI Authenticated Tools Still Use Old `token_<id>` Auth
 
 Severity: High
+Status: Fixed
+Difficulty: Medium / complicated
 
-Evidence:
+Fixed on 2026-07-09:
 
-- `backend/ai_chat.go:37` calls `extractUserID(c)`.
-- `backend/products.go:644` documents and implements `extractUserID` for
-  `Bearer token_<id>`.
-- `backend/myMiddleware/auth.go:18` and `auth.ValidateToken` now validate JWTs.
-- `ai_service/tools.py:272` sends `Authorization: Bearer token_<uid>`.
-- Frontend stores real JWTs after login in
-  `frontend/src/app/(user)/login/page.tsx:122`.
+- `frontend/src/components/AIFloatingChat/AIFloatingChat.tsx` no longer falls
+  back to a fake `token_<id>` value.
+- `backend/ai_chat.go` now validates an optional real JWT when the frontend
+  sends an `Authorization` header.
+- `backend/ai_chat.go` forwards the verified user ID and real JWT to the Python
+  AI service.
+- `ai_service/main.py` stores the forwarded JWT in request context.
+- `ai_service/tools.py` uses the forwarded real JWT for protected backend calls
+  instead of synthesizing `Bearer token_<uid>`.
 
-Why this is a bug:
+Current evidence:
+
+- `frontend/src/components/AIFloatingChat/AIFloatingChat.tsx:122` reads only
+  the real token from local storage.
+- `backend/ai_chat.go:29` validates optional JWT auth for AI requests.
+- `backend/ai_chat.go:68` forwards the verified token to the AI service.
+- `ai_service/main.py:60` accepts the forwarded `authToken`.
+- `ai_service/tools.py:274` reads the forwarded token when building backend
+  auth headers.
+
+Why this was a bug:
 
 The main application migrated to JWTs, but the AI proxy and AI service tools
-still use the old demo token format. As a result, logged-in AI requests are
-treated as anonymous by the Go proxy, and protected backend calls from the AI
-service are rejected.
+still used the old demo token format. As a result, logged-in AI requests could
+be treated as anonymous by the Go proxy, and protected backend calls from the AI
+service could be rejected.
 
 How to trigger:
 
@@ -175,22 +226,23 @@ How to trigger:
    "Show my profile" or "Show my orders".
 4. Observe that the request does not authenticate correctly.
 
-Expected result:
+Expected/current result:
 
 The AI proxy should validate the JWT and forward a valid auth context to the AI
 service or protected backend calls.
 
-Actual result:
+Fixed result:
 
-The proxy expects `token_<id>`, fails to extract the user ID from the JWT, and
-the AI service later sends invalid `Bearer token_<id>` headers.
+The proxy validates a real JWT if one is supplied, keeps guest AI chat available
+without auth, and lets the AI service reuse the real JWT for protected backend
+calls.
 
-Impact:
+Original impact:
 
-AI profile/order features are broken for real logged-in users. This also creates
-confusing duplicate auth behavior in the codebase.
+AI profile/order features could be broken for real logged-in users. This also
+created confusing duplicate auth behavior in the codebase.
 
-Suggested fix:
+Implemented fix:
 
 Replace `extractUserID` with JWT validation or reuse `myMiddleware.JWTAuth()` on
 AI routes that need auth. Do not synthesize `Bearer token_<id>` in the AI
@@ -200,26 +252,35 @@ internal endpoints with explicit service auth.
 ## 4. Uploaded `/static/...` Files Are Not Proxied By Nginx
 
 Severity: High
+Status: Fixed
+Difficulty: Simple
 
-Evidence:
+Fixed on 2026-07-09:
 
-- `backend/main.go:96` serves `e.Static("/static", "static")`.
-- `backend/products.go:529` returns listing image URLs like
+- `nginx/conf/default.conf` now routes `/static/` requests to the backend.
+- `backend/Dockerfile` now creates both `/app/static/avatars` and
+  `/app/static/listings`.
+
+Current evidence:
+
+- `backend/main.go:103` serves `e.Static("/static", "static")`.
+- `backend/products.go:581` returns listing image URLs like
   `/static/listings/<file>`.
 - `backend/modules/user/profile/service.go:62` returns avatar URLs like
   `/static/avatars/<file>`.
 - `nginx/conf/default.conf:36` proxies `/api/` to backend.
 - `nginx/conf/default.conf:56` proxies `/uploads/`.
 - `nginx/conf/default.conf:63` proxies `/avatars/`.
-- There is no nginx `location /static/` block.
+- `nginx/conf/default.conf:70` proxies `/static/` to backend.
+- `backend/Dockerfile:33` creates both static upload directories.
 
-Why this is a bug:
+Why this was a bug:
 
 When users access the app through nginx at `https://localhost`, browser requests
-for `/static/listings/...` and `/static/avatars/...` go to the frontend upstream,
-not the backend static file server.
+for `/static/listings/...` and `/static/avatars/...` went to the frontend
+upstream, not the backend static file server.
 
-How to trigger:
+Original trigger before fix:
 
 1. Start the app through Docker/nginx.
 2. Login and upload a listing photo or profile avatar.
@@ -229,21 +290,20 @@ How to trigger:
 https://localhost/static/listings/<listing_id>_0.jpg
 ```
 
-Expected result:
+Expected/current result:
 
 The uploaded image should be served by the backend.
 
-Actual result:
+Fixed result:
 
-The request is routed to the frontend because nginx has no `/static/` backend
-proxy rule. The image may show as broken or return a frontend 404.
+The request is routed to the backend through the new `/static/` nginx location.
 
-Impact:
+Original impact:
 
-Uploaded avatars and listing images can disappear from the UI in the normal
+Uploaded avatars and listing images could disappear from the UI in the normal
 nginx deployment path.
 
-Suggested fix:
+Implemented fix:
 
 Add an nginx route:
 
@@ -262,46 +322,65 @@ Also ensure the backend Docker image creates both `/app/static/avatars` and
 ## 5. Missing `JWT_SECRET` Is Silently Accepted
 
 Severity: Medium
+Status: Fixed
+Difficulty: Simple
 
-Evidence:
+Fixed on 2026-07-09:
 
-- `backend/modules/user/auth/service.go:30` initializes:
-  `jwtSecret = []byte(os.Getenv("JWT_SECRET"))`.
-- No startup code rejects an empty secret.
+- `backend/modules/user/auth/service.go` now validates `JWT_SECRET` through
+  `ConfigureJWTSecretFromEnv`.
+- `backend/main.go` now fails startup if the auth configuration is invalid.
+- Token generation and validation now also reject an unconfigured or too-short
+  JWT secret.
 
-Why this is a bug:
+Current evidence:
 
-If `JWT_SECRET` is missing, tokens may be signed and validated with an empty
-secret. That is an insecure configuration and can be hard to notice.
+- `backend/modules/user/auth/service.go:28` defines a minimum secret length.
+- `backend/modules/user/auth/service.go:34` rejects an empty `JWT_SECRET`.
+- `backend/modules/user/auth/service.go:37` rejects a short `JWT_SECRET`.
+- `backend/main.go:26` calls the validation before initializing services.
 
-How to trigger:
+Why this was a bug:
+
+If `JWT_SECRET` was missing, tokens could be signed and validated with an empty
+secret. That was an insecure configuration and could be hard to notice.
+
+Original trigger before fix:
 
 1. Start backend without `JWT_SECRET` in `.env`.
 2. Login successfully.
 3. Backend still issues a JWT.
 
-Expected result:
+Expected/current result:
 
 The backend should fail startup with a clear error if `JWT_SECRET` is empty or
 too weak.
 
-Actual result:
+Fixed result:
 
-The backend continues running with an empty secret.
+The backend exits during startup with a clear auth configuration error.
 
-Impact:
+Original impact:
 
-Auth security depends on environment setup. A missing secret can weaken token
+Auth security depended on environment setup. A missing secret could weaken token
 integrity across the whole API.
 
-Suggested fix:
+Implemented fix:
 
-Read and validate `JWT_SECRET` during startup, not silently in package `init`.
-Fail fast if empty or below a minimum length.
+Read and validate `JWT_SECRET` during startup. Fail fast if empty or below the
+minimum length.
 
 ## 6. WebSocket URL Is Hardcoded To `wss://localhost`
 
 Severity: Medium
+Status: Deferred
+Difficulty: Simple
+
+Deferred on 2026-07-09:
+
+- Current MVP demo setup works with the existing localhost/nginx flow.
+- Revisit before deployment, LAN/IP-based demos, tunnels, or any setup where the
+  browser opens the app from a host other than `localhost`.
 
 Evidence:
 
@@ -348,6 +427,15 @@ Or centralize it in a `NEXT_PUBLIC_WS_URL` config.
 ## 7. WebSocket Writer Can Concatenate Multiple JSON Messages Into One Frame
 
 Severity: Medium
+Status: Deferred
+Difficulty: Simple / medium
+
+Deferred on 2026-07-09:
+
+- This is a rare/timing-based realtime chat reliability bug and is hard to
+  trigger manually.
+- Current MVP priority is higher-impact issues.
+- Ask Mohammad to review this WebSocket writer behavior later.
 
 Evidence:
 
@@ -401,6 +489,13 @@ array and update the frontend parser accordingly.
 ## 8. Profile Email/Phone OTP Is Enforced Only In Frontend Flow
 
 Severity: Medium
+Status: Deferred
+Difficulty: Complicated
+
+Deferred on 2026-07-09:
+
+- This is a larger backend security flow change.
+- Intentionally deferred for now.
 
 Evidence:
 
@@ -460,47 +555,84 @@ recent OTP verification token or challenge ID. Do not allow generic
 ## 9. Checkout Button Has No Behavior And No Order Creation Route
 
 Severity: Low
+Status: Fixed / no longer current
+Difficulty: Done
+
+Current verification:
+
+Static re-check on 2026-07-09 shows this finding is no longer current.
 
 Evidence:
 
-- `frontend/src/app/(user)/cart/page.tsx:71` renders a Checkout button with no
-  `onClick`.
-- `backend/main.go:65` and `backend/main.go:66` register only `GET /orders` and
-  `GET /orders/:id`.
-- `backend/orders.go` contains read handlers only.
-- `db/init.sql:108` defines an `orders` table, but no create path uses it.
+- `frontend/src/app/(user)/cart/page.tsx:43` defines `handleCheckout`.
+- `frontend/src/app/(user)/cart/page.tsx:58` posts checkout requests to
+  `/api/v1/orders`.
+- `frontend/src/app/(user)/cart/page.tsx:234` wires the Checkout button to
+  `handleCheckout`.
+- `backend/main.go:65` registers `POST /orders`.
+- `backend/orders.go:52` implements `createOrders`.
 
-Why this is a bug:
+Current behavior from code inspection:
 
-Cart checkout appears available to users, but it does not create an order or
-navigate to a checkout page.
+The cart now sends checkout items to the backend, and the backend creates orders
+transactionally, validates stock, prevents users from buying their own listing,
+and updates listing stock/status.
 
-How to trigger:
+Remaining optional check:
 
-1. Open a product page.
-2. Click "Add to Cart".
-3. Go to `/cart`.
-4. Click "Checkout".
-
-Expected result:
-
-The app should create an order, start a checkout flow, or clearly show that
-checkout is not implemented.
-
-Actual result:
-
-The button does nothing.
-
-Impact:
-
-Users cannot buy items through the cart despite the UI implying they can.
-
-Suggested fix:
-
-Either implement order creation and checkout, or disable/hide the button with a
-clear "coming soon" state.
+Run the app and test checkout through the browser to confirm the full flow works
+with live database seed data, cart state, and nginx routing.
 
 ## Validation Notes
+
+Commands run after fixing bugs 1, 2, 3, 4, and 5:
+
+```bash
+cd frontend
+npm run build
+```
+
+Result: passed after bug 1 and bug 3 frontend cleanup.
+
+```bash
+cd ai_service
+python3 -m py_compile main.py tools.py
+```
+
+Result: passed after bug 3 AI auth changes.
+
+```bash
+git diff --check
+docker compose config
+```
+
+Result: passed after bug 4 nginx/Dockerfile changes and bug 5 startup config
+changes.
+
+```bash
+cd backend
+go test ./...
+```
+
+Result: not run successfully because `go` is not installed in this environment.
+
+```bash
+nginx -t
+```
+
+Result: not run because `nginx` is not installed in this environment.
+
+Commands run during the 2026-07-09 static re-check:
+
+```bash
+git status --short
+sed -n '1,240p' bug.md
+sed -n '241,520p' bug.md
+rg -n "sellerId|sellerID|SellerID|createProduct|POST\\(\\\"/products\\\"|JWT_SECRET|token_<|wss://localhost|NextWriter|/static/|/api/v1/orders|handleCheckout|users/update|POST\\(\\\"/orders\\\"" backend frontend ai_service nginx -S
+```
+
+Result: documentation-only re-check. No application build, backend test, or
+browser runtime reproduction was run for this update.
 
 Commands run during the scan:
 

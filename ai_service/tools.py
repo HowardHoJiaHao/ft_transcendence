@@ -10,8 +10,9 @@ from recommender import (
     predict_racket_specs,
 )
 
-# ContextVar to store current request's user ID for auth proxying
+# ContextVars to store current request auth context for backend calls
 user_id_var = ContextVar("user_id", default=0)
+auth_token_var = ContextVar("auth_token", default="")
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8080")
 
@@ -270,10 +271,10 @@ def _fallback_profile_recommendations(profile, message):
     return f"{message}\n\n{fallback}"
 
 def get_auth_headers():
-    uid = user_id_var.get()
+    token = auth_token_var.get()
     headers = {}
-    if uid > 0:
-        headers["Authorization"] = f"Bearer token_{uid}"
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     return headers
 
 @tool

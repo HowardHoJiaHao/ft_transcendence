@@ -119,7 +119,7 @@ export default function AIFloatingChat() {
     profile?: RecommendationProfile
   ) => {
     try {
-      const token = localStorage.getItem('token') || (user ? `token_${user.id}` : '');
+      const token = localStorage.getItem('token') || '';
       const configuredApiURL = process.env.NEXT_PUBLIC_API_URL?.trim() || '';
       const apiURL = /^https?:\/\/localhost:8080\/?$/.test(configuredApiURL)
         ? ''

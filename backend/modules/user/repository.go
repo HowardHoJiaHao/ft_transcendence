@@ -38,8 +38,8 @@ func (r *Repository) GetUserByEmailWithPassword(email string) (*User, error) {
 	// var dob sql.NullTime
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, password_hash, first_name, last_name, avatar_url, phone_no, date_of_birth, gender, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1",
-		email, 
+		"SELECT id, username, email, password_hash, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1",
+		email,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
 
 	if err != nil {

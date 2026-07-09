@@ -211,7 +211,7 @@ function SellPageInner() {
     }
 
     setSubmitting(true);
-    const token = localStorage.getItem("token") || (user ? `token_${user.id}` : "");
+    const token = localStorage.getItem("token") || "";
     if (!token) {
       showToast("Please login again", "error");
       router.push("/login");
@@ -264,8 +264,6 @@ function SellPageInner() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            sellerId: user.id,
-            sellerName: user.username,
             category,
             condition,
             dealingMethod: dealingMethods.join(", "),

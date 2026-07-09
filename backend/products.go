@@ -46,8 +46,6 @@ type Product struct {
 }
 
 type CreateProductRequest struct {
-	SellerID            int      `json:"sellerId"`
-	SellerName          string   `json:"sellerName"`
 	Category            string   `json:"category"`
 	Condition           string   `json:"condition"`
 	DealingMethod       string   `json:"dealingMethod"`
@@ -328,8 +326,9 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "Invalid request body"})
 	}
-	if req.SellerID <= 0 {
-		return c.JSON(400, map[string]string{"error": "sellerId is required"})
+	sellerID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(401, map[string]string{"error": "Unauthorized"})
 	}
 	if req.Title == "" {
 		return c.JSON(400, map[string]string{"error": "title is required"})
@@ -345,8 +344,16 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(400, map[string]string{"error": "stockQuantity must be at least 1"})
 	}
 
-	if req.SellerName == "" {
-		req.SellerName = "Unknown Seller"
+	var sellerName string
+	if err := sqlDB.QueryRow("SELECT username FROM users WHERE id = $1", sellerID).Scan(&sellerName); err != nil {
+		if err == sql.ErrNoRows {
+			return c.JSON(404, map[string]string{"error": "Seller not found"})
+		}
+		log.Printf("Error fetching seller for product creation: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to validate seller"})
+	}
+	if sellerName == "" {
+		sellerName = "Unknown Seller"
 	}
 	if req.Location == "" {
 		req.Location = "Malaysia"
@@ -379,8 +386,8 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 
 	var productID int
 	err = sqlDB.QueryRow(insertQuery,
-		req.SellerID, req.Title, req.Description, req.WeightCategory, req.FlexibilityCategory,
-		req.BalanceCategory, req.Price, req.OriginalPrice, req.Location, req.Image, req.SellerName,
+		sellerID, req.Title, req.Description, req.WeightCategory, req.FlexibilityCategory,
+		req.BalanceCategory, req.Price, req.OriginalPrice, req.Location, req.Image, sellerName,
 		req.IsNew, req.IsFeatured, req.Category, req.Condition, req.DealingMethod, req.PhoneNumber,
 		stockQuantity,
 	).Scan(&productID)

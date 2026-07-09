@@ -9,10 +9,10 @@ import (
 	"github.com/labstack/echo/v4/middleware" //middleware parts
 
 	"transcendence/modules/user"
-    "transcendence/modules/user/auth"
-    "transcendence/modules/user/profile"
-    "transcendence/modules/user/friends"
+	"transcendence/modules/user/auth"
 	"transcendence/modules/user/chat"
+	"transcendence/modules/user/friends"
+	"transcendence/modules/user/profile"
 	"transcendence/myMiddleware"
 )
 
@@ -22,6 +22,10 @@ func main() {
 	// if err != nil {
 	// 	log.Fatalf("Error loading .env file") //logs info, print str, and exit
 	// }
+
+	if err := auth.ConfigureJWTSecretFromEnv(); err != nil {
+		log.Fatalf("Invalid auth configuration: %v", err)
+	}
 
 	//initialize database
 	rawDB, gormDB, cleanup, err := initDB()

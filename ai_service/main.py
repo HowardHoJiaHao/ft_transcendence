@@ -11,6 +11,7 @@ from contextvars import copy_context
 
 from tools import (
     user_id_var,
+    auth_token_var,
     search_listings,
     get_listing_detail,
     get_seller_info,
@@ -56,6 +57,7 @@ class ChatRequest(BaseModel):
     message: str
     history: List[ChatMessage] = []
     userId: int = 0
+    authToken: str = ""
     recommendationProfile: Optional[Dict[str, str]] = None
 
 def _normalized_text(message: str) -> str:
@@ -532,6 +534,7 @@ async def chat_endpoint(req: ChatRequest):
 
     # Set user ID in ContextVar for the current execution thread context
     user_id_var.set(req.userId)
+    auth_token_var.set(req.authToken)
     
     # Convert Pydantic models to dicts for our helper
     history_dicts = [{"role": m.role, "content": m.content} for m in req.history]

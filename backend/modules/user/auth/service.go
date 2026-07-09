@@ -25,16 +25,41 @@ func NewService(repo *user.Repository) *Service {
 	return &Service{repo: repo}
 }
 
+const minJWTSecretLength = 32
+
 var jwtSecret []byte //declare a global package scope variable
 
-func init() {
-	jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+func ConfigureJWTSecretFromEnv() error {
+	secret := strings.TrimSpace(os.Getenv("JWT_SECRET"))
+	if secret == "" {
+		return fmt.Errorf("JWT_SECRET is required")
+	}
+	if len(secret) < minJWTSecretLength {
+		return fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLength)
+	}
+	jwtSecret = []byte(secret)
+	return nil
+}
+
+func ensureJWTSecretConfigured() error {
+	if len(jwtSecret) == 0 {
+		if err := ConfigureJWTSecretFromEnv(); err != nil {
+			return err
+		}
+	}
+	if len(jwtSecret) < minJWTSecretLength {
+		return fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLength)
+	}
+	return nil
 }
 
 func GenerateToken(userID int) (string, error) {
-	claims := Claims {
+	if err := ensureJWTSecretConfigured(); err != nil {
+		return "", err
+	}
+	claims := Claims{
 		UserId: userID,
-		RegisteredClaims: jwt.RegisteredClaims {
+		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 		},
 	}
@@ -45,6 +70,9 @@ func GenerateToken(userID int) (string, error) {
 var keyFunc = func(token *jwt.Token) (interface{}, error) {
 	if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 		return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+	}
+	if err := ensureJWTSecretConfigured(); err != nil {
+		return nil, err
 	}
 	return jwtSecret, nil
 }
