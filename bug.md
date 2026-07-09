@@ -237,6 +237,16 @@ The proxy validates a real JWT if one is supplied, keeps guest AI chat available
 without auth, and lets the AI service reuse the real JWT for protected backend
 calls.
 
+Follow-up check on 2026-07-09:
+
+- The "what is my username?" symptom still appeared because the OpenRouter
+  provider returned HTTP 429 before the agent could choose a tool.
+- `ai_service/main.py` now falls back to the protected profile/order tools for
+  private profile/order questions when the LLM provider fails.
+- Anonymous tests now return "You must be logged in..." instead of the generic
+  capability message. Logged-in browser requests should use the real forwarded
+  JWT and return that user's own profile/orders.
+
 Original impact:
 
 AI profile/order features could be broken for real logged-in users. This also

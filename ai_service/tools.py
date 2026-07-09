@@ -46,6 +46,16 @@ def _fetch_products(params):
         return None, f"Error searching products: Go API returned HTTP {response.status_code}"
     return response.json().get("products", []), None
 
+def _is_racket_listing(product) -> bool:
+    category = (product.get("category") or "").lower()
+    weight = (product.get("weightCategory") or "").strip()
+    flex = (product.get("flexibilityCategory") or "").strip()
+    balance = (product.get("balanceCategory") or "").strip()
+
+    if "racket" in category or "racquet" in category:
+        return True
+    return bool(weight and flex and balance)
+
 def _beginner_score(product):
     score = 0
     weight = (product.get("weightCategory") or "").upper()
@@ -287,6 +297,7 @@ def search_listings(
     max_price: float = None,
     sort: str = None,
     limit: int = None,
+    racket_only: bool = False,
 ) -> str:
     """
     Search for badminton equipment and racket listings in the marketplace.
@@ -299,6 +310,7 @@ def search_listings(
     - max_price: optional maximum price in RM
     - sort: optional sorting mode ('price-low', 'price-high', 'newest', or 'rating')
     - limit: optional number of listings to include in the response
+    - racket_only: true when the user specifically asks for rackets, excluding accessories
     """
     url = f"{BACKEND_URL}/api/v1/products"
     params = []
@@ -323,6 +335,8 @@ def search_listings(
         if error:
             return error
         products = _dedupe_products(products or [])
+        if racket_only:
+            products = [p for p in products if _is_racket_listing(p)]
         if products:
             return _format_products(products, limit=limit)
 
@@ -335,6 +349,8 @@ def search_listings(
             if spec_error:
                 return spec_error
             spec_products = _dedupe_products(spec_products or [])
+            if racket_only:
+                spec_products = [p for p in spec_products if _is_racket_listing(p)]
             if spec_products:
                 fallback_sections.append(
                     "No exact brand match found. Similar rackets matching your specs:\n"
@@ -349,6 +365,8 @@ def search_listings(
             if brand_error:
                 return brand_error
             brand_products = _dedupe_products(brand_products or [])
+            if racket_only:
+                brand_products = [p for p in brand_products if _is_racket_listing(p)]
             if brand_products:
                 fallback_sections.append(
                     f"Available {query} rackets within your budget but with different specs:\n"
@@ -542,6 +560,7 @@ def get_listing_detail(listing_id: int) -> str:
 def get_seller_info(seller_id: int) -> str:
     """
     Retrieve a seller's profile details.
+    Use this when users ask about a seller, seller profile, seller username, seller bio, or seller verification.
     Arguments:
     - seller_id: the numeric ID of the user/seller (e.g. 1, 2)
     """
@@ -565,9 +584,35 @@ def get_seller_info(seller_id: int) -> str:
         return f"Error calling user backend: {e}"
 
 @tool
+def get_seller_listings(seller_id: int, limit: int = 5) -> str:
+    """
+    Retrieve public active listings from a specific seller.
+    Use this when users ask what else a seller is selling, show seller listings, show seller products, or show products from seller 2.
+    Arguments:
+    - seller_id: the numeric ID of the user/seller (e.g. 1, 2)
+    - limit: optional number of listings to return, default 5
+    """
+    if seller_id <= 0:
+        return "Please provide a valid seller ID."
+
+    params = [("sellerId", seller_id), ("status", "active"), ("limit", limit)]
+    try:
+        products, error = _fetch_products(params)
+        if error:
+            return error
+        products = _dedupe_products(products or [])
+        if not products:
+            return "This seller has no active listings right now."
+        return _format_products(products, limit=limit)
+    except Exception as e:
+        return f"Error fetching seller listings: {e}"
+
+@tool
 def get_user_profile() -> str:
     """
     Retrieve the current logged-in user's profile details. Requires user to be logged in.
+    Use this when users ask about their own username, email, phone number, profile, account details, or who they are logged in as.
+    Example prompts: "what is my username?", "show my profile", "what is my email?", "what is my phone number?", "who am I logged in as?"
     """
     if user_id_var.get() <= 0:
         return "You must be logged in to view your profile."
@@ -596,6 +641,8 @@ def get_user_profile() -> str:
 def get_order_status(order_id: int) -> str:
     """
     Check the status and details of a specific order. Requires user to be logged in.
+    Use this when users ask about one specific order number or order ID.
+    Example prompts: "show order 3", "status of order 12", "where is my order #5?"
     Arguments:
     - order_id: the numeric order ID
     """
@@ -630,6 +677,8 @@ def get_order_status(order_id: int) -> str:
 def get_my_orders() -> str:
     """
     List the logged-in user's recent orders. Requires user to be logged in.
+    Use this when users ask about their own orders, purchases, purchase history, order history, or ask "can you show me my order?" without a specific order ID.
+    Example prompts: "show my orders", "can you show me my order?", "what did I buy?", "my purchases", "order history"
     """
     if user_id_var.get() <= 0:
         return "You must be logged in to view your orders."
@@ -678,6 +727,7 @@ all_tools = [
     get_profile_based_recommendations,
     get_listing_detail,
     get_seller_info,
+    get_seller_listings,
     get_user_profile,
     get_order_status,
     get_my_orders,

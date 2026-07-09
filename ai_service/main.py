@@ -15,6 +15,7 @@ from tools import (
     search_listings,
     get_listing_detail,
     get_seller_info,
+    get_seller_listings,
     get_user_profile,
     get_order_status,
     get_my_orders,
@@ -102,7 +103,8 @@ def _is_marketplace_safety_intent(message: str) -> bool:
         "paid already", "no item", "did not receive", "never receive",
         "report seller", "report listing", "fake racket", "clone racket",
     )
-    return _has_any(text, safety_terms)
+    fake_item = "fake" in text and _has_any(text, ("racket", "listing", "seller", "item", "product"))
+    return _has_any(text, safety_terms) or fake_item
 
 def _is_account_security_intent(message: str) -> bool:
     text = _normalized_text(message)
@@ -119,6 +121,74 @@ def _is_payment_dispute_intent(message: str) -> bool:
         "paid seller", "paid already", "money back", "transfer money",
     )
     return _has_any(text, payment_terms)
+
+def _is_private_profile_intent(message: str) -> bool:
+    text = _normalized_text(message)
+    if _has_any(text, ("seller username", "seller profile", "seller account")):
+        return False
+
+    profile_phrases = (
+        "my username", "what is my username", "what's my username",
+        "my email", "what is my email", "what's my email",
+        "my phone", "my phone number", "what is my phone",
+        "my profile", "show my profile", "view my profile",
+        "my account", "my account details", "account details",
+        "who am i logged in as", "who am i", "what is my name",
+    )
+    return _has_any(text, profile_phrases)
+
+def _extract_requested_order_id(message: str) -> Optional[int]:
+    text = _normalized_text(message)
+    match = re.search(r"\border\s*(?:id|#|number|no\.?)?\s*(\d+)\b", text)
+    if match:
+        return int(match.group(1))
+    match = re.search(r"\border\s*#\s*(\d+)\b", text)
+    if match:
+        return int(match.group(1))
+    return None
+
+def _is_private_order_intent(message: str) -> bool:
+    text = _normalized_text(message)
+    order_phrases = (
+        "my order", "my orders", "show me my order", "show my order",
+        "show my orders", "order history", "my purchase", "my purchases",
+        "purchase history", "what did i buy", "where is my order",
+    )
+    return _has_any(text, order_phrases) or _extract_requested_order_id(message) is not None
+
+def _fallback_private_tool_answer(user_message: str):
+    if _is_private_profile_intent(user_message):
+        return _resolve_tool_action("get_user_profile", {})
+
+    if _is_private_order_intent(user_message):
+        order_id = _extract_requested_order_id(user_message)
+        if order_id is not None:
+            return _resolve_tool_action("get_order_status", {"order_id": order_id})
+        return _resolve_tool_action("get_my_orders", {})
+
+    return None
+
+def _extract_seller_id(message: str) -> Optional[int]:
+    text = _normalized_text(message)
+    match = re.search(r"\bseller\s*(?:id|#|number|no\.?)?\s*(\d+)\b", text)
+    if match:
+        return int(match.group(1))
+    return None
+
+def _fallback_seller_tool_answer(user_message: str):
+    seller_id = _extract_seller_id(user_message)
+    if seller_id is None:
+        return None
+
+    text = _normalized_text(user_message)
+    listing_terms = (
+        "listing", "listings", "product", "products", "selling",
+        "what else", "items", "ads",
+    )
+    if _has_any(text, listing_terms):
+        return _resolve_tool_action("get_seller_listings", {"seller_id": seller_id})
+
+    return _resolve_tool_action("get_seller_info", {"seller_id": seller_id})
 
 def _is_supported_faq_intent(message: str) -> bool:
     text = _normalized_text(message)
@@ -176,6 +246,9 @@ def _deterministic_intent_answer(message: str) -> Optional[str]:
         return _account_security_answer()
     if _is_payment_dispute_intent(message):
         return _payment_dispute_answer()
+    seller_tool_answer = _fallback_seller_tool_answer(message)
+    if seller_tool_answer:
+        return seller_tool_answer
     specific_faq_answer = None
     if _search_filters_from_message(message) is None:
         specific_faq_answer = _fallback_specific_faq_answer(message)
@@ -190,6 +263,7 @@ def _resolve_tool_action(action, action_input):
         "search_listings": search_listings,
         "get_listing_detail": get_listing_detail,
         "get_seller_info": get_seller_info,
+        "get_seller_listings": get_seller_listings,
         "get_user_profile": get_user_profile,
         "get_order_status": get_order_status,
         "get_my_orders": get_my_orders,
@@ -321,6 +395,8 @@ def _search_filters_from_message(message: str):
         return None
 
     filters = _extract_price_filters(message)
+    if "racket" in text or "racquet" in text:
+        filters["racket_only"] = True
     if not filters and "racket" not in text and "racquet" not in text:
         return None
 
@@ -339,6 +415,13 @@ def _search_filters_from_message(message: str):
         filters["balance"] = "Head Heavy"
     elif "even balance" in text:
         filters["balance"] = "Even Balance"
+
+    if "stiff" in text:
+        filters["flex"] = "Stiff Shaft"
+    elif "medium flex" in text or "medium shaft" in text:
+        filters["flex"] = "Medium Flex"
+    elif "high flex" in text or "high flexibility" in text or "flexible" in text:
+        filters["flex"] = "High Flexibility"
 
     return filters
 
@@ -367,13 +450,21 @@ def _fallback_faq_query(user_message: str):
         return f"payment dispute refund deposit support evidence report seller {user_message}"
     if re.search(r"\b\d+u\b", text) or any(term in text for term in ("weight", "flex", "balance", "tension")):
         return f"badminton racket specifications weight 1U 2U 3U 4U 5U flex balance tension {user_message}"
-    if any(term in text for term in ("post ad", "post an ad", "sell", "listing", "list my", "list your")):
-        return f"how to sell create listing post ad {user_message}"
     if any(term in text for term in ("buy", "contact seller", "chat seller", "delivery", "meet up", "mailing")):
         return f"how to buy contact seller delivery meet up mailing {user_message}"
+    if any(term in text for term in ("post ad", "post an ad", "sell", "listing", "list my", "list your")):
+        return f"how to sell create listing post ad {user_message}"
     return user_message
 
 def _fallback_specific_faq_answer(user_message: str):
+    text = _normalized_text(user_message)
+    if any(phrase in text for phrase in ("contact seller", "contact a seller", "contact the seller", "chat seller", "chat with seller", "message seller")):
+        return (
+            "To contact a seller, Boss, open the listing you are interested in and use the chat/contact option on that listing. "
+            "Confirm the item details, condition, location, and dealing method before paying. "
+            "For safety, keep the conversation and proof of payment inside RacketDiction where possible."
+        )
+
     weight_match = re.search(r"\b(\d+)u\b", _normalized_text(user_message))
     if not weight_match:
         return None
@@ -402,10 +493,10 @@ def _faq_sources_for_message(user_message: str):
     text = _normalized_text(user_message)
     if re.search(r"\b\d+u\b", text) or any(term in text for term in ("weight", "flex", "balance", "tension")):
         return {"badminton_guide.md"}
-    if any(term in text for term in ("post ad", "post an ad", "sell", "listing", "list my", "list your")):
-        return {"how_to_sell.md"}
     if any(term in text for term in ("buy", "contact seller", "chat seller", "delivery", "meet up", "mailing")):
         return {"how_to_buy.md", "dealing_methods.md"}
+    if any(term in text for term in ("post ad", "post an ad", "sell", "listing", "list my", "list your")):
+        return {"how_to_sell.md"}
     if _is_marketplace_safety_intent(user_message) or _is_account_security_intent(user_message) or _is_payment_dispute_intent(user_message):
         return {"account_and_safety.md"}
     return set()
@@ -426,6 +517,10 @@ def _fallback_non_llm_answer(user_message: str):
     deterministic_answer = _deterministic_intent_answer(user_message)
     if deterministic_answer:
         return deterministic_answer
+
+    private_tool_answer = _fallback_private_tool_answer(user_message)
+    if private_tool_answer:
+        return private_tool_answer
 
     listing_result = _fallback_listing_search(user_message)
     if listing_result:
