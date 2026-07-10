@@ -1,5 +1,11 @@
 'use client';
 
+// My Shop — the seller dashboard page.
+// Tabs Published / Pending Orders / Sold / Archived manage the seller's listings;
+// the Analytics tab adds revenue stats, a monthly sales chart and per-item tables.
+// Every label goes through t() (src/i18n) so the whole page — charts included —
+// re-renders in the language picked in the header.
+
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -15,9 +21,12 @@ import {
 } from 'recharts';
 import { useAuth } from '@/context/AuthContext';;
 import { useToast } from '@/components/Toast/ToastContext';
+import { useI18n } from '@/context/LanguageContext';
 import Header from '@/components/Header/Header';
+import { downloadCsv } from '@/lib/csv';
 import styles from './my-ads.module.css';
 
+// A seller listing as returned by GET /api/v1/products.
 interface Ad {
   id: number;
   title: string;
@@ -29,6 +38,7 @@ interface Ad {
   createdAt: string;
 }
 
+// A pending order enriched with listing and buyer info (GET /api/v1/seller/orders).
 interface SellerOrder {
   id: number;
   listingId: number;
@@ -43,6 +53,7 @@ interface SellerOrder {
   buyerEmail: string;
 }
 
+// Per-listing analytics row (GET /api/v1/seller/dashboard/items).
 interface SellerItemStat {
   listingId: number;
   title: string;
@@ -57,18 +68,21 @@ interface SellerItemStat {
   stale: boolean;
 }
 
+// Revenue/order totals for one "YYYY-MM" month.
 interface SellerMonthlyStat {
   month: string;
   orderCount: number;
   revenue: number;
 }
 
+// Lifetime sales totals for one category.
 interface CategoryStat {
   category: string;
   itemsSold: number;
   revenue: number;
 }
 
+// One month × category cell — the raw rows behind the stacked bar chart.
 interface MonthlyCategoryStat {
   month: string;
   category: string;
@@ -76,6 +90,7 @@ interface MonthlyCategoryStat {
   revenue: number;
 }
 
+// Aggregated dashboard stats (GET /api/v1/seller/dashboard/summary).
 interface SellerSummary {
   totalRevenue: number;
   pendingOrders: number;
@@ -89,29 +104,12 @@ interface SellerSummary {
   categoryBreakdown: CategoryStat[];
 }
 
+// Sortable columns of the My Items and Sales by Category tables.
 type ItemSortKey = 'title' | 'price' | 'category' | 'status' | 'daysListed' | 'viewsLast30Days' | 'soldAt';
 type CategorySortKey = 'category' | 'itemsSold' | 'revenue' | 'avgDays';
 
-const MONTH_NAMES: Record<string, string> = {
-  '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr', '05': 'May', '06': 'Jun',
-  '07': 'Jul', '08': 'Aug', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dec',
-};
+// Which measure the sales chart plots.
 type ChartMetric = 'revenue' | 'orderCount';
-
-const csvEscape = (v: string | number) => {
-  const s = String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-};
-
-const downloadCsv = (filename: string, header: string[], rows: (string | number)[][]) => {
-  const csv = [header, ...rows].map((r) => r.map(csvEscape).join(',')).join('\n');
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-};
 
 // Categorical palette slots in fixed order (validated for CVD-safe adjacency);
 // categories map to slots by stable alphabetical order, never by rank.
@@ -128,8 +126,13 @@ export default function MyAdsPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const { t } = useI18n();
 
-//   const [searchQuery, setSearchQuery] = useState('');
+  // "2026-03" → localized "Mar 2026" / "3月 2026"; re-renders with the active language.
+  const formatChartMonth = (month: string) =>
+    `${t(`months.${month.slice(5, 7)}`)} ${month.slice(0, 4)}`;
+
+  // Open tab; each listing status keeps its own list so switching tabs is instant.
   const [activeTab, setActiveTab] = useState<'active' | 'pending' | 'sold' | 'archived' | 'analytics'>('active');
   const [publishedAds, setPublishedAds] = useState<Ad[]>([]);
   const [pendingOrders, setPendingOrders] = useState<SellerOrder[]>([]);
@@ -140,6 +143,8 @@ export default function MyAdsPage() {
   const [completingOrderId, setCompletingOrderId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
 
+  // Analytics data — fetched lazily the first time the Analytics tab opens;
+  // analyticsLoaded doubles as the cache flag (reset after an order completes).
   const [itemStats, setItemStats] = useState<SellerItemStat[]>([]);
   const [summary, setSummary] = useState<SellerSummary | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -147,13 +152,16 @@ export default function MyAdsPage() {
   const [itemSort, setItemSort] = useState<{ key: ItemSortKey; dir: 1 | -1 } | null>(null);
   const [catSort, setCatSort] = useState<{ key: CategorySortKey; dir: 1 | -1 } | null>(null);
 
+  // First click on a column header sorts ascending; a second click flips direction.
   const toggleItemSort = (key: ItemSortKey) =>
     setItemSort((s) => (s?.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
   const toggleCatSort = (key: CategorySortKey) =>
     setCatSort((s) => (s?.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
 
+  // "▲"/"▼" suffix shown on the actively sorted column header.
   const sortArrow = (active: boolean, dir: 1 | -1) => (active ? (dir === 1 ? ' ▲' : ' ▼') : '');
 
+  // My Items table: pagination plus a collapsible filter panel.
   const ITEMS_PER_PAGE = 15;
   const [itemPage, setItemPage] = useState(1);
   const [showItemFilters, setShowItemFilters] = useState(false);
@@ -167,12 +175,14 @@ export default function MyAdsPage() {
     sold: 'all' as 'all' | 'sold' | 'unsold',
   });
 
+  // Distinct categories among the seller's items — chips in the filter panel.
   const itemCategories = useMemo(
     () => Array.from(new Set(itemStats.map((it) => it.category))).sort(),
     [itemStats],
   );
   const ITEM_STATUSES = ['active', 'pending', 'sold', 'archived'];
 
+  // Toggle one chip of a multi-select filter; null ("all") expands to the full list first.
   const toggleFilterList = (field: 'cats' | 'statuses', value: string, full: string[]) =>
     setItemFilters((f) => {
       const base = f[field] ?? full;
@@ -182,6 +192,7 @@ export default function MyAdsPage() {
       return { ...f, [field]: next };
     });
 
+  // How many filter groups are constraining the table — shown on the Filters button.
   const activeFilterCount =
     (itemFilters.search ? 1 : 0) +
     (itemFilters.priceMin || itemFilters.priceMax ? 1 : 0) +
@@ -197,6 +208,7 @@ export default function MyAdsPage() {
       viewsMin: '', viewsMax: '', cats: null, statuses: null, sold: 'all',
     });
 
+  // Numeric range check; blank min/max inputs mean unbounded.
   const inRange = (v: number, min: string, max: string) => {
     const lo = parseFloat(min);
     const hi = parseFloat(max);
@@ -205,6 +217,7 @@ export default function MyAdsPage() {
     return true;
   };
 
+  // Apply search, numeric ranges and chip selections to the item rows.
   const filteredItems = useMemo(
     () =>
       itemStats.filter((it) => {
@@ -227,6 +240,7 @@ export default function MyAdsPage() {
     [itemStats, itemFilters],
   );
 
+  // Any filter or sort change resets the table to page 1.
   useEffect(() => {
     setItemPage(1);
   }, [itemFilters, itemSort]);
@@ -249,6 +263,7 @@ export default function MyAdsPage() {
     });
   }, [filteredItems, itemSort]);
 
+  // Clamp the page number in case filtering shrank the result set.
   const itemTotalPages = Math.max(1, Math.ceil(sortedItems.length / ITEMS_PER_PAGE));
   const clampedItemPage = Math.min(itemPage, itemTotalPages);
   const pagedItems = sortedItems.slice(
@@ -256,6 +271,8 @@ export default function MyAdsPage() {
     clampedItemPage * ITEMS_PER_PAGE,
   );
 
+  // Sales-by-Category rows: the backend breakdown plus an average days-to-sell
+  // derived client-side from each category's sold items.
   const sortedCategories = useMemo(() => {
     const rows = (summary?.categoryBreakdown ?? []).map((cs) => {
       const soldIn = itemStats.filter((it) => it.category === cs.category && it.sold);
@@ -279,6 +296,7 @@ export default function MyAdsPage() {
   const [selectedCats, setSelectedCats] = useState<string[] | null>(null);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
 
+  // Shared chip toggler for the chart's year/month filters.
   const toggleInList = (
     setter: (fn: (prev: string[] | null) => string[] | null) => void,
     value: string,
@@ -300,6 +318,7 @@ export default function MyAdsPage() {
   const catColor = (cat: string) =>
     CHART_COLORS[chartCategories.indexOf(cat) % CHART_COLORS.length];
 
+  // Distinct years / month numbers present in the data — these drive the filter chips.
   const chartYears = useMemo(
     () =>
       Array.from(
@@ -316,6 +335,7 @@ export default function MyAdsPage() {
     [summary],
   );
 
+  // Resolve the null-means-all convention into concrete selections.
   const activeYears = selectedYears ?? chartYears;
   const activeMonths = selectedMonths ?? chartMonthParts;
   const allYearsOn = selectedYears === null || activeYears.length === chartYears.length;
@@ -339,6 +359,7 @@ export default function MyAdsPage() {
       return next;
     });
 
+  // Rows surviving the year/month/category chips; feeds the chart and its CSV export.
   const filteredChartRows = useMemo(
     () =>
       (summary?.monthlyByCategory ?? []).filter(
@@ -350,6 +371,8 @@ export default function MyAdsPage() {
     [summary, activeYears, activeMonths, activeCats],
   );
 
+  // Pivot to one row per month ({ month, [category]: value }) — the shape
+  // recharts stacked bars expect.
   const chartData = useMemo(() => {
     const byMonth = new Map<string, Record<string, number | string>>();
     filteredChartRows.forEach((r) => {
@@ -363,6 +386,7 @@ export default function MyAdsPage() {
 
   const visibleCategories = chartCategories.filter((c) => activeCats.includes(c));
 
+  // CSV of every sold item, grouped by category.
   const exportCategoryCsv = () =>
     downloadCsv(
       'seller-category-sales.csv',
@@ -375,6 +399,7 @@ export default function MyAdsPage() {
         ]),
     );
 
+  // CSV of the chart's currently filtered rows.
   const exportChartCsv = () =>
     downloadCsv(
       'seller-monthly-sales.csv',
@@ -382,6 +407,7 @@ export default function MyAdsPage() {
       filteredChartRows.map((r) => [r.month, r.category, r.orderCount, r.revenue]),
     );
 
+  // CSV of the item table in its current sort order (all pages, not just the visible one).
   const exportItemsCsv = () =>
     downloadCsv(
       'seller-items.csv',
@@ -392,10 +418,7 @@ export default function MyAdsPage() {
       ]),
     );
 
-//   const handleSearch = () => {
-//     router.push(`/?search=${encodeURIComponent(searchQuery)}`);
-//   };
-
+  // Initial load once auth resolves: the seller's listings per status + pending orders.
   useEffect(() => {
     if (authLoading) {
       return;
@@ -430,6 +453,8 @@ export default function MyAdsPage() {
       .finally(() => setLoading(false));
   }, [authLoading, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Lazy-load analytics on the first visit to the tab; skipped afterwards
+  // until analyticsLoaded is reset (e.g. after completing an order).
   useEffect(() => {
     if (authLoading || activeTab !== 'analytics' || analyticsLoaded || !user) return;
     const token = localStorage.getItem('token') || '';
@@ -457,6 +482,7 @@ export default function MyAdsPage() {
       .finally(() => setAnalyticsLoading(false));
   }, [authLoading, activeTab, analyticsLoaded, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // List + pagination for the currently open listings tab.
   const currentAds =
     activeTab === 'active' ? publishedAds : activeTab === 'sold' ? soldAds : archivedAds;
   const totalPages = Math.max(1, Math.ceil(currentAds.length / ADS_PER_PAGE));
@@ -465,6 +491,7 @@ export default function MyAdsPage() {
     page * ADS_PER_PAGE,
   );
 
+  // Delete a listing (after confirm) and drop it from whichever tab list held it.
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this ad? This cannot be undone.')) return;
     const token = localStorage.getItem('token') || '';
@@ -487,6 +514,7 @@ export default function MyAdsPage() {
     }
   };
 
+  // "12 Mar 2026"-style display date for ad/order rows.
   const formatDate = (str: string) => {
     try {
       return new Date(str).toLocaleDateString('en-MY', {
@@ -499,12 +527,15 @@ export default function MyAdsPage() {
     }
   };
 
+  // Whole days elapsed since the given timestamp (never negative).
   const daysSince = (str: string) => {
     const d = new Date(str).getTime();
     if (Number.isNaN(d)) return 0;
     return Math.max(0, Math.floor((Date.now() - d) / 86400000));
   };
 
+  // Resolve image paths: absolute/data URLs pass through, relative ones are
+  // served by the backend host.
   const imgSrc = (ad: Ad) => {
     if (!ad.image) return PLACEHOLDER_IMAGE;
     if (ad.image.startsWith('http://') || ad.image.startsWith('https://') || ad.image.startsWith('data:'))
@@ -519,6 +550,7 @@ export default function MyAdsPage() {
     if (order.listingImage.startsWith('/')) return `${API_BASE}${order.listingImage}`;
     return `${API_BASE}/${order.listingImage}`;
   };
+  // Refetch pending orders (called every time the Pending tab is opened).
   const fetchPendingOrders = async () => {
     const token = localStorage.getItem('token') || '';
     setPendingLoading(true);
@@ -538,6 +570,7 @@ export default function MyAdsPage() {
       setPendingLoading(false);
     }
   };
+  // Re-pull all three listing lists so tab counts stay accurate after a sale.
   const refreshSellerData = async () => {
     if (!user) return;
     const [activeData, soldData, archivedData] = await Promise.all([
@@ -549,6 +582,8 @@ export default function MyAdsPage() {
     setSoldAds(soldData.products || []);
     setArchivedAds(archivedData.products || []);
   };
+  // Mark an order delivered, then invalidate the cached analytics and refresh
+  // the listing lists so Sold counts and revenue reflect the completed sale.
   const handleCompleteOrder = async (orderId: number) => {
     const token = localStorage.getItem('token') || '';
     setCompletingOrderId(orderId);
@@ -586,54 +621,58 @@ export default function MyAdsPage() {
           className={styles.backBtn}
           onClick={() => router.push('/profile')}
         >
-          ← Back
+          {t('myShop.back')}
         </button>
 
-        <h1 className={styles.heading}>🏪 My Shop</h1>
+        <h1 className={styles.heading}>{t('myShop.heading')}</h1>
         <p className={styles.subheading}>
-          {publishedAds.length + soldAds.length + archivedAds.length} listings · manage your
-          items and track your sales
+          {t('myShop.subheading', {
+            count: publishedAds.length + soldAds.length + archivedAds.length,
+          })}
         </p>
 
         <div className={styles.card}>
           {/* Tabs */}
           <div className={styles.tabBar}>
             <Link href="/sell" className={styles.postAdBtn}>
-              + Post an Ad
+              {t('myShop.postAd')}
+            </Link>
+            <Link href="/profile/my-ads/import" className={styles.docsBtn}>
+              {t('myShop.importCsv')}
             </Link>
             <Link href="/profile/developer-api" className={styles.docsBtn}>
-              Developer API
+              {t('myShop.developerApi')}
             </Link>
             <span className={styles.tabDivider} />
             <button
               className={`${styles.tab} ${activeTab === 'active' ? styles.tabActive : ''}`}
               onClick={() => { setActiveTab('active'); setPage(1); }}
             >
-              Published ({publishedAds.length})
+              {t('myShop.tabPublished', { count: publishedAds.length })}
             </button>
             <button
               className={`${styles.tab} ${activeTab === 'pending' ? styles.tabActive : ''}`}
               onClick={() => { setActiveTab('pending'); setPage(1); fetchPendingOrders(); }}
             >
-              Pending Orders ({pendingOrders.length})
+              {t('myShop.tabPending', { count: pendingOrders.length })}
             </button>
             <button
               className={`${styles.tab} ${activeTab === 'sold' ? styles.tabActive : ''}`}
               onClick={() => { setActiveTab('sold'); setPage(1); }}
             >
-              Sold ({soldAds.length})
+              {t('myShop.tabSold', { count: soldAds.length })}
             </button>
             <button
               className={`${styles.tab} ${activeTab === 'archived' ? styles.tabActive : ''}`}
               onClick={() => { setActiveTab('archived'); setPage(1); }}
             >
-              Archived ({archivedAds.length})
+              {t('myShop.tabArchived', { count: archivedAds.length })}
             </button>
             <button
               className={`${styles.tab} ${activeTab === 'analytics' ? styles.tabActive : ''}`}
               onClick={() => setActiveTab('analytics')}
             >
-              📊 Analytics
+              {t('myShop.tabAnalytics')}
             </button>
           </div>
 
@@ -641,38 +680,39 @@ export default function MyAdsPage() {
           {activeTab === 'analytics' ? (
             <div className={styles.analyticsSection}>
               {analyticsLoading ? (
-                <p className={styles.emptyText}>Loading analytics…</p>
+                <p className={styles.emptyText}>{t('analytics.loading')}</p>
               ) : (
                 <>
+                  {/* Overview stat tiles */}
                   <div className={styles.sectionCard}>
-                  <h2 className={styles.sectionTitle}>🏪 Overview</h2>
+                  <h2 className={styles.sectionTitle}>{t('analytics.overview')}</h2>
                   <div className={styles.statGrid}>
                     <div className={styles.statTile}>
-                      <p className={styles.statLabel}>Sell-Through Rate</p>
+                      <p className={styles.statLabel}>{t('analytics.sellThroughRate')}</p>
                       <p className={styles.statValue}>{(summary?.sellThroughRate ?? 0).toFixed(0)}%</p>
                     </div>
                     <div className={styles.statTile}>
-                      <p className={styles.statLabel}>Total Revenue</p>
+                      <p className={styles.statLabel}>{t('analytics.totalRevenue')}</p>
                       <p className={styles.statValue}>RM {(summary?.totalRevenue ?? 0).toFixed(2)}</p>
                     </div>
                     <div className={styles.statTile}>
-                      <p className={styles.statLabel}>Active Listings</p>
+                      <p className={styles.statLabel}>{t('analytics.activeListings')}</p>
                       <p className={styles.statValue}>{summary?.itemsActive ?? 0}</p>
                     </div>
                     <div className={styles.statTile}>
-                      <p className={styles.statLabel}>Pending Orders</p>
+                      <p className={styles.statLabel}>{t('analytics.pendingOrders')}</p>
                       <p className={styles.statValue}>{summary?.pendingOrders ?? 0}</p>
                     </div>
                     <div className={styles.statTile}>
-                      <p className={styles.statLabel}>Items Sold</p>
+                      <p className={styles.statLabel}>{t('analytics.itemsSold')}</p>
                       <p className={styles.statValue}>{summary?.itemsSold ?? 0}</p>
                     </div>
                     <div className={styles.statTile}>
-                      <p className={styles.statLabel}>Archived</p>
+                      <p className={styles.statLabel}>{t('analytics.archived')}</p>
                       <p className={styles.statValue}>{summary?.itemsArchived ?? 0}</p>
                     </div>
                     <div className={styles.statTile}>
-                      <p className={styles.statLabel}>Avg Days to Sell</p>
+                      <p className={styles.statLabel}>{t('analytics.avgDaysToSell')}</p>
                       <p className={styles.statValue}>
                         {(summary?.avgDaysToSell ?? 0) > 0 ? (summary!.avgDaysToSell).toFixed(1) : '—'}
                       </p>
@@ -681,8 +721,10 @@ export default function MyAdsPage() {
 
                   </div>
 
+                  {/* Sales trends: stacked monthly bar chart with a metric toggle
+                      and year / month / category filter chips */}
                   <div className={styles.sectionCard}>
-                  <h2 className={styles.sectionTitle}>📈 Sales Trends</h2>
+                  <h2 className={styles.sectionTitle}>{t('analytics.salesTrends')}</h2>
                   <div className={styles.chartPanel}>
                     <div className={styles.chartToolbar}>
                       <div className={styles.segmented}>
@@ -690,28 +732,28 @@ export default function MyAdsPage() {
                           className={`${styles.segmentBtn} ${chartMetric === 'revenue' ? styles.segmentBtnActive : ''}`}
                           onClick={() => setChartMetric('revenue')}
                         >
-                          Monthly Revenue
+                          {t('analytics.monthlyRevenue')}
                         </button>
                         <button
                           className={`${styles.segmentBtn} ${chartMetric === 'orderCount' ? styles.segmentBtnActive : ''}`}
                           onClick={() => setChartMetric('orderCount')}
                         >
-                          Items Sold
+                          {t('analytics.itemsSold')}
                         </button>
                       </div>
                       <button className={styles.exportBtn} onClick={exportChartCsv}>
-                        ⬇ Export CSV
+                        {t('analytics.exportCsv')}
                       </button>
                     </div>
 
                     <div className={styles.filterRow}>
-                      <span className={styles.filterLabel}>Year</span>
+                      <span className={styles.filterLabel}>{t('analytics.year')}</span>
                       <button
                         className={`${styles.filterChip} ${allYearsOn ? styles.filterChipActive : ''}`}
                         onClick={() => setSelectedYears(allYearsOn ? [] : null)}
-                        title={allYearsOn ? 'Deselect all years' : 'Select all years'}
+                        title={allYearsOn ? t('analytics.deselectAll') : t('analytics.selectAll')}
                       >
-                        All
+                        {t('analytics.all')}
                       </button>
                       {chartYears.map((y) => {
                         const on = activeYears.includes(y);
@@ -729,13 +771,13 @@ export default function MyAdsPage() {
                     </div>
 
                     <div className={styles.filterRow}>
-                      <span className={styles.filterLabel}>Month</span>
+                      <span className={styles.filterLabel}>{t('analytics.month')}</span>
                       <button
                         className={`${styles.filterChip} ${allMonthsOn ? styles.filterChipActive : ''}`}
                         onClick={() => setSelectedMonths(allMonthsOn ? [] : null)}
-                        title={allMonthsOn ? 'Deselect all months' : 'Select all months'}
+                        title={allMonthsOn ? t('analytics.deselectAll') : t('analytics.selectAll')}
                       >
-                        All
+                        {t('analytics.all')}
                       </button>
                       {chartMonthParts.map((m) => {
                         const on = activeMonths.includes(m);
@@ -745,7 +787,7 @@ export default function MyAdsPage() {
                             className={`${styles.filterChip} ${on ? styles.filterChipOn : styles.filterChipOff}`}
                             onClick={() => toggleInList(setSelectedMonths, m, chartMonthParts)}
                           >
-                            {MONTH_NAMES[m] ?? m}
+                            {t(`months.${m}`)}
                             <span className={styles.chipState}>{on ? '✓' : ''}</span>
                           </button>
                         );
@@ -753,13 +795,13 @@ export default function MyAdsPage() {
                     </div>
 
                     <div className={styles.filterRow}>
-                      <span className={styles.filterLabel}>Categories</span>
+                      <span className={styles.filterLabel}>{t('analytics.categories')}</span>
                       <button
                         className={`${styles.filterChip} ${allCatsOn ? styles.filterChipActive : ''}`}
                         onClick={() => setSelectedCats(allCatsOn ? [] : null)}
-                        title={allCatsOn ? 'Deselect all categories' : 'Select all categories'}
+                        title={allCatsOn ? t('analytics.deselectAll') : t('analytics.selectAll')}
                       >
-                        All
+                        {t('analytics.all')}
                       </button>
                       {chartCategories.map((cat) => {
                         const on = activeCats.includes(cat);
@@ -768,7 +810,7 @@ export default function MyAdsPage() {
                             key={cat}
                             className={`${styles.filterChip} ${on ? styles.filterChipOn : styles.filterChipOff}`}
                             onClick={() => toggleCat(cat)}
-                            title={on ? `Hide ${cat}` : `Show ${cat}`}
+                            title={on ? t('analytics.hideCat', { name: cat }) : t('analytics.showCat', { name: cat })}
                           >
                             <span className={styles.chipDot} style={{ background: catColor(cat) }} />
                             {cat}
@@ -783,16 +825,23 @@ export default function MyAdsPage() {
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e1e0d9" vertical={false} />
-                            <XAxis dataKey="month" tick={{ fill: '#898781', fontSize: 12 }} />
+                            <XAxis
+                              dataKey="month"
+                              tick={{ fill: '#898781', fontSize: 12 }}
+                              tickFormatter={formatChartMonth}
+                            />
                             <YAxis
                               allowDecimals={chartMetric === 'revenue'}
                               tick={{ fill: '#898781', fontSize: 12 }}
                             />
                             <Tooltip
+                              labelFormatter={(label) => formatChartMonth(String(label))}
                               formatter={(value, name) => {
                                 const n = Number(Array.isArray(value) ? value[0] : value ?? 0);
                                 return [
-                                  chartMetric === 'revenue' ? `RM ${n.toFixed(2)}` : `${n} item(s)`,
+                                  chartMetric === 'revenue'
+                                    ? `RM ${n.toFixed(2)}`
+                                    : t('analytics.itemsTooltip', { count: n }),
                                   String(name),
                                 ];
                               }}
@@ -813,17 +862,18 @@ export default function MyAdsPage() {
                         </ResponsiveContainer>
                       </div>
                     ) : (
-                      <p className={styles.emptyText}>No sales data for this selection.</p>
+                      <p className={styles.emptyText}>{t('analytics.noChartData')}</p>
                     )}
                   </div>
                   </div>
 
+                  {/* Sales by category — click a row to expand the sold items behind it */}
                   {sortedCategories.length > 0 && (
                     <div className={styles.sectionCard}>
                       <div className={styles.sectionHeader}>
-                        <h2 className={styles.sectionTitle}>🗂 Sales by Category</h2>
+                        <h2 className={styles.sectionTitle}>{t('analytics.salesByCategory')}</h2>
                         <button className={styles.exportBtn} onClick={exportCategoryCsv}>
-                          ⬇ Export CSV
+                          {t('analytics.exportCsv')}
                         </button>
                       </div>
                       <div className={styles.tableWrap}>
@@ -831,16 +881,16 @@ export default function MyAdsPage() {
                           <thead>
                             <tr>
                               <th className={styles.sortableTh} onClick={() => toggleCatSort('category')}>
-                                Category{sortArrow(catSort?.key === 'category', catSort?.dir ?? 1)}
+                                {t('analytics.category')}{sortArrow(catSort?.key === 'category', catSort?.dir ?? 1)}
                               </th>
                               <th className={styles.sortableTh} onClick={() => toggleCatSort('itemsSold')}>
-                                Items Sold{sortArrow(catSort?.key === 'itemsSold', catSort?.dir ?? 1)}
+                                {t('analytics.itemsSold')}{sortArrow(catSort?.key === 'itemsSold', catSort?.dir ?? 1)}
                               </th>
                               <th className={styles.sortableTh} onClick={() => toggleCatSort('avgDays')}>
-                                Avg Days to Sell{sortArrow(catSort?.key === 'avgDays', catSort?.dir ?? 1)}
+                                {t('analytics.avgDaysToSell')}{sortArrow(catSort?.key === 'avgDays', catSort?.dir ?? 1)}
                               </th>
                               <th className={styles.sortableTh} onClick={() => toggleCatSort('revenue')}>
-                                Total Revenue{sortArrow(catSort?.key === 'revenue', catSort?.dir ?? 1)}
+                                {t('analytics.totalRevenue')}{sortArrow(catSort?.key === 'revenue', catSort?.dir ?? 1)}
                               </th>
                             </tr>
                           </thead>
@@ -873,17 +923,17 @@ export default function MyAdsPage() {
                                       <td colSpan={4}>
                                         {soldInCat.length === 0 ? (
                                           <p className={styles.subEmpty}>
-                                            No sold items found for this category.
+                                            {t('analytics.noSoldInCategory')}
                                           </p>
                                         ) : (
                                           <table className={styles.subTable}>
                                             <thead>
                                               <tr>
                                                 <th className={styles.indexCol}>#</th>
-                                                <th>Item</th>
-                                                <th>Sold Date</th>
-                                                <th>Days to Sell</th>
-                                                <th>Revenue</th>
+                                                <th>{t('analytics.item')}</th>
+                                                <th>{t('analytics.soldDate')}</th>
+                                                <th>{t('analytics.daysToSell')}</th>
+                                                <th>{t('analytics.revenue')}</th>
                                               </tr>
                                             </thead>
                                             <tbody>
@@ -918,27 +968,28 @@ export default function MyAdsPage() {
                     </div>
                   )}
 
+                  {/* My Items — filterable, sortable, paginated table of every listing */}
                   <div className={styles.sectionCard}>
                   {itemStats.some((it) => it.stale) && (
                     <p className={styles.staleBanner}>
-                      ⚠ {itemStats.filter((it) => it.stale).length} listing
-                      {itemStats.filter((it) => it.stale).length > 1 ? 's have' : ' has'} been active
-                      for 30+ days without selling — consider repricing or updating photos.
+                      {t('analytics.staleBanner', {
+                        count: itemStats.filter((it) => it.stale).length,
+                      })}
                     </p>
                   )}
 
                   <div className={styles.sectionHeader}>
-                    <h2 className={styles.sectionTitle}>📦 My Items</h2>
+                    <h2 className={styles.sectionTitle}>{t('analytics.myItems')}</h2>
                     {itemStats.length > 0 && (
                       <div className={styles.sectionActions}>
                         <button
                           className={`${styles.exportBtn} ${activeFilterCount > 0 ? styles.filterBtnActive : ''}`}
                           onClick={() => setShowItemFilters((s) => !s)}
                         >
-                          ⚙ Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                          {t('analytics.filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                         </button>
                         <button className={styles.exportBtn} onClick={exportItemsCsv}>
-                          ⬇ Export CSV
+                          {t('analytics.exportCsv')}
                         </button>
                       </div>
                     )}
@@ -948,11 +999,11 @@ export default function MyAdsPage() {
                     <div className={styles.filterPanel}>
                       <div className={styles.filterGrid}>
                         <label className={styles.filterField}>
-                          <span className={styles.filterFieldLabel}>Item name</span>
+                          <span className={styles.filterFieldLabel}>{t('analytics.itemName')}</span>
                           <input
                             type="text"
                             className={styles.filterInput}
-                            placeholder="Search title…"
+                            placeholder={t('analytics.searchTitle')}
                             value={itemFilters.search}
                             onChange={(e) =>
                               setItemFilters((f) => ({ ...f, search: e.target.value }))
@@ -960,13 +1011,13 @@ export default function MyAdsPage() {
                           />
                         </label>
                         <label className={styles.filterField}>
-                          <span className={styles.filterFieldLabel}>Price (RM)</span>
+                          <span className={styles.filterFieldLabel}>{t('analytics.priceRm')}</span>
                           <span className={styles.rangePair}>
                             <input
                               type="number"
                               min="0"
                               className={styles.filterInput}
-                              placeholder="Min"
+                              placeholder={t('analytics.min')}
                               value={itemFilters.priceMin}
                               onChange={(e) =>
                                 setItemFilters((f) => ({ ...f, priceMin: e.target.value.replace(/-/g, '') }))
@@ -977,7 +1028,7 @@ export default function MyAdsPage() {
                               type="number"
                               min="0"
                               className={styles.filterInput}
-                              placeholder="Max"
+                              placeholder={t('analytics.max')}
                               value={itemFilters.priceMax}
                               onChange={(e) =>
                                 setItemFilters((f) => ({ ...f, priceMax: e.target.value.replace(/-/g, '') }))
@@ -986,13 +1037,13 @@ export default function MyAdsPage() {
                           </span>
                         </label>
                         <label className={styles.filterField}>
-                          <span className={styles.filterFieldLabel}>Days listed</span>
+                          <span className={styles.filterFieldLabel}>{t('analytics.daysListed')}</span>
                           <span className={styles.rangePair}>
                             <input
                               type="number"
                               min="0"
                               className={styles.filterInput}
-                              placeholder="Min"
+                              placeholder={t('analytics.min')}
                               value={itemFilters.daysMin}
                               onChange={(e) =>
                                 setItemFilters((f) => ({ ...f, daysMin: e.target.value.replace(/-/g, '') }))
@@ -1003,7 +1054,7 @@ export default function MyAdsPage() {
                               type="number"
                               min="0"
                               className={styles.filterInput}
-                              placeholder="Max"
+                              placeholder={t('analytics.max')}
                               value={itemFilters.daysMax}
                               onChange={(e) =>
                                 setItemFilters((f) => ({ ...f, daysMax: e.target.value.replace(/-/g, '') }))
@@ -1012,13 +1063,13 @@ export default function MyAdsPage() {
                           </span>
                         </label>
                         <label className={styles.filterField}>
-                          <span className={styles.filterFieldLabel}>Views (30d)</span>
+                          <span className={styles.filterFieldLabel}>{t('analytics.views30d')}</span>
                           <span className={styles.rangePair}>
                             <input
                               type="number"
                               min="0"
                               className={styles.filterInput}
-                              placeholder="Min"
+                              placeholder={t('analytics.min')}
                               value={itemFilters.viewsMin}
                               onChange={(e) =>
                                 setItemFilters((f) => ({ ...f, viewsMin: e.target.value.replace(/-/g, '') }))
@@ -1029,7 +1080,7 @@ export default function MyAdsPage() {
                               type="number"
                               min="0"
                               className={styles.filterInput}
-                              placeholder="Max"
+                              placeholder={t('analytics.max')}
                               value={itemFilters.viewsMax}
                               onChange={(e) =>
                                 setItemFilters((f) => ({ ...f, viewsMax: e.target.value.replace(/-/g, '') }))
@@ -1039,7 +1090,7 @@ export default function MyAdsPage() {
                         </label>
                       </div>
                       <div className={styles.filterRow}>
-                        <span className={styles.filterLabel}>Category</span>
+                        <span className={styles.filterLabel}>{t('analytics.category')}</span>
                         <button
                           className={`${styles.filterChip} ${itemFilters.cats === null || itemFilters.cats.length === itemCategories.length ? styles.filterChipActive : ''}`}
                           onClick={() =>
@@ -1052,7 +1103,7 @@ export default function MyAdsPage() {
                             }))
                           }
                         >
-                          All
+                          {t('analytics.all')}
                         </button>
                         {itemCategories.map((cat) => {
                           const on = (itemFilters.cats ?? itemCategories).includes(cat);
@@ -1069,7 +1120,7 @@ export default function MyAdsPage() {
                         })}
                       </div>
                       <div className={styles.filterRow}>
-                        <span className={styles.filterLabel}>Status</span>
+                        <span className={styles.filterLabel}>{t('analytics.statusLabel')}</span>
                         <button
                           className={`${styles.filterChip} ${itemFilters.statuses === null || itemFilters.statuses.length === ITEM_STATUSES.length ? styles.filterChipActive : ''}`}
                           onClick={() =>
@@ -1082,7 +1133,7 @@ export default function MyAdsPage() {
                             }))
                           }
                         >
-                          All
+                          {t('analytics.all')}
                         </button>
                         {ITEM_STATUSES.map((st) => {
                           const on = (itemFilters.statuses ?? ITEM_STATUSES).includes(st);
@@ -1092,35 +1143,42 @@ export default function MyAdsPage() {
                               className={`${styles.filterChip} ${on ? styles.filterChipOn : styles.filterChipOff}`}
                               onClick={() => toggleFilterList('statuses', st, ITEM_STATUSES)}
                             >
-                              {st}
+                              {t(`status.${st}`)}
                               <span className={styles.chipState}>{on ? '✓' : ''}</span>
                             </button>
                           );
                         })}
-                        <span className={styles.filterLabel}>Sold</span>
+                        <span className={styles.filterLabel}>{t('analytics.sold')}</span>
                         {(['all', 'sold', 'unsold'] as const).map((s) => (
                           <button
                             key={s}
                             className={`${styles.filterChip} ${itemFilters.sold === s ? styles.filterChipActive : ''}`}
                             onClick={() => setItemFilters((f) => ({ ...f, sold: s }))}
                           >
-                            {s === 'all' ? 'All' : s === 'sold' ? 'Sold' : 'Not sold'}
+                            {s === 'all'
+                              ? t('analytics.all')
+                              : s === 'sold'
+                                ? t('analytics.sold')
+                                : t('analytics.notSold')}
                           </button>
                         ))}
                         <button className={styles.clearFiltersBtn} onClick={clearItemFilters}>
-                          ✕ Clear all
+                          {t('analytics.clearAll')}
                         </button>
                       </div>
                       <p className={styles.filterResultCount}>
-                        Showing {sortedItems.length} of {itemStats.length} items
+                        {t('analytics.showingCount', {
+                          shown: sortedItems.length,
+                          total: itemStats.length,
+                        })}
                       </p>
                     </div>
                   )}
 
                   {itemStats.length === 0 ? (
-                    <p className={styles.emptyText}>No listings yet.</p>
+                    <p className={styles.emptyText}>{t('analytics.noListings')}</p>
                   ) : sortedItems.length === 0 ? (
-                    <p className={styles.emptyText}>No items match the current filters.</p>
+                    <p className={styles.emptyText}>{t('analytics.noMatches')}</p>
                   ) : (
                     <div className={styles.tableWrap}>
                       <table className={styles.statsTable}>
@@ -1128,25 +1186,25 @@ export default function MyAdsPage() {
                           <tr>
                             <th className={styles.indexCol}>#</th>
                             <th className={styles.sortableTh} onClick={() => toggleItemSort('title')}>
-                              Item{sortArrow(itemSort?.key === 'title', itemSort?.dir ?? 1)}
+                              {t('analytics.item')}{sortArrow(itemSort?.key === 'title', itemSort?.dir ?? 1)}
                             </th>
                             <th className={styles.sortableTh} onClick={() => toggleItemSort('price')}>
-                              Price{sortArrow(itemSort?.key === 'price', itemSort?.dir ?? 1)}
+                              {t('analytics.price')}{sortArrow(itemSort?.key === 'price', itemSort?.dir ?? 1)}
                             </th>
                             <th className={styles.sortableTh} onClick={() => toggleItemSort('category')}>
-                              Category{sortArrow(itemSort?.key === 'category', itemSort?.dir ?? 1)}
+                              {t('analytics.category')}{sortArrow(itemSort?.key === 'category', itemSort?.dir ?? 1)}
                             </th>
                             <th className={styles.sortableTh} onClick={() => toggleItemSort('status')}>
-                              Status{sortArrow(itemSort?.key === 'status', itemSort?.dir ?? 1)}
+                              {t('analytics.statusLabel')}{sortArrow(itemSort?.key === 'status', itemSort?.dir ?? 1)}
                             </th>
                             <th className={styles.sortableTh} onClick={() => toggleItemSort('daysListed')}>
-                              Days Listed{sortArrow(itemSort?.key === 'daysListed', itemSort?.dir ?? 1)}
+                              {t('analytics.daysListedCol')}{sortArrow(itemSort?.key === 'daysListed', itemSort?.dir ?? 1)}
                             </th>
                             <th className={styles.sortableTh} onClick={() => toggleItemSort('viewsLast30Days')}>
-                              Views (30d){sortArrow(itemSort?.key === 'viewsLast30Days', itemSort?.dir ?? 1)}
+                              {t('analytics.views30d')}{sortArrow(itemSort?.key === 'viewsLast30Days', itemSort?.dir ?? 1)}
                             </th>
                             <th className={styles.sortableTh} onClick={() => toggleItemSort('soldAt')}>
-                              Sold{sortArrow(itemSort?.key === 'soldAt', itemSort?.dir ?? 1)}
+                              {t('analytics.sold')}{sortArrow(itemSort?.key === 'soldAt', itemSort?.dir ?? 1)}
                             </th>
                           </tr>
                         </thead>
@@ -1160,11 +1218,11 @@ export default function MyAdsPage() {
                                 <Link href={`/products/${it.listingId}`} className={styles.actionLink}>
                                   {it.title}
                                 </Link>
-                                {it.stale && <span className={styles.staleTag}> stale</span>}
+                                {it.stale && <span className={styles.staleTag}> {t('analytics.stale')}</span>}
                               </td>
                               <td>RM {it.price.toFixed(2)}</td>
                               <td>{it.category}</td>
-                              <td>{it.status}</td>
+                              <td>{t(`status.${it.status}`)}</td>
                               <td>{it.daysListed}</td>
                               <td>{it.viewsLast30Days}</td>
                               <td>
@@ -1211,6 +1269,7 @@ export default function MyAdsPage() {
               )}
             </div>
           ) : activeTab === 'pending' ? (
+            /* Pending orders awaiting the seller's delivery confirmation */
             pendingLoading ? (
               <p className={styles.emptyText}>Loading pending orders…</p>
             ) : pendingOrders.length === 0 ? (
@@ -1260,23 +1319,24 @@ export default function MyAdsPage() {
               </div>
             )
           ) : loading ? (
-            <p className={styles.emptyText}>Loading your ads…</p>
+            <p className={styles.emptyText}>{t('myShop.loadingAds')}</p>
           ) : paginatedAds.length === 0 ? (
             <div className={styles.emptyState}>
               <p className={styles.emptyText}>
                 {activeTab === 'active'
-                  ? "You don't have any published ads yet."
+                  ? t('myShop.emptyPublished')
                   : activeTab === 'sold'
-                    ? "You don't have any sold items yet."
-                    : "You don't have any archived items yet."}
+                    ? t('myShop.emptySold')
+                    : t('myShop.emptyArchived')}
               </p>
               {activeTab === 'active' && (
                 <Link href="/sell" className={styles.postAdLink}>
-                  Post your first ad →
+                  {t('myShop.postFirstAd')}
                 </Link>
               )}
             </div>
           ) : (
+            /* Active / Sold / Archived listings of the open tab */
             paginatedAds.map((ad, i) => (
               <div key={ad.id} className={styles.adItem}>
                 <span className={styles.adIndex}>

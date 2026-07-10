@@ -71,6 +71,40 @@
     gap: 16px;
 }
 
+/* ── Bulk import shortcut below the step list ── */
+.bulkImportBox {
+    margin-top: 20px;
+    padding: 12px 14px;
+    border: 1px dashed #ccc;
+    border-radius: 8px;
+    background: #fafafa;
+    text-align: center;
+}
+
+.bulkImportText {
+    font-size: 12px;
+    color: #888;
+    margin: 0 0 10px;
+}
+
+.bulkImportBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 16px;
+    border-radius: 20px;
+    background: #111;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.15s;
+}
+
+.bulkImportBtn:hover {
+    background: #333;
+}
+
 .stepItem {
     display: flex;
     align-items: center;

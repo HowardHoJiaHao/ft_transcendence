@@ -58,6 +58,7 @@ func main() {
 	protected.Use(myMiddleware.JWTAuth())
 
 	protected.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
+	protected.POST("/products/import", func(c echo.Context) error { return importProducts(c, gormDB) })
 	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
 	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	protected.POST("/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
@@ -85,6 +86,7 @@ func main() {
 	public.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
 	public.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
 	public.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
+	public.POST("/products/import", func(c echo.Context) error { return importProducts(c, gormDB) })
 	public.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
 	public.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	

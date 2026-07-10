@@ -172,6 +172,40 @@ const publicEndpoints: Endpoint[] = [
 { "id": 60, "title": "My Racket", "price": 123, "status": "active", "...": "..." }`,
   },
   {
+    method: 'POST',
+    path: '/api/public/v1/products/import',
+    auth: 'X-API-Key: <your key>',
+    description:
+      'Bulk create up to 500 listings in one call. Every item is validated first; if ANY item is invalid, nothing is created and you get per-row errors back (all-or-nothing, one database transaction). All listings are owned by the key’s account — sellerId in items is ignored.',
+    params: [
+      'items (required) — array of 1–500 listing objects',
+      'each item takes the same fields as POST /products: title (required), price (required, > 0), and optional description, category, condition, dealingMethod, phoneNumber, location, weightCategory, flexibilityCategory, balanceCategory, originalPrice (> 0 if given), stockQuantity (integer ≥ 1, default 1), isNew, isFeatured',
+      'omitted optional fields get the same defaults as the single-product POST',
+      'on success: 201 with { imported, ids } — ids are the new listing ids in item order',
+      'on validation failure: 400 with { imported: 0, errors: [{ row, field, message }] } — row is the 1-based position in items',
+    ],
+    request: `curl -k -X POST https://localhost/api/public/v1/products/import \\
+  -H "X-API-Key: sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "items": [
+      { "title": "Yonex Astrox 88D Pro", "price": 450, "category": "Rackets", "stockQuantity": 1 },
+      { "title": "Victor Thruster K9900", "price": 380, "category": "Rackets", "condition": "New" }
+    ]
+  }'`,
+    response: `201 Created
+{ "imported": 2, "ids": [61, 62] }
+
+# If any row is invalid, NOTHING is imported:
+400 Bad Request
+{
+  "imported": 0,
+  "errors": [
+    { "row": 2, "field": "price", "message": "price must be greater than 0" }
+  ]
+}`,
+  },
+  {
     method: 'PUT',
     path: '/api/public/v1/products/:id',
     auth: 'X-API-Key: <your key>',
