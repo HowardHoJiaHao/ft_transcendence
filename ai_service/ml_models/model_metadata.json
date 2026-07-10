@@ -14,5 +14,7 @@
     "flexibilityCategory",
     "balanceCategory"
   ],
-  "trained_at": "YYYY-MM-DD"
+  "trained_at": null,
+  "confidence_calibrated": false,
+  "provenance": "Legacy project artifact; reproducible training and evaluation artifacts are not yet committed"
 }

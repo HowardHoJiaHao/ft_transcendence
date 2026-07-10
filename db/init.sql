@@ -236,8 +236,47 @@ CREATE TABLE IF NOT EXISTS faq_embeddings (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_faq_embeddings_vector 
+CREATE INDEX IF NOT EXISTS idx_faq_embeddings_vector
 ON faq_embeddings USING ivfflat (embedding vector_cosine_ops);
+
+-- Versioned RacketBot knowledge base. The embedding column deliberately does
+-- not hardcode a dimension: ingestion validates and records the dimension for
+-- the configured embedding model before activating a new version.
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
+    id BIGSERIAL PRIMARY KEY,
+    chunk_id VARCHAR(255) NOT NULL,
+    source_id VARCHAR(255) NOT NULL,
+    source_file VARCHAR(255) NOT NULL,
+    document_title TEXT NOT NULL,
+    section_title TEXT NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    audience VARCHAR(50) NOT NULL DEFAULT 'all',
+    last_reviewed VARCHAR(32),
+    chunk_text TEXT NOT NULL,
+    content_hash CHAR(64) NOT NULL,
+    embedding_model VARCHAR(255) NOT NULL,
+    embedding_dimension INT NOT NULL,
+    ingestion_version VARCHAR(100) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
+    search_vector TSVECTOR GENERATED ALWAYS AS (
+        to_tsvector(
+            'english',
+            COALESCE(document_title, '') || ' ' ||
+            COALESCE(section_title, '') || ' ' ||
+            COALESCE(chunk_text, '')
+        )
+    ) STORED,
+    embedding VECTOR NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (ingestion_version, chunk_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_active
+ON knowledge_chunks (is_active, category);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_search
+ON knowledge_chunks USING GIN (search_vector);
 
 -- ============================================================
 -- Demo seed: seller analytics dashboard data

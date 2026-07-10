@@ -1,21 +1,27 @@
+import json
 import os
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 try:
     import joblib
-except ImportError:  # pragma: no cover - dependency is installed in Docker image
+except ImportError:  # pragma: no cover - installed by the service image
     joblib = None
 
 try:
     import pandas as pd
-except ImportError:  # pragma: no cover - dependency is installed in Docker image
+except ImportError:  # pragma: no cover - installed by the service image
     pd = None
 
 
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "ml_models")
 MODEL_PATH = os.getenv(
     "RACKET_RECOMMENDER_MODEL_PATH",
-    os.path.join(os.path.dirname(__file__), "ml_models", "racket_recommender.joblib"),
+    os.path.join(MODEL_DIR, "racket_recommender.joblib"),
+)
+MODEL_METADATA_PATH = os.getenv(
+    "RACKET_RECOMMENDER_METADATA_PATH",
+    os.path.join(MODEL_DIR, "model_metadata.json"),
 )
 
 REQUIRED_PROFILE_FIELDS = [
@@ -74,15 +80,15 @@ PROFILE_VALUE_ALIASES = {
 
 
 class RecommendationProfileError(ValueError):
-    pass
+    """The structured assessment profile is missing or invalid."""
 
 
 class ModelUnavailableError(RuntimeError):
-    pass
+    """The serialized recommendation model cannot be loaded."""
 
 
 class ModelPredictionError(RuntimeError):
-    pass
+    """The model failed to return its documented outputs."""
 
 
 def validate_profile(profile: Dict[str, Any]) -> Dict[str, str]:
@@ -96,7 +102,7 @@ def validate_profile(profile: Dict[str, Any]) -> Dict[str, str]:
             f"Missing recommendation profile field(s): {', '.join(missing)}"
         )
 
-    clean_profile = {}
+    clean_profile: Dict[str, str] = {}
     invalid = []
     for field in REQUIRED_PROFILE_FIELDS:
         raw_value = str(profile[field]).strip()
@@ -110,8 +116,25 @@ def validate_profile(profile: Dict[str, Any]) -> Dict[str, str]:
         raise RecommendationProfileError(
             f"Invalid recommendation profile value(s): {', '.join(invalid)}"
         )
-
     return clean_profile
+
+
+@lru_cache(maxsize=1)
+def load_model_metadata() -> Dict[str, Any]:
+    metadata: Dict[str, Any] = {
+        "model_name": "racket_recommender",
+        "version": "unknown",
+        "trained_at": None,
+        "confidence_calibrated": False,
+    }
+    try:
+        with open(MODEL_METADATA_PATH, "r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+        if isinstance(loaded, dict):
+            metadata.update(loaded)
+    except (OSError, json.JSONDecodeError):
+        pass
+    return metadata
 
 
 @lru_cache(maxsize=1)
@@ -119,8 +142,11 @@ def load_model():
     if joblib is None:
         raise ModelUnavailableError("joblib is not installed")
     if not os.path.exists(MODEL_PATH):
-        raise ModelUnavailableError(f"Model file not found at {MODEL_PATH}")
-    return joblib.load(MODEL_PATH)
+        raise ModelUnavailableError("Recommendation model artifact is missing")
+    try:
+        return joblib.load(MODEL_PATH)
+    except Exception as exc:
+        raise ModelUnavailableError("Recommendation model could not be loaded") from exc
 
 
 def _as_feature_frame(profile: Dict[str, str]):
@@ -142,25 +168,30 @@ def _first_prediction_row(raw_prediction: Any) -> List[Any]:
     raise ModelPredictionError("Model returned an empty prediction")
 
 
-def _prediction_confidence(model: Any, feature_frame: Any) -> Optional[float]:
+def _confidence_by_output(model: Any, feature_frame: Any) -> Optional[Dict[str, float]]:
+    """Return independent output confidence when the estimator exposes it.
+
+    The values are deliberately not averaged: weight, flexibility, and balance
+    are separate predictions with potentially different uncertainty. They are
+    also not described as calibrated unless model metadata proves calibration.
+    """
+
     if not hasattr(model, "predict_proba"):
         return None
-
     try:
-        probabilities = model.predict_proba(feature_frame)
-        confidences = []
-        for output_probs in probabilities:
+        probability_outputs = model.predict_proba(feature_frame)
+        if not isinstance(probability_outputs, (list, tuple)):
+            return None
+        result: Dict[str, float] = {}
+        for index, output_probs in enumerate(probability_outputs[: len(OUTPUT_FIELDS)]):
             first_row = output_probs[0]
             if hasattr(first_row, "tolist"):
                 first_row = first_row.tolist()
             if first_row:
-                confidences.append(max(first_row))
-        if confidences:
-            return round(sum(confidences) / len(confidences), 2)
+                result[OUTPUT_FIELDS[index]] = round(float(max(first_row)), 4)
+        return result or None
     except Exception:
         return None
-
-    return None
 
 
 def predict_racket_specs(profile: Dict[str, Any]) -> Dict[str, Any]:
@@ -170,19 +201,25 @@ def predict_racket_specs(profile: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         prediction_row = _first_prediction_row(model.predict(feature_frame))
+    except ModelPredictionError:
+        raise
     except Exception as exc:
-        raise ModelPredictionError(str(exc)) from exc
+        raise ModelPredictionError("Model prediction failed") from exc
 
     if len(prediction_row) < len(OUTPUT_FIELDS):
         raise ModelPredictionError(
             f"Model returned {len(prediction_row)} output(s), expected {len(OUTPUT_FIELDS)}"
         )
 
-    specs = {
+    predictions = {
         field: str(prediction_row[index])
         for index, field in enumerate(OUTPUT_FIELDS)
     }
-    confidence = _prediction_confidence(model, feature_frame)
-    if confidence is not None:
-        specs["confidence"] = confidence
-    return specs
+    result: Dict[str, Any] = {
+        "predictions": predictions,
+        "model": load_model_metadata(),
+    }
+    confidence = _confidence_by_output(model, feature_frame)
+    if confidence:
+        result["confidence_by_output"] = confidence
+    return result
