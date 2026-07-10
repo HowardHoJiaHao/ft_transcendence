@@ -1,11 +1,11 @@
-"""Live OpenRouter smoke test for native multi-tool calling.
+"""Live DeepSeek smoke test for native multi-tool calling.
 
 Run inside the AI service environment:
 
     python smoke_tool_calling.py
 
 The script never calls the marketplace backend. It verifies that the configured
-model and LangChain/OpenRouter combination exchange native tool-call objects.
+model and LangChain combination exchange native tool-call objects.
 """
 
 import asyncio
@@ -31,8 +31,8 @@ def sample_seller_listings(seller_id: int) -> dict:
 
 
 async def main() -> int:
-    if not os.getenv("OPENROUTER_API_KEY", "").strip():
-        print("OPENROUTER_API_KEY is required for the live smoke test.")
+    if not os.getenv("DEEPSEEK_API_KEY", "").strip():
+        print("DEEPSEEK_API_KEY is required for the live smoke test.")
         return 2
 
     graph = create_agent(

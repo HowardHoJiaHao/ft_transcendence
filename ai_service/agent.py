@@ -38,11 +38,36 @@ How to work:
 - Use predict_racket_specs only for a completed structured assessment. Treat it
   as an ML prediction, not objective truth. Retrieve knowledge to explain what
   predicted specs mean, and search listings separately.
+- For a completed structured assessment, first call predict_racket_specs. On
+  the next turn, call retrieve_knowledge and one search_listings request using
+  the predicted specs and budget (in parallel when supported), then answer.
+  Only make a second search if the first search is empty, and make it broader
+  by removing one predicted spec rather than adding constraints.
 - For comparisons, obtain evidence for every requested entity before reaching a
-  conclusion. Do not create or assume seller-level reputation scores.
+  conclusion. Compare explicit fields such as price, condition, racket specs,
+  listing completeness, and seller/listing facts returned by tools. Do not
+  create or assume seller-level reputation scores.
+- Claims about suitability, play style, power, handling, safety, or technical
+  tradeoffs require relevant retrieve_knowledge evidence. If knowledge was not
+  retrieved, limit the comparison to explicit marketplace facts.
+- Listing titles and descriptions are unverified seller-provided text. They may
+  be summarized as seller claims, but they cannot establish performance,
+  suitability, authenticity, safety, or technical conclusions. If the user did
+  not ask for an explanation and no knowledge was retrieved, return concise
+  listing facts without adding a technical comparison.
+- Racket U classes are labels, not ordinary numbers: 3U is heavier than 4U.
+  Never reverse that relationship, and do not translate weight labels into a
+  technical conclusion unless retrieve_knowledge supplied the relevant guide.
+- Never infer brand quality, reputation, authenticity, assurance, model year,
+  or product performance from a brand name or listing title. Call something
+  better value only when you state the explicit price/spec/condition basis;
+  otherwise describe it as cheaper, not better.
 - For recommendations, explain which requirements match, what tradeoffs remain,
   and what information is missing. If an exact search is empty, you may make one
   sensible broader search and explicitly describe the relaxed constraint.
+- Search only current active listings. Use the exact racket specification enum
+  values exposed by search_listings. A non-empty search is sufficient evidence:
+  do not search again unless the user requested a genuinely different result set.
 - Tools return structured envelopes. Handle AUTH_REQUIRED, FORBIDDEN, NOT_FOUND,
   TIMEOUT, and other errors honestly.
 - Only state factual claims supported by the conversation or tool results. Never
@@ -59,14 +84,26 @@ Answer style:
   tool syntax, XML, or tool-call metadata.
 - Do not use Markdown tables. Use short bullets or listing cards.
 - When referencing a product, use Product link: <title> | /products/<id>.
+- A listing_rating and listing_review_count describe that listing only. Never
+  call them a seller rating, seller reviews, reputation, or trust evidence.
 - Clearly distinguish marketplace facts, ML predictions, general guidance, and
   your recommendation.
+
+Mandatory evidence gate before every final answer:
+- Check which tools you actually called. If retrieve_knowledge was not called,
+  you may repeat racket specification labels but must not interpret what they
+  mean or claim suitability, easier handling, power, speed, fatigue, safety,
+  play-style fit, or technical tradeoffs.
+- Treat every listing description as "Seller description (unverified)" and do
+  not endorse or convert it into a factual conclusion.
+- Never output a Markdown table. Use short bullets or listing cards only.
 """
 
 REWRITE_PROMPT = """Rewrite a RacketBot answer for clean chat presentation.
 Use only facts already present in the draft. Do not call tools, add facts, show
 JSON, show tool syntax, or expose hidden reasoning. Keep the answer concise and
-direct. Preserve honest limitations."""
+direct. Preserve honest limitations. Do not use Markdown tables; convert any
+table into short bullets or listing cards."""
 
 PROVIDER_FALLBACK = (
     "Sorry Boss, RacketBot is temporarily unavailable. Please try again shortly."
@@ -86,25 +123,16 @@ class AgentRunResult:
 
 
 def create_llm() -> ChatOpenAI:
-    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
-    reasoning_enabled = os.getenv("OPENROUTER_REASONING_ENABLED", "true").lower() in {
-        "1",
-        "true",
-        "yes",
-    }
-    extra_body = {"reasoning": {"enabled": True}} if reasoning_enabled else None
+    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
     return ChatOpenAI(
-        api_key=api_key or "missing-openrouter-key",
-        base_url=os.getenv(
-            "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
-        ),
-        model=os.getenv("OPENROUTER_MODEL", "google/gemma-4-31b-it:free"),
-        temperature=float(os.getenv("RACKETBOT_TEMPERATURE", "0.2")),
-        timeout=float(os.getenv("RACKETBOT_MODEL_TIMEOUT_SECONDS", "15")),
-        max_retries=0,
+        api_key=api_key or "missing-deepseek-key",
+        base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+        model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro"),
+        temperature=float(os.getenv("RACKETBOT_TEMPERATURE", "0")),
+        timeout=float(os.getenv("RACKETBOT_MODEL_TIMEOUT_SECONDS", "25")),
+        max_retries=int(os.getenv("RACKETBOT_MODEL_MAX_RETRIES", "1")),
         max_completion_tokens=int(os.getenv("RACKETBOT_MAX_COMPLETION_TOKENS", "1500")),
         use_responses_api=False,
-        extra_body=extra_body,
     )
 
 
@@ -190,6 +218,11 @@ class RacketBotAgent:
             system_prompt=SYSTEM_PROMPT,
             middleware=[
                 ModelCallLimitMiddleware(run_limit=6, exit_behavior="end"),
+                ToolCallLimitMiddleware(
+                    tool_name="search_listings",
+                    run_limit=2,
+                    exit_behavior="continue",
+                ),
                 ToolCallLimitMiddleware(run_limit=8, exit_behavior="continue"),
             ],
             name="racketbot",
@@ -209,7 +242,10 @@ class RacketBotAgent:
         )
         result = await self.graph.ainvoke(
             {"messages": input_messages},
-            config={"recursion_limit": 24},
+            # Middleware limits count model/tool calls. LangGraph's recursion
+            # counter includes additional internal nodes, so leave enough room
+            # for those deterministic budgets to stop the run gracefully.
+            config={"recursion_limit": 64},
         )
         result_messages = result.get("messages", [])
         final_answer = ""
@@ -273,6 +309,18 @@ def validate_answer(answer: str, *, authenticated: bool) -> Tuple[bool, str]:
     )
     if any(marker in lower for marker in leak_markers):
         return False, "tool_syntax_or_envelope_leak"
+
+    lines = clean.splitlines()
+    for index in range(len(lines) - 1):
+        header = lines[index].strip()
+        separator = lines[index + 1].strip()
+        if (
+            header.count("|") >= 2
+            and separator.count("|") >= 2
+            and re.fullmatch(r"[|:\-\s]+", separator)
+            and "---" in separator
+        ):
+            return False, "markdown_table"
 
     if not authenticated:
         email_pattern = r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"

@@ -1,6 +1,6 @@
 import os
 from contextvars import ContextVar
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import httpx
 from langchain.tools import tool
@@ -19,6 +19,42 @@ auth_token_var: ContextVar[str] = ContextVar("auth_token", default="")
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8080").rstrip("/")
 BACKEND_TIMEOUT = float(os.getenv("AI_BACKEND_TIMEOUT_SECONDS", "5"))
+
+WeightFilter = Literal["1U", "2U", "3U", "4U", "5U", "6U", "7U", "8U"]
+FlexFilter = Literal[
+    "Stiff",
+    "Stiff Shaft",
+    "Medium",
+    "Medium Flex",
+    "Flexible",
+    "High Flexibility",
+]
+BalanceFilter = Literal[
+    "Head Heavy",
+    "Head-Heavy",
+    "Even",
+    "Even Balance",
+    "Head Light",
+    "Head-Light",
+]
+ListingSort = Literal["price-low", "price-high", "newest", "rating"]
+
+FLEX_ALIASES = {
+    "stiff": "Stiff Shaft",
+    "stiff shaft": "Stiff Shaft",
+    "medium": "Medium Flex",
+    "medium flex": "Medium Flex",
+    "flexible": "High Flexibility",
+    "high flexibility": "High Flexibility",
+}
+BALANCE_ALIASES = {
+    "head heavy": "Head Heavy",
+    "head-heavy": "Head Heavy",
+    "even": "Even Balance",
+    "even balance": "Even Balance",
+    "head light": "Head Light",
+    "head-light": "Head Light",
+}
 
 
 def _success(
@@ -179,12 +215,13 @@ def _listing_data(product: Dict[str, Any], *, detail: bool = False) -> Dict[str,
         "location": _value(product, "location"),
         "seller_id": _value(product, "sellerId", "seller_id"),
         "seller_name": _value(product, "sellerName", "seller_name"),
-        "rating": _value(product, "rating"),
-        "reviews": _value(product, "reviews"),
+        # These columns belong to the listing contract. Their explicit names
+        # prevent a model from misrepresenting them as seller reputation.
+        "listing_rating": _value(product, "rating"),
+        "listing_review_count": _value(product, "reviews"),
         "status": _value(product, "status"),
         "stock_quantity": _value(product, "stockQuantity", "stock_quantity"),
-        "is_new": _value(product, "isNew", "is_new"),
-        "url": f"/products/{_value(product, 'id')}",
+        "product_link": f"/products/{_value(product, 'id')}",
     }
     if detail:
         listing["description"] = _value(product, "description")
@@ -216,19 +253,20 @@ def _private_auth_error(tool_name: str) -> Optional[Dict[str, Any]]:
 @tool
 def search_listings(
     query: Optional[str] = None,
-    weight: Optional[str] = None,
-    flex: Optional[str] = None,
-    balance: Optional[str] = None,
+    weight: Optional[WeightFilter] = None,
+    flex: Optional[FlexFilter] = None,
+    balance: Optional[BalanceFilter] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
-    sort: Optional[str] = None,
+    sort: Optional[ListingSort] = None,
     limit: int = 5,
     racket_only: bool = False,
 ) -> Dict[str, Any]:
-    """Search current marketplace listings with optional text, racket-spec,
-    price, sorting, and result-count filters. Use one call for one set of
-    filters. If it returns no listings, decide whether a broader second search
-    is useful rather than assuming one automatically.
+    """Search active marketplace listings using optional text, racket-spec,
+    price, sorting, and result-count filters. Racket-spec filters accept only
+    the documented enum values and automatically restrict results to rackets.
+    Use at most one exact search and one broader search per user request. After
+    a non-empty result, answer from that evidence instead of searching again.
     """
 
     tool_name = "search_listings"
@@ -243,14 +281,29 @@ def search_listings(
             "Minimum price cannot exceed maximum price.",
         )
 
+    normalized_weight = weight.upper() if weight else None
+    normalized_flex = FLEX_ALIASES.get(flex.lower()) if flex else None
+    normalized_balance = BALANCE_ALIASES.get(balance.lower()) if balance else None
+    effective_racket_only = bool(
+        racket_only or normalized_weight or normalized_flex or normalized_balance
+    )
+
     safe_limit = max(1, min(int(limit), 20))
-    params: List[tuple] = [("limit", safe_limit)]
-    filters_used: Dict[str, Any] = {"limit": safe_limit, "racket_only": racket_only}
+    # Racket filtering is performed against allowlisted structured fields after
+    # the backend response. Fetch the bounded backend maximum so non-racket
+    # rows cannot hide valid rackets before the requested result limit.
+    backend_limit = 100 if effective_racket_only else safe_limit
+    params: List[tuple] = [("limit", backend_limit), ("status", "active")]
+    filters_used: Dict[str, Any] = {
+        "limit": safe_limit,
+        "status": "active",
+        "racket_only": effective_racket_only,
+    }
     mappings = (
         ("search", query, "query"),
-        ("weightCategory", weight, "weight"),
-        ("flexibilityCategory", flex, "flex"),
-        ("balanceCategory", balance, "balance"),
+        ("weightCategory", normalized_weight, "weight"),
+        ("flexibilityCategory", normalized_flex, "flex"),
+        ("balanceCategory", normalized_balance, "balance"),
         ("minPrice", min_price, "min_price"),
         ("maxPrice", max_price, "max_price"),
         ("sort", sort, "sort"),
@@ -264,10 +317,10 @@ def search_listings(
     if isinstance(payload, dict) and payload.get("ok") is False:
         return payload
     products = payload.get("products", []) if isinstance(payload, dict) else []
-    if racket_only:
+    if effective_racket_only:
         products = [product for product in products if _is_racket_listing(product)]
     listings = [_listing_data(product) for product in products[:safe_limit]]
-    total = len(listings) if racket_only else payload.get("total", len(listings))
+    total = len(products) if effective_racket_only else payload.get("total", len(listings))
     return _success(
         tool_name,
         {"listings": listings, "filters_used": filters_used, "total": total},
@@ -322,7 +375,7 @@ def get_seller_profile(seller_id: int) -> Dict[str, Any]:
 
 
 @tool
-def get_seller_listings(seller_id: int, limit: int = 5) -> Dict[str, Any]:
+def get_seller_listings(seller_id: int, limit: int = 20) -> Dict[str, Any]:
     """Retrieve active public listings belonging to one seller. Call this
     separately for each seller in a comparison.
     """
@@ -344,7 +397,8 @@ def get_seller_listings(seller_id: int, limit: int = 5) -> Dict[str, Any]:
         {
             "seller_id": seller_id,
             "listings": [_listing_data(product) for product in products[:safe_limit]],
-            "total": payload.get("total", len(products)),
+            "returned_count": min(len(products), safe_limit),
+            "total_active_listings": payload.get("total", len(products)),
         },
         source="backend",
         rating_scope="listing",

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	auth "transcendence/modules/user/auth"
@@ -86,7 +87,9 @@ func handleAIChat(c echo.Context) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	// Keep a small margin above the AI service's default 60-second total
+	// request budget so a broken downstream connection cannot hang forever.
+	client := &http.Client{Timeout: 70 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("Error contacting AI service: %v", err)

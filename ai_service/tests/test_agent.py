@@ -7,7 +7,11 @@ import agent
 
 
 class FakeGraph:
+    def __init__(self):
+        self.config = None
+
     async def ainvoke(self, payload, config=None):
+        self.config = config
         await asyncio.sleep(0.01)
         user_messages = [
             message.content
@@ -52,13 +56,15 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("__recommendation_assessment_complete__", messages[-1].content)
 
     async def test_parallel_runs_do_not_share_history(self):
-        bot = agent.RacketBotAgent(graph=FakeGraph(), llm=FakeLLM())
+        graph = FakeGraph()
+        bot = agent.RacketBotAgent(graph=graph, llm=FakeLLM())
         first, second = await asyncio.gather(
             bot.run(history=[], message="first request"),
             bot.run(history=[], message="second request"),
         )
         self.assertEqual(first.answer, "Answer for first request")
         self.assertEqual(second.answer, "Answer for second request")
+        self.assertEqual(graph.config["recursion_limit"], 64)
 
     def test_validator_rejects_raw_envelope_and_guest_pii(self):
         self.assertFalse(
@@ -76,6 +82,16 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
                 "A 5U flexible racket is easier to handle.", authenticated=False
             )[0]
         )
+
+    def test_validator_rejects_markdown_tables(self):
+        answer = """Comparison
+| Product | Price |
+|---|---|
+| Racket A | RM200 |
+"""
+        valid, reason = agent.validate_answer(answer, authenticated=False)
+        self.assertFalse(valid)
+        self.assertEqual(reason, "markdown_table")
 
 
 if __name__ == "__main__":

@@ -15,7 +15,9 @@ class RecordingAgent:
         before = auth_token_var.get()
         await asyncio.sleep(0.01)
         after = auth_token_var.get()
-        self.seen.append((message, before, after, list(history)))
+        self.seen.append(
+            (message, before, after, list(history), recommendation_profile)
+        )
         return AgentRunResult(
             answer=f"Completed answer for {message} with grounded facts.",
             tools_called=(),
@@ -80,6 +82,38 @@ class MainConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(by_message["second"][1:3], ("token-two", "token-two"))
         self.assertEqual(by_message["first"][3][0]["content"], "history one")
         self.assertEqual(by_message["second"][3][0]["content"], "history two")
+
+    async def test_recommendation_profile_is_validated_and_normalized(self):
+        request = main.ChatRequest(
+            message="__recommendation_assessment_complete__",
+            recommendationProfile={
+                "age_group": "under-13",
+                "gender": "prefer_not_to_say",
+                "experience_level": "6_months-1_year",
+                "play_style": "not_sure",
+                "budget_range": "under-200",
+                "unexpected": "ignore me",
+            },
+        )
+        response = await main.chat_endpoint(request)
+        await response_text(response)
+
+        normalized = self.agent.seen[-1][4]
+        self.assertEqual(normalized["age_group"], "under_13")
+        self.assertEqual(normalized["experience_level"], "6_months_1_year")
+        self.assertEqual(normalized["budget_range"], "under_200")
+        self.assertNotIn("unexpected", normalized)
+
+    async def test_invalid_recommendation_profile_never_reaches_agent(self):
+        request = main.ChatRequest(
+            message="__recommendation_assessment_complete__",
+            recommendationProfile={"age_group": "18-25"},
+        )
+        response = await main.chat_endpoint(request)
+        answer = sse_answer(await response_text(response))
+
+        self.assertIn("incomplete or invalid", answer)
+        self.assertEqual(self.agent.seen, [])
 
 
 if __name__ == "__main__":

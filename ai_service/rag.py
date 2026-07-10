@@ -277,6 +277,34 @@ def ingest_knowledge(
                 content_hash: _as_list(vector)
                 for content_hash, vector in cursor.fetchall()
             }
+            cursor.execute(
+                """
+                SELECT ingestion_version, content_hash, embedding_dimension
+                FROM knowledge_chunks
+                WHERE is_active = TRUE AND embedding_model = %s
+                ORDER BY chunk_id
+                """,
+                (model_id,),
+            )
+            active_rows = cursor.fetchall()
+
+        expected_hashes = {chunk["content_hash"] for chunk in chunks}
+        active_hashes = {row[1] for row in active_rows}
+        if len(active_rows) == len(chunks) and active_hashes == expected_hashes:
+            active_version = active_rows[0][0]
+            active_dimension = active_rows[0][2]
+            result = {
+                "ok": True,
+                "ingestion_version": active_version,
+                "documents": len({chunk["source_id"] for chunk in chunks}),
+                "chunks": len(chunks),
+                "embedding_model": model_id,
+                "embedding_dimension": active_dimension,
+                "reused_embeddings": len(chunks),
+                "unchanged": True,
+            }
+            logger.info("Knowledge ingestion unchanged: %s", result)
+            return result
 
         missing_chunks = [
             chunk for chunk in chunks if chunk["content_hash"] not in reusable

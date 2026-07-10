@@ -165,7 +165,7 @@ Implementation requirements:
    `langchain-core`, `langchain-openai`, and LangGraph dependencies.
 2. Use the supported agent constructor for those pinned versions.
 3. Confirm that the resulting client sends OpenAI-compatible `tools` and
-   receives native `tool_calls` through OpenRouter.
+   receives native `tool_calls` through the configured DeepSeek chat API.
 4. Record the chosen package versions and model ID in configuration.
 5. Do not reuse `initialize_agent`,
    `STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION`, or
@@ -174,6 +174,15 @@ Implementation requirements:
 LangGraph is used for the bounded tool-calling loop, not to introduce five
 separate LLM roles. Planner, collector, sufficiency decision, reasoning, and
 composition occur naturally across the model's loop turns.
+
+Provider responsibilities remain separate:
+
+- DeepSeek is the chat and native tool-calling provider. The correctness-first
+  default is `deepseek-v4-pro`, configurable through `DEEPSEEK_MODEL`.
+- OpenRouter is the vector-embedding provider used by RAG.
+- Each provider has its own API key, base URL, and model configuration.
+- Changing the chat provider must not silently disable or replace RAG
+  embeddings.
 
 ## 7. Request Lifecycle
 
@@ -244,7 +253,9 @@ Initial limits:
 
 - Maximum 5 model tool-selection iterations.
 - Maximum 8 total tool executions.
-- Maximum 20 seconds agent wall time, configurable by environment.
+- Maximum 60 seconds agent wall time by default, configurable by environment.
+  The value includes measured DeepSeek V4 Pro multi-tool latency plus the one
+  permitted presentation rewrite. Deployments may lower it after measurement.
 - Maximum 1 final-answer rewrite.
 - The rewrite uses already collected evidence and cannot call more tools.
 
@@ -317,9 +328,9 @@ or trust scores.
 
 Purpose: retrieve active public listings belonging to a seller.
 
-Any rating included in a listing is treated according to the backend listing
-contract. It must not be relabelled as an independently calculated seller
-reputation score.
+Any rating included in a listing is exposed as `listing_rating` with
+`listing_review_count`. It must not be relabelled as a seller rating or an
+independently calculated seller reputation score.
 
 ### 10.5 `get_my_profile`
 
@@ -505,7 +516,7 @@ Do not:
 ### Phase 0: Dependency and Native Tool-Calling Proof
 
 - Choose and pin compatible modern LangChain/LangGraph packages.
-- Verify the configured OpenRouter model returns native `tool_calls`.
+- Verify the configured DeepSeek model returns native `tool_calls`.
 - Test one call, multiple calls, no-tool answer, invalid arguments, and a tool
   error.
 - Verify the model can request two seller-listing tools for a comparison-shaped

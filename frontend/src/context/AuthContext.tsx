@@ -54,6 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) //by p
 	{
 		setUser(null);
 		localStorage.removeItem('user'); //removes saved user from website storage
+		localStorage.removeItem('token');
 	};
 
 	const updateUser = (updates: Partial<User>) => {

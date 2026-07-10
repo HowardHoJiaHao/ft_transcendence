@@ -46,11 +46,44 @@ class ToolContractTests(unittest.TestCase):
         result = tools.search_listings.invoke({"max_price": 300, "racket_only": True})
         listing = result["data"]["listings"][0]
         self.assertTrue(result["ok"])
-        self.assertEqual(listing["url"], "/products/7")
+        self.assertEqual(listing["product_link"], "/products/7")
         self.assertNotIn("phoneNumber", listing)
         self.assertNotIn("phone", listing)
         self.assertNotIn("image", listing)
+        self.assertNotIn("rating", listing)
+        self.assertEqual(listing["listing_rating"], 4.5)
         self.assertEqual(result["meta"]["rating_scope"], "listing")
+
+    @patch("tools.httpx.get")
+    def test_search_normalizes_racket_filters_and_requests_active_scope(self, get):
+        get.return_value = FakeResponse(
+            200,
+            {
+                "products": [
+                    {
+                        "id": 9,
+                        "title": "Fixture Attack Racket",
+                        "price": 150,
+                        "weightCategory": "3U",
+                        "flexibilityCategory": "Stiff Shaft",
+                        "balanceCategory": "Head Heavy",
+                        "status": "active",
+                    }
+                ],
+                "total": 1,
+            },
+        )
+
+        result = tools.search_listings.invoke(
+            {"flex": "Stiff", "max_price": 500, "limit": 10}
+        )
+
+        params = get.call_args.kwargs["params"]
+        self.assertIn(("flexibilityCategory", "Stiff Shaft"), params)
+        self.assertIn(("status", "active"), params)
+        self.assertIn(("limit", 100), params)
+        self.assertTrue(result["data"]["filters_used"]["racket_only"])
+        self.assertEqual(result["data"]["total"], 1)
 
     @patch("tools.httpx.get")
     def test_public_seller_profile_uses_allowlist(self, get):
@@ -71,6 +104,22 @@ class ToolContractTests(unittest.TestCase):
         self.assertNotIn("email", seller)
         self.assertNotIn("phone", seller)
         self.assertNotIn("rating", seller)
+
+    @patch("tools.httpx.get")
+    def test_seller_listing_comparison_returns_bounded_full_scope(self, get):
+        get.return_value = FakeResponse(
+            200,
+            {
+                "products": [{"id": 1, "title": "Racket", "price": 100}],
+                "total": 7,
+            },
+        )
+
+        result = tools.get_seller_listings.invoke({"seller_id": 10})
+
+        self.assertEqual(result["data"]["returned_count"], 1)
+        self.assertEqual(result["data"]["total_active_listings"], 7)
+        self.assertIn(("limit", 20), get.call_args.kwargs["params"])
 
     def test_spoofed_user_id_without_token_cannot_open_private_tool(self):
         tools.user_id_var.set(99)

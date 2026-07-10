@@ -84,7 +84,7 @@ const assessmentSteps: AssessmentStep[] = [
 ];
 
 export default function AIFloatingChat() {
-  const { user } = useAuth();
+  const { logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -125,19 +125,31 @@ export default function AIFloatingChat() {
         ? ''
         : configuredApiURL.replace(/\/$/, '');
       
-      const response = await fetch(`${apiURL}/api/v1/ai/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          message: requestMessage,
-          // Send last 10 messages as history context (windowing)
-          history: visibleHistory.slice(-10),
-          ...(profile ? { recommendationProfile: profile } : {})
-        })
+      const requestBody = JSON.stringify({
+        message: requestMessage,
+        // Send last 10 messages as history context (windowing)
+        history: visibleHistory.slice(-10),
+        ...(profile ? { recommendationProfile: profile } : {})
       });
+      const sendRequest = (authToken: string) => fetch(
+        `${apiURL}/api/v1/ai/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+          },
+          body: requestBody
+        }
+      );
+
+      let response = await sendRequest(token);
+      if (response.status === 401 && token) {
+        // Guest AI chat is supported. Expire stale browser auth state and retry
+        // once without credentials; private tools will remain unavailable.
+        logout();
+        response = await sendRequest('');
+      }
 
       if (!response.ok) {
         throw new Error(`API returned HTTP ${response.status}`);
@@ -151,43 +163,49 @@ export default function AIFloatingChat() {
       const decoder = new TextDecoder();
       let done = false;
       let aiResponseText = '';
+      let sseBuffer = '';
 
       while (!done) {
         const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          // Split SSE lines by double newline or single newline
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            const cleanLine = line.trim();
-            if (cleanLine.startsWith('data: ')) {
-              const dataStr = cleanLine.slice(6);
-              if (dataStr === '[DONE]') {
-                done = true;
-                break;
-              }
-              try {
-                const parsed = JSON.parse(dataStr);
-                const tokenVal = parsed.token || '';
-                aiResponseText += tokenVal;
-                
-                // Update the last message (AI bubble) in real time
-                setMessages((prev) => {
-                  const newMsgs = [...prev];
-                  if (newMsgs.length > 0) {
-                    newMsgs[newMsgs.length - 1] = {
-                      role: 'assistant',
-                      content: aiResponseText
-                    };
-                  }
-                  return newMsgs;
-                });
-              } catch (e) {
-                // Ignore incomplete lines during chunk breaks
-              }
-            }
+        sseBuffer += value
+          ? decoder.decode(value, { stream: !doneReading })
+          : decoder.decode();
+        const events = sseBuffer.split(/\r?\n\r?\n/);
+        sseBuffer = events.pop() || '';
+
+        for (const event of events) {
+          const dataLine = event
+            .split(/\r?\n/)
+            .find((line) => line.startsWith('data: '));
+          if (!dataLine) continue;
+
+          const dataStr = dataLine.slice(6).trim();
+          if (dataStr === '[DONE]') {
+            done = true;
+            break;
           }
+          try {
+            const parsed = JSON.parse(dataStr);
+            const tokenVal = parsed.token || '';
+            aiResponseText += tokenVal;
+
+            // Update the last message (AI bubble) in real time
+            setMessages((prev) => {
+              const newMsgs = [...prev];
+              if (newMsgs.length > 0) {
+                newMsgs[newMsgs.length - 1] = {
+                  role: 'assistant',
+                  content: aiResponseText
+                };
+              }
+              return newMsgs;
+            });
+          } catch (e) {
+            console.error('Invalid AI stream event:', e);
+          }
+        }
+        if (doneReading) {
+          done = true;
         }
       }
     } catch (error) {

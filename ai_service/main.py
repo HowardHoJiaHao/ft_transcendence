@@ -17,6 +17,7 @@ from agent import (
     validate_answer,
 )
 from rag import ingest_knowledge
+from recommender import RecommendationProfileError, validate_profile
 from tools import auth_token_var, user_id_var
 
 
@@ -53,7 +54,22 @@ async def _ingest_in_background() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("RacketDiction AI service starting")
+    logger.info(
+        "RacketDiction AI service starting chat_provider=deepseek "
+        "chat_model=%s embedding_provider=openrouter embedding_model=%s",
+        os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro"),
+        os.getenv(
+            "OPENROUTER_EMBEDDING_MODEL",
+            "nvidia/llama-nemotron-embed-vl-1b-v2:free",
+        ),
+    )
+    if not os.getenv("DEEPSEEK_API_KEY", "").strip():
+        logger.warning("DEEPSEEK_API_KEY is missing; chatbot requests will fail")
+    if not os.getenv("OPENROUTER_API_KEY", "").strip():
+        logger.warning(
+            "OPENROUTER_API_KEY is missing; vector RAG will use its local "
+            "fallback and cannot generate new embeddings"
+        )
     ingestion_task = None
     if os.getenv("RAG_INGEST_ON_STARTUP", "true").lower() in {"1", "true", "yes"}:
         ingestion_task = asyncio.create_task(_ingest_in_background())
@@ -84,10 +100,24 @@ async def _run_and_validate(
     req: ChatRequest,
     history: List[Dict[str, str]],
 ) -> str:
+    recommendation_profile = None
+    if req.recommendationProfile is not None:
+        try:
+            # Accept only the controlled assessment fields and values before
+            # placing them in model context. validate_profile also discards any
+            # unexpected keys supplied by a direct API caller.
+            recommendation_profile = validate_profile(req.recommendationProfile)
+        except RecommendationProfileError:
+            logger.warning("RacketBot rejected invalid recommendation profile")
+            return (
+                "The racket assessment is incomplete or invalid. "
+                "Please restart it and answer all five questions."
+            )
+
     result = await agent.run(
         history=history,
         message=req.message,
-        recommendation_profile=req.recommendationProfile,
+        recommendation_profile=recommendation_profile,
     )
     answer = result.answer
     authenticated = bool(req.authToken.strip())
@@ -140,7 +170,7 @@ async def chat_endpoint(req: ChatRequest):
         auth_token = auth_token_var.set(req.authToken)
         try:
             agent = await _get_agent()
-            timeout = float(os.getenv("RACKETBOT_REQUEST_TIMEOUT_SECONDS", "20"))
+            timeout = float(os.getenv("RACKETBOT_REQUEST_TIMEOUT_SECONDS", "60"))
             answer = await asyncio.wait_for(
                 _run_and_validate(agent, req, history),
                 timeout=timeout,
