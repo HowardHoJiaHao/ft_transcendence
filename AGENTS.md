@@ -61,6 +61,15 @@ Service URLs:
 - AI service: `http://localhost:8000`
 - PostgreSQL: `localhost:5432`
 
+### MVP Admin Access
+
+- Admin login page: `https://localhost/admin/login` (or `http://localhost/admin/login`).
+- Local MVP administrator username: `wongdakfat`.
+- The test password is configured locally in `.env` as `ADMIN_PASSWORD_HASH`;
+  do not copy it into tracked files or commits.
+- The admin dashboard at `/admin/users` can search/filter users, suspend or
+  restore accounts, and display marketplace summary counts.
+
 ## Validation
 
 Use the narrowest relevant checks after changes.

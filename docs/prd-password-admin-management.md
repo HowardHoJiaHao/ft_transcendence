@@ -104,6 +104,9 @@ The administrator users page displays:
 | Account status | Yes |
 | Suspend or restore action | Yes |
 
+The page also includes a small dashboard summary (member, listing, and
+completed-order totals) plus username/email search and account-status filters.
+
 Search, analytics, listing counts, sales data, and detailed filters are not
 required.
 

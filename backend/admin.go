@@ -30,10 +30,20 @@ type updateAccountStatusRequest struct {
 	AccountStatus string `json:"accountStatus"`
 }
 
+type adminSummary struct {
+	TotalUsers       int     `json:"totalUsers"`
+	ActiveUsers      int     `json:"activeUsers"`
+	SuspendedUsers   int     `json:"suspendedUsers"`
+	ActiveListings   int     `json:"activeListings"`
+	CompletedOrders  int     `json:"completedOrders"`
+	CompletedRevenue float64 `json:"completedRevenue"`
+}
+
 func registerAdminRoutes(v1 *echo.Group, db *sql.DB) {
 	v1.POST("/admin/auth/login", adminLogin)
 	admin := v1.Group("/admin")
 	admin.Use(myMiddleware.AdminAuth())
+	admin.GET("/summary", func(c echo.Context) error { return getAdminSummary(c, db) })
 	admin.GET("/users", func(c echo.Context) error { return listAdminUsers(c, db) })
 	admin.PATCH("/users/:id/status", func(c echo.Context) error { return updateAdminUserStatus(c, db) })
 }
@@ -66,7 +76,21 @@ func adminLogin(c echo.Context) error {
 }
 
 func listAdminUsers(c echo.Context, db *sql.DB) error {
-	rows, err := db.Query("SELECT id, username, email, account_status FROM users ORDER BY id ASC")
+	query := "SELECT id, username, email, account_status FROM users WHERE 1=1"
+	args := []interface{}{}
+	if status := c.QueryParam("status"); status != "" {
+		if status != "active" && status != "suspended" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "status must be active or suspended"})
+		}
+		query += " AND account_status = $1"
+		args = append(args, status)
+	}
+	if search := strings.TrimSpace(c.QueryParam("search")); search != "" {
+		query += " AND (username ILIKE $" + strconv.Itoa(len(args)+1) + " OR email ILIKE $" + strconv.Itoa(len(args)+1) + ")"
+		args = append(args, "%"+search+"%")
+	}
+	query += " ORDER BY id ASC"
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch users"})
 	}
@@ -80,6 +104,30 @@ func listAdminUsers(c echo.Context, db *sql.DB) error {
 		users = append(users, u)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{"users": users})
+}
+
+func getAdminSummary(c echo.Context, db *sql.DB) error {
+	var summary adminSummary
+	err := db.QueryRow(`
+		SELECT
+			(SELECT COUNT(*) FROM users),
+			(SELECT COUNT(*) FROM users WHERE account_status = 'active'),
+			(SELECT COUNT(*) FROM users WHERE account_status = 'suspended'),
+			(SELECT COUNT(*) FROM listings WHERE status = 'active'),
+			(SELECT COUNT(*) FROM orders WHERE status = 'completed'),
+			COALESCE((SELECT SUM(total_price) FROM orders WHERE status = 'completed'), 0)
+	`).Scan(
+		&summary.TotalUsers,
+		&summary.ActiveUsers,
+		&summary.SuspendedUsers,
+		&summary.ActiveListings,
+		&summary.CompletedOrders,
+		&summary.CompletedRevenue,
+	)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch admin summary"})
+	}
+	return c.JSON(http.StatusOK, summary)
 }
 
 func updateAdminUserStatus(c echo.Context, db *sql.DB) error {
