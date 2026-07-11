@@ -43,6 +43,10 @@ How to work:
   the predicted specs and budget (in parallel when supported), then answer.
   Only make a second search if the first search is empty, and make it broader
   by removing one predicted spec rather than adding constraints.
+- The assessment profile is already complete and validated. Never ask the user
+  to repeat age, gender, experience, play style, or budget. For the prediction
+  tool, use the profile's canonical values exactly; play_style is one of
+  attacking, defensive, balanced, or not_sure.
 - For comparisons, obtain evidence for every requested entity before reaching a
   conclusion. Compare explicit fields such as price, condition, racket specs,
   listing completeness, and seller/listing facts returned by tools. Do not
@@ -108,10 +112,33 @@ table into short bullets or listing cards."""
 PROVIDER_FALLBACK = (
     "Sorry Boss, RacketBot is temporarily unavailable. Please try again shortly."
 )
+MODEL_LIMIT_FALLBACK = (
+    "I reached the safe reasoning limit before completing this request. "
+    "Please try a simpler question or ask me to continue."
+)
+MODEL_LIMIT_MARKER = "model call limits exceeded:"
 
 
 class AgentNoAnswerError(RuntimeError):
     pass
+
+
+class AgentLimitReachedError(AgentNoAnswerError):
+    """The safety budget stopped the agent before it produced an answer."""
+
+
+def _is_model_limit_message(text: str) -> bool:
+    return text.strip().lower().startswith(MODEL_LIMIT_MARKER)
+
+
+def _model_call_limit() -> int:
+    """Keep the safety budget configurable without letting bad env values crash startup."""
+
+    try:
+        return max(1, int(os.getenv("RACKETBOT_MODEL_CALL_LIMIT", "10")))
+    except (TypeError, ValueError):
+        logger.warning("Invalid RACKETBOT_MODEL_CALL_LIMIT; using 10")
+        return 10
 
 
 @dataclass(frozen=True)
@@ -127,7 +154,7 @@ def create_llm() -> ChatOpenAI:
     return ChatOpenAI(
         api_key=api_key or "missing-deepseek-key",
         base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
-        model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro"),
+        model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
         temperature=float(os.getenv("RACKETBOT_TEMPERATURE", "0")),
         timeout=float(os.getenv("RACKETBOT_MODEL_TIMEOUT_SECONDS", "25")),
         max_retries=int(os.getenv("RACKETBOT_MODEL_MAX_RETRIES", "1")),
@@ -160,7 +187,10 @@ def build_request_messages(
     recommendation_profile: Optional[Dict[str, str]] = None,
 ) -> List[Any]:
     messages: List[Any] = []
-    clean_history = list(history[-10:])
+    # A completed assessment is already a validated structured profile. Do not
+    # send the five old question/answer turns back to the model: they can make
+    # it ask for a field that is already present (especially the budget).
+    clean_history = [] if recommendation_profile else list(history[-10:])
 
     # The current frontend includes the just-submitted user message in history.
     # Avoid sending it to the model twice.
@@ -185,8 +215,10 @@ def build_request_messages(
     if recommendation_profile:
         current_message = (
             "The user completed the structured racket recommendation assessment. "
-            "Use the prediction, knowledge, and marketplace tools to give a "
-            "personalised recommendation with evidence and tradeoffs.\n\n"
+            "The profile below is complete and already validated. Do not ask the "
+            "user to repeat any profile field. Use the prediction, knowledge, and "
+            "marketplace tools to give a personalised recommendation with evidence "
+            "and tradeoffs.\n\n"
             f"Assessment profile: {json.dumps(recommendation_profile, sort_keys=True)}"
         )
     messages.append(HumanMessage(content=current_message))
@@ -217,7 +249,13 @@ class RacketBotAgent:
             tools=all_tools,
             system_prompt=SYSTEM_PROMPT,
             middleware=[
-                ModelCallLimitMiddleware(run_limit=6, exit_behavior="end"),
+                ModelCallLimitMiddleware(
+                    # Ten is the configured operational budget. This is a
+                    # guardrail, not a DeepSeek quota, and remains configurable
+                    # with RACKETBOT_MODEL_CALL_LIMIT.
+                    run_limit=_model_call_limit(),
+                    exit_behavior="end",
+                ),
                 ToolCallLimitMiddleware(
                     tool_name="search_listings",
                     run_limit=2,
@@ -248,21 +286,42 @@ class RacketBotAgent:
             config={"recursion_limit": 64},
         )
         result_messages = result.get("messages", [])
+        # LangGraph returns the input messages followed by messages generated in
+        # this run. Never select an old assistant question from the input as the
+        # current answer when a middleware limit stops generation.
+        generated_messages = result_messages[len(input_messages) :]
         final_answer = ""
-        for item in reversed(result_messages):
+        limit_reached = False
+        for item in reversed(generated_messages):
             if isinstance(item, AIMessage):
                 text = _message_text(item)
+                if _is_model_limit_message(text):
+                    limit_reached = True
+                    continue
                 if text and not (getattr(item, "tool_calls", None) or []):
                     final_answer = text
                     break
         if not final_answer:
+            if limit_reached:
+                logger.warning(
+                    "RacketBot model call budget exhausted without a final answer"
+                )
+                raise AgentLimitReachedError(MODEL_LIMIT_FALLBACK)
             raise AgentNoAnswerError("Agent did not produce a final answer")
 
-        tools_called, model_calls, tool_calls = _summarize_run(result_messages)
+        if limit_reached:
+            final_answer = (
+                f"{final_answer}\n\n"
+                "I stopped after the safe model-call limit; this answer uses "
+                "the evidence gathered so far."
+            )
+
+        tools_called, model_calls, tool_calls = _summarize_run(generated_messages)
         logger.info(
-            "RacketBot run complete model_calls=%s tool_calls=%s tools=%s",
+            "RacketBot run complete model_calls=%s tool_calls=%s limit_reached=%s tools=%s",
             model_calls,
             tool_calls,
+            limit_reached,
             list(tools_called),
         )
         return AgentRunResult(

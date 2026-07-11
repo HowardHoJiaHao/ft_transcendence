@@ -64,9 +64,16 @@ PROFILE_VALUE_ALIASES = {
     },
     "play_style": {
         "attacking": "attacking",
+        "offensive": "attacking",
         "defensive": "defensive",
+        "defense": "defensive",
+        "control": "defensive",
         "balanced": "balanced",
+        "all-round": "balanced",
+        "all_round": "balanced",
+        "all round": "balanced",
         "not_sure": "not_sure",
+        "not sure": "not_sure",
     },
     "budget_range": {
         "under-200": "under_200",
@@ -107,6 +114,8 @@ def validate_profile(profile: Dict[str, Any]) -> Dict[str, str]:
     for field in REQUIRED_PROFILE_FIELDS:
         raw_value = str(profile[field]).strip()
         normalized_value = PROFILE_VALUE_ALIASES[field].get(raw_value)
+        if normalized_value is None:
+            normalized_value = PROFILE_VALUE_ALIASES[field].get(raw_value.lower())
         if normalized_value is None:
             invalid.append(f"{field}={raw_value}")
         else:

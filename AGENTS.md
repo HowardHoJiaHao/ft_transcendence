@@ -7,7 +7,9 @@ This is a full-stack marketplace app for badminton/racket listings.
 Main services:
 - `frontend/`: Next.js app using React, TypeScript, App Router, and CSS modules.
 - `backend/`: Go Echo API server using PostgreSQL through pgx/GORM.
-- `ai_service/`: FastAPI AI service using LangChain, OpenRouter, PostgreSQL, and pgvector.
+- `ai_service/`: FastAPI RacketBot service using LangChain/LangGraph, DeepSeek
+  for chat and tool calling, OpenRouter for RAG embeddings, PostgreSQL, and
+  pgvector.
 - `db/`: PostgreSQL schema and seed data.
 - `nginx/`: Reverse proxy for frontend/backend routing.
 - `docker-compose.yml`: Main local orchestration.
@@ -24,7 +26,11 @@ Before making changes, inspect the relevant files:
 - Database schema: `db/init.sql`
 - Frontend root app: `frontend/src/app/layout.tsx`, `frontend/src/app/page.tsx`
 - Auth state: `frontend/src/context/AuthContext.tsx`
-- AI service entrypoint: `ai_service/main.py`
+- AI proxy: `backend/ai_chat.go`
+- AI service entrypoint and request lifecycle: `ai_service/main.py`
+- AI agent, tools, RAG, embeddings, and ML: `ai_service/agent.py`,
+  `ai_service/tools.py`, `ai_service/rag.py`, `ai_service/embeddings.py`, and
+  `ai_service/recommender.py`
 
 Use `rg` / `rg --files` for searching.
 
@@ -63,8 +69,10 @@ Frontend:
 ```bash
 cd frontend
 npm run build
-npm run lint
 ```
+
+Run `npm run lint` only when the project has a non-interactive ESLint
+configuration; `npm run build` performs the current production type/build check.
 
 Backend:
 ```bash
@@ -77,6 +85,7 @@ AI service:
 ```bash
 cd ai_service
 python -m py_compile *.py
+python -m unittest discover -s tests -v
 ```
 
 Docker-level:
@@ -128,9 +137,21 @@ If a command cannot run because dependencies or services are unavailable, report
 
 ### AI Service
 
-- FastAPI app is in `ai_service/main.py`.
-- RAG/embedding logic is split across `rag.py`, `embeddings.py`, `agent.py`, and `tools.py`.
-- Uses OpenRouter environment variables.
+- The FastAPI `/chat` path builds request-local state and invokes one stateless
+  native tool-calling agent; do not add keyword intent routing or shared chat
+  memory to the normal path.
+- `backend/ai_chat.go` validates optional JWTs, derives the trusted user ID,
+  and streams the AI response. The Go backend remains the authorization boundary.
+- DeepSeek is the chat/tool-calling provider. Configure it with
+  `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, and `DEEPSEEK_MODEL`.
+- OpenRouter is the vector-embedding provider for RAG. Configure it separately
+  with `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`, and
+  `OPENROUTER_EMBEDDING_MODEL`. Do not interchange the two provider keys.
+- RAG/embedding logic is split across `rag.py` and `embeddings.py`; the agent,
+  structured read-only tools, and ML recommender live in `agent.py`, `tools.py`,
+  and `recommender.py`.
+- RAG uses the versioned `knowledge_chunks` pgvector table. Preserve the active
+  version if ingestion or an embedding provider fails.
 - Avoid hardcoding API keys or model credentials.
 - AI service depends on PostgreSQL and pgvector.
 
@@ -140,6 +161,10 @@ Existing docs are useful but may be stale:
 - `README.md`, `DEVELOPMENT.md`, and `ARCHITECTURE.md` contain some MySQL references.
 - Trust active code/config over old documentation when they conflict.
 - If changing behavior, update docs only when the request includes documentation or the mismatch would confuse future work.
+- Keep this file as an agent orientation guide, not a full architecture manual.
+  Update it when service boundaries, provider responsibilities, critical
+  commands, security behavior, or major subsystem ownership changes; ordinary
+  bug fixes and individual endpoints usually do not require an update.
 
 ## Git / Safety Rules
 

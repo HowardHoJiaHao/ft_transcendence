@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from agent import (
+    AgentLimitReachedError,
     PROVIDER_FALLBACK,
     RacketBotAgent,
     create_agent,
@@ -57,7 +58,7 @@ async def lifespan(app: FastAPI):
     logger.info(
         "RacketDiction AI service starting chat_provider=deepseek "
         "chat_model=%s embedding_provider=openrouter embedding_model=%s",
-        os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro"),
+        os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
         os.getenv(
             "OPENROUTER_EMBEDDING_MODEL",
             "nvidia/llama-nemotron-embed-vl-1b-v2:free",
@@ -114,11 +115,15 @@ async def _run_and_validate(
                 "Please restart it and answer all five questions."
             )
 
-    result = await agent.run(
-        history=history,
-        message=req.message,
-        recommendation_profile=recommendation_profile,
-    )
+    try:
+        result = await agent.run(
+            history=history,
+            message=req.message,
+            recommendation_profile=recommendation_profile,
+        )
+    except AgentLimitReachedError as exc:
+        logger.warning("RacketBot stopped at its model-call safety limit")
+        return str(exc)
     answer = result.answer
     authenticated = bool(req.authToken.strip())
     valid, reason = validate_answer(answer, authenticated=authenticated)

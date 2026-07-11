@@ -26,6 +26,12 @@ class FakeModel:
 
 
 class RecommenderTests(unittest.TestCase):
+    def test_profile_validation_accepts_model_style_aliases_case_insensitively(self):
+        profile = dict(VALID_PROFILE)
+        profile["play_style"] = "Defensive"
+        normalized = recommender.validate_profile(profile)
+        self.assertEqual(normalized["play_style"], "defensive")
+
     def test_profile_validation_rejects_missing_fields(self):
         with self.assertRaises(recommender.RecommendationProfileError):
             recommender.validate_profile({"age_group": "18-25"})

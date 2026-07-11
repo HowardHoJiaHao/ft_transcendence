@@ -565,7 +565,10 @@ def predict_racket_specs(
     """Predict suitable racket weight, flexibility, and balance from the
     completed structured assessment. This returns an ML prediction only. Use
     knowledge retrieval to explain the predicted specs and listing search to
-    find current products.
+    find current products. Use the validated profile values: age_group, gender,
+    experience_level, play_style (attacking, defensive, balanced, or not_sure),
+    and budget_range. Do not invent a second play-style vocabulary such as
+    offensive, all-round, or control.
     """
 
     tool_name = "predict_racket_specs"

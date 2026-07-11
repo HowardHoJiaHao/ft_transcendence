@@ -177,8 +177,10 @@ composition occur naturally across the model's loop turns.
 
 Provider responsibilities remain separate:
 
-- DeepSeek is the chat and native tool-calling provider. The correctness-first
-  default is `deepseek-v4-pro`, configurable through `DEEPSEEK_MODEL`.
+- DeepSeek is the chat and native tool-calling provider. The default is
+  `deepseek-v4-flash`, configurable through `DEEPSEEK_MODEL`; deployments may
+  choose V4 Pro when they need stronger reasoning and accept higher latency or
+  cost.
 - OpenRouter is the vector-embedding provider used by RAG.
 - Each provider has its own API key, base URL, and model configuration.
 - Changing the chat provider must not silently disable or replace RAG

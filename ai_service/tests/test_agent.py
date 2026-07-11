@@ -31,6 +31,22 @@ class FakeLLM:
         return AIMessage(content="Rewritten clean answer with enough words.")
 
 
+class LimitGraph:
+    async def ainvoke(self, payload, config=None):
+        return {
+            "messages": [
+                *payload["messages"],
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {"name": "search_listings", "args": {}, "id": "call-1"}
+                    ],
+                ),
+            AIMessage(content="Model call limits exceeded: run limit (10/10)"),
+            ]
+        }
+
+
 class AgentTests(unittest.IsolatedAsyncioTestCase):
     def test_current_frontend_message_is_not_duplicated(self):
         messages = agent.build_request_messages(
@@ -42,7 +58,7 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
 
     def test_structured_profile_becomes_request_context(self):
         messages = agent.build_request_messages(
-            [],
+            [{"role": "assistant", "content": "What budget range should I stay within?"}],
             "__recommendation_assessment_complete__",
             {
                 "age_group": "18-25",
@@ -52,6 +68,7 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
                 "budget_range": "200-400",
             },
         )
+        self.assertEqual(len(messages), 1)
         self.assertIn("Assessment profile", messages[-1].content)
         self.assertNotIn("__recommendation_assessment_complete__", messages[-1].content)
 
@@ -65,6 +82,17 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.answer, "Answer for first request")
         self.assertEqual(second.answer, "Answer for second request")
         self.assertEqual(graph.config["recursion_limit"], 64)
+
+    async def test_limit_message_is_not_exposed_as_an_answer(self):
+        bot = agent.RacketBotAgent(graph=LimitGraph(), llm=FakeLLM())
+        with self.assertRaises(agent.AgentLimitReachedError) as context:
+            await bot.run(
+                history=[
+                    {"role": "assistant", "content": "What budget range should I stay within?"}
+                ],
+                message="Find a racket",
+            )
+        self.assertEqual(str(context.exception), agent.MODEL_LIMIT_FALLBACK)
 
     def test_validator_rejects_raw_envelope_and_guest_pii(self):
         self.assertFalse(
