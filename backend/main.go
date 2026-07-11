@@ -59,7 +59,7 @@ func main() {
 
 	// protected product routes
 	protected := e.Group("/api/v1")
-	protected.Use(myMiddleware.JWTAuth())
+	protected.Use(myMiddleware.JWTAuth(rawDB))
 
 	protected.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
 	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
@@ -99,9 +99,12 @@ func main() {
 
 	// Register routes
 	authHandler.RegisterRoutes(v1)
+	protected.POST("/auth/change-password/request", authHandler.RequestPasswordChange)
+	protected.POST("/auth/change-password/confirm", authHandler.ConfirmPasswordChange)
 	profileHandler.RegisterRoutes(v1)
 	friendsHandler.RegisterRoutes(v1)
 	chatHandler.RegisterRoutes(v1)
+	registerAdminRoutes(v1, rawDB)
 
 	// serve static files (avatars) from ./static mapped to /static URL
 	e.Static("/static", "static")

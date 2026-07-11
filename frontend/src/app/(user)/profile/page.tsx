@@ -411,6 +411,19 @@ export default function ProfilePage() {
 
             <hr className={styles.divider} />
 
+			<div className={styles.row}>
+			  <div className={styles.label}>Password</div>
+			  <div className={styles.static}>••••••••</div>
+			  <button
+				className="btn btn-secondary btn-sm"
+				onClick={() => router.push("/profile/change-password")}
+			  >
+				change
+			  </button>
+			</div>
+
+			<hr className={styles.divider} />
+
             <div className={styles.row}>
               <div className={styles.label}>First Name</div>
               <input

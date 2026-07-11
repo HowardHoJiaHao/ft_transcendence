@@ -21,7 +21,7 @@ func NewHandler(repo *Repository, service *auth.Service) *Handler {
 
 func (h *Handler) RegisterRoutes(e *echo.Group) {
 	protected := e.Group("")
-	protected.Use(myMiddleware.JWTAuth())
+	protected.Use(myMiddleware.JWTAuth(h.Repo.DB))
 
 	protected.GET("/friends", h.GetFriends)
 	protected.POST("/friends/:friend_id", h.AddFriend)

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     bio TEXT, 
     is_verified BOOLEAN DEFAULT FALSE,
     requires_2fa BOOLEAN DEFAULT FALSE,
+    account_status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (account_status IN ('active', 'suspended')),
     oauth_id VARCHAR(255),
     oauth_provider VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

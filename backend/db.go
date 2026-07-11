@@ -34,6 +34,11 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 		return nil, nil, nil, fmt.Errorf("analytics_events migration failed: %w", err)
 	}
 
+	if err := runUsersMigration(rawDB); err != nil {
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("users migration failed: %w", err)
+	}
+
 	log.Println("Database connected successfully")
 
 	cleanup := func() {
@@ -42,6 +47,25 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 	}
 
 	return rawDB, ormDB, cleanup, nil
+}
+
+func runUsersMigration(db *sql.DB) error {
+	migrations := []string{
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status VARCHAR(20) NOT NULL DEFAULT 'active'`,
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_account_status_check') THEN
+				ALTER TABLE users ADD CONSTRAINT users_account_status_check CHECK (account_status IN ('active', 'suspended'));
+			END IF;
+		END $$`,
+	}
+	for _, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("Users migration completed")
+	return nil
 }
 
 //just to try use runlistingsmigration

@@ -14,6 +14,7 @@ export default function NavBar()
         <Link href="/">Marketplace</Link>
       </div>
       <div className={styles.actions}>
+		<Link href="/admin/login" className={styles.link}>Admin</Link>
         {user ? (
           <>
             <Link href="/profile" className={styles.link}>Profile</Link>

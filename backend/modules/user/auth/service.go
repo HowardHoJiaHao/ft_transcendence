@@ -59,8 +59,23 @@ func GenerateToken(userID int) (string, error) {
 	}
 	claims := Claims{
 		UserId: userID,
+		Role: "member",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
+}
+
+func GenerateAdminToken() (string, error) {
+	if err := ensureJWTSecretConfigured(); err != nil {
+		return "", err
+	}
+	claims := Claims{
+		Role: "admin",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(8 * time.Hour)),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

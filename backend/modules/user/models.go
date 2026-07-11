@@ -7,22 +7,23 @@ import (
 )
 
 type User struct {
-	ID           int       `json:"id"`
-	Username     string    `json:"username"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	FirstName    string    `json:"firstName"`
-	LastName     string    `json:"lastName"`
+	ID           int        `json:"id"`
+	Username     string     `json:"username"`
+	Email        string     `json:"email"`
+	PasswordHash string     `json:"-"`
+	FirstName    string     `json:"firstName"`
+	LastName     string     `json:"lastName"`
 	PhoneNo      *string    `json:"phoneNo"`
 	DateOfBirth  *time.Time `json:"dateOfBirth"`
 	Gender       *string    `json:"gender"`
-	AvatarURL    *string   `json:"avatarUrl,omitempty"`
-	AvatarMime   *string   `json:"avatarMimeType,omitempty"`
-	Bio          string    `json:"bio"`
-	IsOnline     bool      `json:"onlineStatus"`
-	CreatedAt    time.Time `json:"createdAt"`
-	HasAvatarBin bool      `json:"hasAvatarBinary,omitempty"`
-	Requires2FA  bool      `json:"require2FA"`
+	AvatarURL     *string    `json:"avatarUrl,omitempty"`
+	AvatarMime    *string    `json:"avatarMimeType,omitempty"`
+	Bio           string     `json:"bio"`
+	IsOnline      bool       `json:"onlineStatus"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	HasAvatarBin  bool       `json:"hasAvatarBinary,omitempty"`
+	Requires2FA   bool       `json:"require2FA"`
+	AccountStatus string     `json:"accountStatus"`
 
 	AvatarData []byte `json:"-"`
 }
@@ -76,6 +77,17 @@ type OTPrequest struct {
 
 type ResendOtpRequest struct {
 	Email string `json:"email"`
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+}
+
+type ConfirmPasswordChangeRequest struct {
+	TempToken       string `json:"tempToken"`
+	OtpCode         string `json:"otpCode"`
+	NewPassword     string `json:"newPassword"`
+	ConfirmPassword string `json:"confirmPassword"`
 }
 
 func (OTP) TableName() string {

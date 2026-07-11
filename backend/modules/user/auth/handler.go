@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"golang.org/x/crypto/bcrypt"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/crypto/bcrypt"
 	"transcendence/modules/user"
 )
 
@@ -32,7 +32,7 @@ func (h *Handler) Register(c echo.Context) error {
 	}
 
 	if err := h.service.CheckAndHashNewPassword(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()});
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
 	id, err := h.repo.CreateUser(req)
@@ -65,6 +65,9 @@ func (h *Handler) Login(c echo.Context) error {
 	if err = bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid credentials 2"})
 	}
+	if u.AccountStatus != "active" {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "Account suspended"})
+	}
 
 	if !u.Requires2FA {
 		token, err := GenerateToken(u.ID)
@@ -80,6 +83,60 @@ func (h *Handler) Login(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusAccepted, user.LoginResponse{TempToken: tempToken, NeedOtp: true})
+}
+
+func (h *Handler) RequestPasswordChange(c echo.Context) error {
+	userID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	}
+	var req user.ChangePasswordRequest
+	if err := c.Bind(&req); err != nil || strings.TrimSpace(req.CurrentPassword) == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Current password is required"})
+	}
+	u, err := h.repo.GetUserByID(userID)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User not found"})
+	}
+	withPassword, err := h.repo.GetUserByEmailWithPassword(u.Email)
+	if err != nil || bcrypt.CompareHashAndPassword([]byte(withPassword.PasswordHash), []byte(req.CurrentPassword)) != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Current password is incorrect"})
+	}
+	tempToken, err := h.service.GenerateAndSendOTP(u.Email)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "OTP failed to send"})
+	}
+	return c.JSON(http.StatusAccepted, map[string]string{"tempToken": tempToken, "message": "OTP sent"})
+}
+
+func (h *Handler) ConfirmPasswordChange(c echo.Context) error {
+	userID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	}
+	var req user.ConfirmPasswordChangeRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
+	}
+	if req.NewPassword != req.ConfirmPassword {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "New passwords do not match"})
+	}
+	u, err := h.repo.GetUserByID(userID)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User not found"})
+	}
+	passwordRequest := user.RegisterRequest{Username: u.Username, Password: req.NewPassword}
+	if err := h.service.CheckAndHashNewPassword(&passwordRequest); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	email, err := h.repo.VerifyOTPAndConsume(req.TempToken, req.OtpCode)
+	if err != nil || email != u.Email {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid or expired OTP"})
+	}
+	if err := h.repo.UpdatePassword(userID, passwordRequest.Password); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update password"})
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "Password changed successfully. Please log in again."})
 }
 
 func (h *Handler) Verify2FA(c echo.Context) error {
@@ -99,6 +156,9 @@ func (h *Handler) Verify2FA(c echo.Context) error {
 	u, err := h.repo.GetUserByEmail(email)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to load user"})
+	}
+	if u.AccountStatus != "active" {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "Account suspended"})
 	}
 
 	token, err := GenerateToken(u.ID)
