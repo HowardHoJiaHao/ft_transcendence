@@ -75,3 +75,22 @@
   text-decoration: underline;
   color: #333;
 }
+
+.googleButton {
+  display: inline-flex;  /* Treats button contents as a row */
+  align-items: center;   /* Centers icon and text vertically */
+  justify-content: center; /* Centers everything horizontally */
+  gap: 10px;             /* The modern way to handle the spacing! */
+  
+  width: 100%;
+  padding: 12px;
+  background-color: #ffffff;
+  border: 1px solid #747775;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.googleIcon {
+  width: 18px;
+  height: 18px;
+}

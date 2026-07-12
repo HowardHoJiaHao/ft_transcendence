@@ -1,12 +1,9 @@
--- Enable pgvector extension for embeddings
-CREATE EXTENSION IF NOT EXISTS vector;
-
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY, --primary key means the official address of row w/ characteristics of unique and cannot be NULL
     username VARCHAR(255) UNIQUE NOT NULL, --not null means columns are mandatory
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255),
     first_name VARCHAR(50),
     last_name VARCHAR(50),
 	phone_no VARCHAR(30),
@@ -21,7 +18,12 @@ CREATE TABLE IF NOT EXISTS users (
     oauth_id VARCHAR(255),
     oauth_provider VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP--,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT users_auth_check CHECK (
+        password_hash IS NOT NULL
+        OR (oauth_id IS NOT NULL AND oauth_provider IS NOT NULL)
+    )
     -- CONSTRAINT users_avatar_source_check CHECK (
     --     avatar_data IS NOT NULL
     --     OR (avatar_url IS NOT NULL AND btrim(avatar_url) <> '')
@@ -144,6 +146,15 @@ CREATE TABLE IF NOT EXISTS analytics_events (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ); 
 
+-- Create analytics table
+CREATE TABLE IF NOT EXISTS analytics (
+    id SERIAL PRIMARY KEY,
+    event_type VARCHAR(50) NOT NULL,
+    listing_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (listing_id) REFERENCES listings(id)
+);
+
 -- Create friendships table
 CREATE TABLE IF NOT EXISTS friendships (
     id SERIAL PRIMARY KEY,
@@ -155,17 +166,6 @@ CREATE TABLE IF NOT EXISTS friendships (
     FOREIGN KEY (user_id1) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id2) REFERENCES users(id) ON DELETE CASCADE
 ); 
-
-CREATE TABLE IF NOT EXISTS messages (
-    id SERIAL PRIMARY KEY,
-    sender_id INT NOT NULL,
-	receiver_id INT NOT NULL,
-    content TEXT NOT NULL,
-    is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-	FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
-	FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
-);
 
 CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver ON messages(sender_id, receiver_id);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_id, is_read);
@@ -207,15 +207,6 @@ INSERT INTO analytics_events (user_id, event_type, event_data) VALUES
 (7, 'order_status_updated', '{"order_id":1,"status":"shipped"}'),
 (8, 'review_submitted', '{"listing_id":1,"rating":5}')
 ON CONFLICT DO NOTHING; 
-
--- Create analytics table
-CREATE TABLE IF NOT EXISTS analytics (
-    id SERIAL PRIMARY KEY,
-    event_type VARCHAR(50) NOT NULL,
-    listing_id INT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (listing_id) REFERENCES listings(id)
-);
 
 -- Enable pgvector extension and create faq_embeddings table
 CREATE EXTENSION IF NOT EXISTS vector;
