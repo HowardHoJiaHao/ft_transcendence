@@ -1,0 +1,47 @@
+# alert.rules.yml
+# Each "alert" below is a condition: IF this is true for X time, THEN fire.
+# Prometheus checks these constantly and sends triggered ones to Alertmanager.
+
+groups:
+  - name: transcendence-basic-alerts
+    rules:
+
+      # "up" is a special metric: 1 = target is alive, 0 = target is dead/unreachable
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m   # must stay down for 1 full minute before we alert (avoids false alarms on restarts)
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is DOWN"
+          description: "Prometheus could not reach {{ $labels.job }} for more than 1 minute."
+
+      # Container using too much CPU (cadvisor gives per-container cpu usage)
+      - alert: HighContainerCPU
+        expr: sum(rate(container_cpu_usage_seconds_total{name!=""}[5m])) by (name) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} has used more than 85% CPU for 5 minutes."
+
+      # Container using too much memory (adjust the byte value to your server's real RAM)
+      - alert: HighContainerMemory
+        expr: container_memory_usage_bytes{name!=""} > 500000000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory on container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} is using more than 500MB of RAM for 5 minutes."
+
+      # Postgres exporter reachable, but check active connections aren't maxed
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is DOWN"
+          description: "postgres-exporter cannot reach the database."

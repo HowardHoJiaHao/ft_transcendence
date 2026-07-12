@@ -1,0 +1,14 @@
+# datasource.yml
+# Concept: Grafana is just a "viewer". This file tells it, on startup:
+# "Your data comes from Prometheus, and here's its address."
+# Without this, you'd have to click through the Grafana UI manually every time.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090   # container name from docker-compose = internal DNS name
+    isDefault: true
+    editable: true

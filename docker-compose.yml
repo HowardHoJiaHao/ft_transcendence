@@ -82,6 +82,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - transcendence-network
   # end of need to change wai keong 
 
   # Nginx
@@ -99,8 +101,93 @@ services:
     networks:
       - transcendence-network
 
+  # ============================================
+  # MONITORING STACK (DevOps module)
+  # ============================================
+
+  # cAdvisor: auto-watches every container's CPU/RAM/network. No code changes needed.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: transcendence-cadvisor
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - transcendence-network
+
+  # postgres-exporter: translates Postgres internal stats into Prometheus format
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: transcendence-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${DB_USER:-transcendence}:${DB_PASSWORD:-transcendence_pass}@db:5432/${DB_NAME:-transcendence}?sslmode=disable"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - transcendence-network
+
+  # node-exporter: watches the host machine itself (disk space, host memory, etc.)
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: transcendence-node-exporter
+    networks:
+      - transcendence-network
+
+  # Prometheus: the "brain" that pulls stats from all exporters above on a schedule
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: transcendence-prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - cadvisor
+      - postgres-exporter
+      - node-exporter
+    networks:
+      - transcendence-network
+
+  # Alertmanager: decides where triggered alerts get sent (Discord/email/etc.)
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: transcendence-alertmanager
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    ports:
+      - "9093:9093"
+    networks:
+      - transcendence-network
+
+  # Grafana: the dashboard website (this is YOUR part, Person B)
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: transcendence-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - transcendence-network
+
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   transcendence-network:

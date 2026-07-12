@@ -1,0 +1,41 @@
+# prometheus.yml
+# This file answers 2 questions for Prometheus:
+#   1. WHO should I check on (scrape), and how often?
+#   2. WHERE do I send alerts when a rule is broken?
+
+global:
+  scrape_interval: 15s      # ask every target "how are you?" every 15 seconds
+  evaluation_interval: 15s  # check alert rules every 15 seconds
+
+# Load our alert rules from this file (built in Stage 2)
+rule_files:
+  - "alert.rules.yml"
+
+# Tell Prometheus where Alertmanager lives, so it can forward triggered alerts
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# The actual list of things to watch
+scrape_configs:
+  # Prometheus watching itself (sanity check)
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # cAdvisor = watches ALL docker containers (cpu/mem/network) automatically
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # postgres-exporter = watches the database
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  # node-exporter = watches the host machine (disk, ram, cpu)
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]

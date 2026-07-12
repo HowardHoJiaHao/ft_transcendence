@@ -1,0 +1,33 @@
+# alertmanager.yml
+# Prometheus decides WHEN to alert (the rules).
+# Alertmanager decides WHERE that alert message goes (email, Discord, Slack, etc.)
+# and how to avoid spamming (grouping, silencing repeats).
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: "default-notifier"   # if no other rule matches, use this receiver
+  group_by: ["alertname"]        # bundle alerts with the same name together (avoid spam)
+  group_wait: 30s                # wait 30s to see if similar alerts arrive, then send as one batch
+  group_interval: 5m             # wait 5 min before sending a new batch for the same group
+  repeat_interval: 3h            # if still broken, remind again every 3 hours (not every 15s!)
+
+receivers:
+  - name: "default-notifier"
+    # --- OPTION A (default for now): Discord webhook — easiest for a student team ---
+    # 1. In Discord: Server Settings > Integrations > Webhooks > New Webhook > Copy URL
+    # 2. Discord wants URLs ending in /slack for this simple format to work, paste yours below:
+    webhook_configs:
+      - url: "https://discord.com/api/webhooks/REPLACE_WITH_YOUR_WEBHOOK/slack"
+        send_resolved: true
+
+    # --- OPTION B: Real email via Brevo SMTP (you already have Brevo keys in backend/.env) ---
+    # Uncomment and fill in to send real emails instead:
+    # email_configs:
+    #   - to: "your-team-email@example.com"
+    #     from: "alerts@ft-transcendence.local"
+    #     smarthost: "smtp-relay.brevo.com:587"
+    #     auth_username: "YOUR_BREVO_LOGIN"
+    #     auth_password: "YOUR_BREVO_SMTP_KEY"
+    #     require_tls: true
