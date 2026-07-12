@@ -1,0 +1,47 @@
+groups:
+  - name: transcendence-monitoring
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instance {{ $labels.instance }} is down"
+          description: "Job {{ $labels.job }} on {{ $labels.instance }} has been unreachable for more than 2 minutes."
+
+      - alert: HostHighCpuUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage has been above 85% for 5 minutes."
+
+      - alert: HostLowDiskSpace
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs",fstype!="aufs",fstype!="overlay"} / node_filesystem_size_bytes{fstype!="tmpfs",fstype!="aufs",fstype!="overlay"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk available space is below 15%."
+
+      - alert: PostgresExporterDown
+        expr: up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Postgres exporter is down"
+          description: "Prometheus cannot scrape the PostgreSQL exporter."
+
+      - alert: WebEndpointDown
+        expr: up{job="blackbox"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Web endpoint is down"
+          description: "One of the monitored marketplace endpoints is failing the blackbox probe."

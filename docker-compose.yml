@@ -15,6 +15,70 @@ services:
     networks:
       - transcendence-network
     healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: transcendence-node-exporter
+    command:
+      - --path.rootfs=/host
+    pid: host
+    ports:
+      - "9100:9100"
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: transcendence-cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: transcendence-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://${DB_USER:-transcendence}:${DB_PASSWORD:-transcendence_pass}@db:5432/${DB_NAME:-transcendence}?sslmode=disable
+    ports:
+      - "9187:9187"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: transcendence-blackbox-exporter
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+    healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}"] 
       timeout: 20s
       retries: 10
@@ -101,8 +165,67 @@ services:
     networks:
       - transcendence-network
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: transcendence-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - node-exporter
+      - cadvisor
+      - postgres-exporter
+      - blackbox-exporter
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: transcendence-alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager:/etc/alertmanager:ro
+      - alertmanager_data:/alertmanager
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  grafana:
+    image: grafana/grafana-oss:11.1.0
+    container_name: transcendence-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
 volumes:
   postgres_data:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:
 
 networks:
   transcendence-network:
