@@ -638,6 +638,21 @@
 
 .postAdBtn:hover { background: #333; }
 
+.docsBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 18px;
+  border-radius: 20px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.docsBtn:hover { background: #e0e7ff; }
+
 .tabDivider {
   width: 1px;
   align-self: stretch;

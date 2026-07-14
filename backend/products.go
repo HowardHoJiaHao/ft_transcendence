@@ -46,6 +46,8 @@ type Product struct {
 }
 
 type CreateProductRequest struct {
+	SellerID            int      `json:"sellerId"`
+	SellerName          string   `json:"sellerName"`
 	Category            string   `json:"category"`
 	Condition           string   `json:"condition"`
 	DealingMethod       string   `json:"dealingMethod"`
@@ -327,7 +329,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(400, map[string]string{"error": "Invalid request body"})
 	}
 	sellerID, ok := c.Get("userId").(int)
-	if !ok {
+	if !ok || sellerID <= 0 {
 		return c.JSON(401, map[string]string{"error": "Unauthorized"})
 	}
 	if req.Title == "" {

@@ -10,9 +10,9 @@
 
 .headerTop {
   display: grid;
-  grid-template-columns: auto minmax(320px, 1fr) auto;
+  grid-template-columns: auto minmax(200px, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .logo {
@@ -26,19 +26,66 @@
 
 .headerActions {
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Keep every action the same height as .btn-sm and on one line */
+.headerActions > * {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.headerActions > :global(.btn) {
+  height: 28px;
+  padding-top: 0;
+  padding-bottom: 0;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Same metrics as global .btn-secondary.btn-sm so the row aligns perfectly */
+.langSwitcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--light);
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.langSwitcher:hover {
+  background: #e9ecef;
+}
+
+.langIcon {
+  font-size: 14px;
+  line-height: 1;
 }
 
 .cartBtn {
   position: relative; /*stays within the box*/
-  background: white;
-  color: white;
-  padding: 8px 12px;
+  background: var(--light);
+  color: var(--dark);
+  height: 28px;
+  padding: 0 10px;
+  box-sizing: border-box;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   text-decoration: none;
-  font-size: 18px;
+  font-size: 15px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.3s;
 }
 
 .cartBtn:hover {
@@ -59,4 +106,36 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.langSelect {
+  border: none;
+  background: transparent;
+  color: var(--dark);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  padding: 0;
+  height: 100%;
+  cursor: pointer;
+}
+
+.langSelect:focus {
+  outline: none;
+}
+
+.langSwitcher:focus-within {
+  border-color: var(--primary);
+}
+
+/* Stack the header on narrow screens so the single action row stays intact */
+@media (max-width: 900px) {
+  .headerTop {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .headerActions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
 }

@@ -48,6 +48,7 @@ type MonthlyCategoryStat struct {
 
 type SellerSummary struct {
 	TotalRevenue      float64             `json:"totalRevenue"`
+	PendingOrders     int                 `json:"pendingOrders"`
 	ItemsSold         int                 `json:"itemsSold"`
 	ItemsActive       int                 `json:"itemsActive"`
 	ItemsArchived     int                 `json:"itemsArchived"`
@@ -83,6 +84,8 @@ func getSellerDashboardItems(c echo.Context, gormDB *gorm.DB) error {
 			l.updated_at,
 			(SELECT MIN(o.created_at) FROM orders o
 				WHERE o.listing_id = l.id AND o.status = 'completed') AS sold_at,
+			COALESCE((SELECT COUNT(*) FROM orders o
+				WHERE o.listing_id = l.id AND o.status = 'pending'), 0) AS pending_orders,
 			COALESCE((SELECT SUM(o.total_price) FROM orders o
 				WHERE o.listing_id = l.id AND o.status = 'completed'), 0) AS revenue,
 			COALESCE((SELECT COUNT(*) FROM analytics_events ae
@@ -106,15 +109,22 @@ func getSellerDashboardItems(c echo.Context, gormDB *gorm.DB) error {
 		var it SellerItemStat
 		var createdAt, updatedAt time.Time
 		var soldAt sql.NullTime
+		var pendingOrders int
 		if err := rows.Scan(
 			&it.ListingID, &it.Title, &it.Price, &it.Category, &it.Status,
-			&createdAt, &updatedAt, &soldAt, &it.Revenue, &it.ViewsLast30Days,
+			&createdAt, &updatedAt, &soldAt, &pendingOrders, &it.Revenue, &it.ViewsLast30Days,
 		); err != nil {
 			log.Printf("Error scanning seller dashboard item: %v", err)
 			continue
 		}
 
 		it.Sold = it.Status == "sold" || soldAt.Valid
+
+		// A listing with orders awaiting the seller's completion shows as
+		// "pending" — it needs action, regardless of remaining stock.
+		if pendingOrders > 0 && it.Status != "archived" {
+			it.Status = "pending"
+		}
 
 		// Days on market: until the completed order if one exists; if the seller
 		// marked it sold manually (no order row), fall back to updated_at.
@@ -182,9 +192,11 @@ func getSellerDashboardSummary(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	err = sqlDB.QueryRow(`
-		SELECT COALESCE(SUM(total_price) FILTER (WHERE status = 'completed'), 0)
+		SELECT
+			COALESCE(SUM(total_price) FILTER (WHERE status = 'completed'), 0),
+			COALESCE(COUNT(*) FILTER (WHERE status = 'pending'), 0)
 		FROM orders WHERE seller_id = $1`, sellerID,
-	).Scan(&summary.TotalRevenue)
+	).Scan(&summary.TotalRevenue, &summary.PendingOrders)
 	if err != nil {
 		log.Printf("Error querying seller revenue: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to fetch seller summary"})

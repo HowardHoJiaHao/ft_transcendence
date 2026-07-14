@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext'; //import hook to access global authentication data
+import { useI18n, LOCALES, type Locale } from '@/context/LanguageContext';
 import { useSearch } from '@/hooks/useSearch';
 import SearchBar from '@/components/SearchBar/SearchBar';
 import styles from './Header.module.css';
@@ -15,6 +15,14 @@ type HeaderProps = {
   onSearchSubmit?: () => void;
 };
 
+// Compact labels for the language select — each language's own short form,
+// so they need no translation.
+const SHORT_LANG_LABELS: Record<Locale, string> = {
+  en: 'EN',
+  ms: 'MS',
+  zh: '中文',
+};
+
 export default function Header({
   searchValue,
   onSearchChange,
@@ -23,6 +31,7 @@ export default function Header({
   const router = useRouter();
   const { user, logout } = useAuth();
   const { itemCount } = useCart();
+  const { t, lang, setLang } = useI18n();
   const { searchQuery, setSearchQuery, handleSearch } = useSearch();
   const activeSearchValue = searchValue ?? searchQuery;
   const handleSearchChange = onSearchChange ?? setSearchQuery;
@@ -39,19 +48,34 @@ export default function Header({
               {user ? (
                 <>
                   <Link href="/profile" className="btn btn-secondary btn-sm">{user.username}</Link>
-                  <Link href="/friends" className="btn btn-secondary btn-sm">Friends</Link>
-                  <button className="btn btn-secondary btn-sm" onClick={logout}>Logout</button>
+                  <Link href="/friends" className="btn btn-secondary btn-sm">{t('header.friends')}</Link>
+                  <button className="btn btn-secondary btn-sm" onClick={logout}>{t('header.logout')}</button>
                 </>
               ) : (
-                <Link href="/login" className="btn btn-secondary btn-sm">Login</Link>
+                <Link href="/login" className="btn btn-secondary btn-sm">{t('header.login')}</Link>
               )}
               <Link href="/cart" className={styles.cartBtn}>🛒{itemCount > 0 && (<span className={styles.cartBadge}>{itemCount}</span>)}</Link>
               <button
               className="btn btn-primary btn-sm"
               onClick={() => router.push(user ? '/profile/my-ads' : '/login')}
               >
-              🏪 My Shop
+              {t('header.myShop')}
               </button>
+              <label className={styles.langSwitcher} title={t('language.label')}>
+                <span className={styles.langIcon} aria-hidden="true">🌐</span>
+                <select
+                  className={styles.langSelect}
+                  value={lang}
+                  onChange={(e) => setLang(e.target.value as Locale)}
+                  aria-label={t('language.label')}
+                >
+                  {LOCALES.map((code) => (
+                    <option key={code} value={code}>
+                      {SHORT_LANG_LABELS[code]}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </div>
         </div>

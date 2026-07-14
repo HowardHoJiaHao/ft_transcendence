@@ -138,7 +138,22 @@ CREATE TABLE IF NOT EXISTS api_keys (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_used_at TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-); 
+);
+
+-- Audit log for every public-API request made with an API key
+CREATE TABLE IF NOT EXISTS api_request_logs (
+    id SERIAL PRIMARY KEY,
+    api_key_id INT,
+    user_id INT,
+    method VARCHAR(10),
+    path VARCHAR(255),
+    status INT,
+    ip_address VARCHAR(64),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_request_logs_key
+ON api_request_logs(api_key_id, created_at);
 
 -- Create analytics table
 CREATE TABLE IF NOT EXISTS analytics_events (
@@ -381,18 +396,22 @@ FROM (VALUES
   (8, 55, 950, 'pending',   'card', 1)
 ) AS v(buyer, listing, price, status, method, days);
 
--- Recent listing views (last 30 days) so views/stale detection have data
+-- Recent listing views for seller dashboard demo data
 INSERT INTO analytics_events (user_id, event_type, listing_id, created_at)
-SELECT viewer, 'listing_viewed', listing, NOW() - (random() * INTERVAL '29 days')
+SELECT viewer, 'listing_viewed', listing_id, NOW() - (days * INTERVAL '1 day')
 FROM (VALUES
-  (2,25),(3,25),(4,25),(2,25),(5,25),
-  (2,26),(3,26),(4,26),(6,26),(2,26),(3,26),(7,26),(8,26),(2,26),(4,26),
-  (2,1),(3,1),(4,1),(5,2),(6,2),
-  (2,37),(3,37),(4,37),(5,37),(6,37),(7,37),(8,37),(2,37),(3,37),(4,37),
-  (2,38),(3,38),(4,38),(5,38),
-  (2,39),(3,39),(4,39),(6,39),(7,39),
-  (5,40),
-  (2,55),(3,55),(4,55),(5,55),(6,55),(7,55),(8,55),(9,55),(2,55),(3,55),(4,55),(5,55),
-  (2,56),(3,56),(4,56),(5,56),(6,56),(7,56),
-  (8,57),(9,57)
-) AS v(viewer, listing);
+    (2, 20, 5),
+    (3, 21, 4),
+    (4, 22, 3),
+    (5, 23, 2),
+    (6, 24, 8),
+    (7, 25, 1),
+    (8, 26, 12),
+    (2, 27, 6),
+    (3, 28, 9),
+    (4, 29, 10),
+    (5, 30, 11),
+    (6, 31, 7),
+    (7, 32, 14),
+    (8, 33, 15)
+) AS v(viewer, listing_id, days);

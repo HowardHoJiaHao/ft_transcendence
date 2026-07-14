@@ -2,9 +2,11 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import Header from "@/components/Header/Header";
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from "@/components/Toast/ToastContext";
+import { useI18n } from '@/context/LanguageContext';
 import styles from "./sell.module.css";
 
 const CATEGORIES = [
@@ -46,6 +48,7 @@ function SellPageInner() {
 
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState(isEditMode ? 2 : 1);
@@ -355,6 +358,14 @@ function SellPageInner() {
                 <span>Ad Successfully Submitted</span>
               </li>
             </ul>
+
+            {/* Shortcut to bulk CSV import for sellers with many products */}
+            <div className={styles.bulkImportBox}>
+              <p className={styles.bulkImportText}>{t('sell.bulkHint')}</p>
+              <Link href="/profile/my-ads/import" className={styles.bulkImportBtn}>
+                {t('myShop.importCsv')}
+              </Link>
+            </div>
           </div>
         </aside>
 
