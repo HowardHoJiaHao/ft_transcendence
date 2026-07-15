@@ -9,10 +9,13 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
       POSTGRES_DB: ${DB_NAME:-transcendence}
       POSTGRES_USER: ${DB_USER:-transcendence}
-    #should remove
+    #might remove environment
     ports:
       - "5432:5432"
     #two volumes
+    # first mount is where database lives
+    # second mount is how the database is initially created
+    # postgreSql needs a instructions for creating the database structure
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -34,10 +37,12 @@ services:
     container_name: transcendence-backend
     env_file:
       - .env
+      #backend to find postgreSql, running in the db container, refer to db.go,the db.go will use db container
     environment:
       DB_HOST: db
     expose:
       - "8080"
+    #mapping the files in current project folders to container(bind mount)
     volumes:
       - ./uploads:/app/uploads
       - ./avatar:/app/avatar
