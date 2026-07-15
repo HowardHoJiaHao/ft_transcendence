@@ -1,4 +1,5 @@
 FROM golang:1.25.8-alpine AS builder
+#alpine is to build and compile the go
 
 WORKDIR /app
 

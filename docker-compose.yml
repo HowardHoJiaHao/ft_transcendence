@@ -1,19 +1,24 @@
 services:
   # PostgreSQL Database
   db:
+    #docker image,rather than build it
     image: pgvector/pgvector:pg15
     container_name: transcendence-postgres
+    #default env
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
       POSTGRES_DB: ${DB_NAME:-transcendence}
       POSTGRES_USER: ${DB_USER:-transcendence}
+    #should remove
     ports:
       - "5432:5432"
+    #two volumes
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - transcendence-network
+    #health check right after it up
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}"] 
       timeout: 20s
@@ -22,6 +27,7 @@ services:
 
   # Go 
   backend:
+  #build image, by going to this directory, execute Dockerfile
     build:
       context: ./backend
       dockerfile: Dockerfile
