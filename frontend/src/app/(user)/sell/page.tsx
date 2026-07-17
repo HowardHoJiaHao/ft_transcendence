@@ -35,23 +35,30 @@ const API_BASE =
   "http://localhost:8080";
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 
-type Condition = (typeof CONDITIONS)[number];
+type Condition = (typeof CONDITIONS)[number]; // treat conditions like this is enum, but string union type
 
 /* ─────────────────────────────────────────
    Inner component – reads search params
 ───────────────────────────────────────── */
+
+// first, prepare everything the page needs before display the form
 function SellPageInner() {
+	//initial setup, preparing the page state
+	//router can navigate the page
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const editId = searchParams.get("editId");
-  const isEditMode = !!editId;
+  const searchParams = useSearchParams(); //reading value from parameter from URL,/sell?editId=42
+  const editId = searchParams.get("editId"); // fetch editId, 42
+  const isEditMode = !!editId; // turn value to true / false
 
-  const { user } = useAuth();
-  const { showToast } = useToast();
-  const { t } = useI18n();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth(); // check is current user logged in?
+  const { showToast } = useToast(); // display small message to user, a notification function, eg: listing created success, please login first
+  const { t } = useI18n(); // for language translation
+  const fileInputRef = useRef<HTMLInputElement>(null); // create an invisible input box
 
-  const [step, setStep] = useState(isEditMode ? 2 : 1);
+	/* this block is temporary page state */
+
+  //state variables, temp memory for the page, usually what is the current state
+  const [step, setStep] = useState(isEditMode ? 2 : 1); // current page'stage
   const [searchInput, setSearchInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [editLoading, setEditLoading] = useState(isEditMode);
@@ -64,7 +71,9 @@ function SellPageInner() {
   const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
+  // what information does the form remember?
   // Details & Pricing
+  // form state
   const [condition, setCondition] = useState<Condition>("Second-hand (Used)");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -75,21 +84,21 @@ function SellPageInner() {
   const [weightCategory, setWeightCategory] = useState("4U");
   const [flexibilityCategory, setFlexibilityCategory] = useState("Medium Flex");
   const [balanceCategory, setBalanceCategory] = useState("Even Balance");
-
   // Contact
   const [phoneNumber, setPhoneNumber] = useState("");
-
   // Acknowledgement
   const [acknowledged, setAcknowledged] = useState(false);
+  /* this block is temporary page state */
 
-  /* Load listing data in edit mode */
+  /* Load listing data in edit mode, editing an existing listing */
+  /* this is about when user trying to edit the existing listing, call api, fetch data from postgreSQL to make amendment */
   useEffect(() => {
     if (!editId) return;
     setEditLoading(true);
-    //fetch(`${API_BASE}/api/v1/products/${editId}`) // conflict happen during merging. this is howaikeong code. I am taking mad code which is below
     fetch(`/api/v1/products/${editId}`)
-      .then((r) => r.json())
-      .then((p) => {
+      .then((r) => r.json())	// take api response and fills the edit form, read response body and convert to javaScript object
+      //Take the existing listing data returned by the backend, convert it into the formats expected by the frontend, and fill the edit form.
+	  .then((p) => {
         setCategory(p.category || "Others");
         if (CONDITIONS.includes(p.condition))
           setCondition(p.condition as Condition);
@@ -109,7 +118,9 @@ function SellPageInner() {
       .catch(() => showToast("Failed to load listing data", "error"))
       .finally(() => setEditLoading(false));
   }, [editId]); // eslint-disable-line react-hooks/exhaustive-deps
+/* this is about when user trying to edit the existing listing, call api, fetch data from postgreSQL to make amendment */
 
+/* possible unused / redundance code*/
   const handleSearch = () => {
     if (!searchInput.trim()) {
       router.push("/");
@@ -117,7 +128,9 @@ function SellPageInner() {
     }
     router.push(`/?search=${encodeURIComponent(searchInput.trim())}`);
   };
+  /* possible unused / redundance code*/
 
+  // clars the current frontend form state
   const handleClearAll = () => {
     setCategory("Others");
     photoPreviewUrls.forEach((u) => URL.revokeObjectURL(u));
@@ -138,6 +151,14 @@ function SellPageInner() {
     if (!isEditMode) setStep(1);
   };
 
+  /* 
+ 	keep only image file
+	reject image larger than 10 mb
+	max 6 photos
+	show error for invalid files
+	stop if no valid files remain
+	create preview url and store them in photoPreviewUrls
+  */
   const addPhotos = (files: File[]) => {
     const valid = files.filter((f) => f.type.startsWith("image/"));
     const uploadable = valid.filter((f) => f.size <= MAX_PHOTO_SIZE);
@@ -150,10 +171,10 @@ function SellPageInner() {
     if (uploadable.length > slots)
       showToast("You can upload up to 6 photos", "error");
     if (!newFiles.length) return;
-    setPhotos((prev) => [...prev, ...newFiles]);
+    setPhotos((prev) => [...prev, ...newFiles]); //append new photo
     setPhotoPreviewUrls((prev) => [
       ...prev,
-      ...newFiles.map((f) => URL.createObjectURL(f)),
+      ...newFiles.map((f) => URL.createObjectURL(f)), // create previews
     ]);
   };
 
@@ -163,6 +184,7 @@ function SellPageInner() {
     setPhotoPreviewUrls((prev) => prev.filter((_, j) => j !== i));
   };
 
+  // meet up vs mailing or dealing
   const toggleDealingMethod = (m: string) =>
     setDealingMethods((prev) =>
       prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m],
