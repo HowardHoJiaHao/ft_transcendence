@@ -190,12 +190,14 @@ function SellPageInner() {
       prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m],
     );
 
+	//upload to go backend
   const uploadPhotos = async (listingId: number, token: string) => {
     if (!photos.length) return;
-    const fd = new FormData();
-    photos.forEach((p) => fd.append("images", p));
+    const fd = new FormData(); //this is to create special request body that can hold files
+    photos.forEach((p) => fd.append("images", p)); //add selected photo to fd
     // const res = await fetch(`${API_BASE}/api/v1/products/${listingId}/images`, { // conflict happen during merging. this is howaikeong code. I am taking mad code which is below
-    const res = await fetch(`/api/v1/products/${listingId}/images`, { //recheck mad add
+    //send the files to the backend endpoint for that listing
+	const res = await fetch(`/api/v1/products/${listingId}/images`, { //recheck mad add
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: fd,
@@ -207,7 +209,9 @@ function SellPageInner() {
   };
 
   const handleSubmit = async () => {
-    if (!user) {
+    
+	/* validation */
+	if (!user) {
       showToast("Please login first", "error");
       router.push("/login");
       return;
@@ -234,7 +238,9 @@ function SellPageInner() {
       showToast("Please confirm the acknowledgement", "error");
       return;
     }
+	/* validation */
 
+	//authentication setup
     setSubmitting(true);
     const token = localStorage.getItem("token") || "";
     if (!token) {
@@ -243,6 +249,7 @@ function SellPageInner() {
       return;
     }
 
+	//edit existing listing
     try {
       if (isEditMode) {
         /* ── UPDATE ── */
@@ -280,7 +287,7 @@ function SellPageInner() {
         showToast("Ad updated successfully", "success");
         router.push("/profile/my-ads");
       } else {
-        /* ── CREATE ── */
+        /* ── CREATE new listing ── */
         // const res = await fetch(`${API_BASE}/api/v1/products`, { // conflict happen during merging. this is howaikeong code. I am taking mad code which is below
         const res = await fetch("/api/v1/products", {
           method: "POST",
@@ -322,7 +329,7 @@ function SellPageInner() {
       setSubmitting(false);
     }
   };
-
+  //progress bar
   const progressPercent = step === 1 ? 33 : step === 2 ? 66 : 100;
 
   if (editLoading) {
