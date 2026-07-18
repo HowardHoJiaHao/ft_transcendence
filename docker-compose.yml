@@ -78,11 +78,6 @@ services:
     restart: unless-stopped
     networks:
       - transcendence-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}"] 
-      timeout: 20s
-      retries: 10
-      interval: 10s
 
   # Go 
   backend:
