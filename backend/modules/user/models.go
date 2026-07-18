@@ -7,24 +7,25 @@ import (
 )
 
 type User struct {
-	ID           int       `json:"id"`
-	Username     string    `json:"username"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	FirstName    string    `json:"firstName"`
-	LastName     string    `json:"lastName"`
-	PhoneNo      *string    `json:"phoneNo"`
-	DateOfBirth  *time.Time `json:"dateOfBirth"`
-	Gender       *string    `json:"gender"`
-	AvatarURL    *string   `json:"avatarUrl,omitempty"`
-	AvatarMime   *string   `json:"avatarMimeType,omitempty"`
-	Bio          string    `json:"bio"`
-	IsOnline     bool      `json:"onlineStatus"`
-	CreatedAt    time.Time `json:"createdAt"`
-	HasAvatarBin bool      `json:"hasAvatarBinary,omitempty"`
-	Requires2FA  bool      `json:"require2FA"`
-
-	AvatarData []byte `json:"-"`
+	ID            int       `json:"id"`
+	Username      string    `json:"username"`
+	Email         string    `json:"email"`
+	PasswordHash  string    `json:"-"`
+	FirstName     string    `json:"firstName"`
+	LastName      string    `json:"lastName"`
+	PhoneNo       *string    `json:"phoneNo"`
+	DateOfBirth   *time.Time `json:"dateOfBirth"`
+	Gender        *string    `json:"gender"`
+	AvatarURL     *string   `json:"avatarUrl,omitempty"`
+	AvatarMime    *string   `json:"avatarMimeType,omitempty"`
+	Bio           string    `json:"bio"`
+	IsOnline      bool      `json:"onlineStatus"`
+	CreatedAt     time.Time `json:"createdAt"`
+	HasAvatarBin  bool      `json:"hasAvatarBinary,omitempty"`
+	Requires2FA   bool      `json:"require2FA"`
+	OAuthID       string    `json:"oauth_id"`
+	OAuthProvider string    `json:"oauth_provider"`
+	AvatarData    []byte    `json:"-"`
 }
 
 type RegisterRequest struct {
@@ -84,6 +85,16 @@ func (OTP) TableName() string {
 
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(&OTP{})
+}
+
+type OAuthUserPayload struct {
+	Username      string
+	Email         string
+	FirstName     string
+	LastName      string
+	AvatarURL     string
+	OAuthID       string
+	OAuthProvider string
 }
 
 // func (u *User) GenerateToken() string {

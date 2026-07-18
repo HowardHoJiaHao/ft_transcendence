@@ -34,13 +34,13 @@ func (r *Repository) CreateUser(req RegisterRequest) (int64, error) {
 
 func (r *Repository) GetUserByEmailWithPassword(email string) (*User, error) {
 	var user User
-	var bio, avatarURL, avatarMime sql.NullString /*phone_no, gender*/
+	var bio, avatarURL, avatarMime, oauthID, oauthProvider sql.NullString /*phone_no, gender*/
 	// var dob sql.NullTime
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, password_hash, first_name, last_name, avatar_url, phone_no, date_of_birth, gender, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1",
-		email, 
-	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
+		"SELECT id, username, email, password_hash, first_name, last_name, avatar_url, phone_no, date_of_birth, gender, avatar_data, avatar_mime_type, bio, requires_2fa, oauth_id, oauth_provider, created_at FROM users WHERE email = $1",
+		email,
+	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &oauthID, &oauthProvider, &user.CreatedAt)
 
 	if err != nil {
 		fmt.Printf("\nFailed to fetch user and password using email\n")
@@ -58,20 +58,26 @@ func (r *Repository) GetUserByEmailWithPassword(email string) (*User, error) {
 		avatarPath := fmt.Sprintf("/api/v1/users/%d/avatar", user.ID)
 		user.AvatarURL = &avatarPath
 	}
-	user.IsOnline = true // For demo
+	if oauthID.Valid {
+		user.OAuthID = oauthID.String
+	}
+	if oauthProvider.Valid {
+		user.OAuthProvider = oauthProvider.String
+	}
+	// user.IsOnline = true // For demo
 	return &user, nil
 }
 
 func (r *Repository) GetUserByID(id int) (*User, error) {
 	var user User
-	var bio sql.NullString
+	var bio, oauthID, oauthProvider sql.NullString
 	var avatarURL sql.NullString
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, oauth_id, oauth_provider, created_at FROM users WHERE id = $1",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &oauthID, &oauthProvider, &user.CreatedAt)
 
 	if err != nil {
 		fmt.Printf("Scan error\n")
@@ -89,20 +95,26 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 		avatarPath := fmt.Sprintf("/api/v1/users/%d/avatar", user.ID)
 		user.AvatarURL = &avatarPath
 	}
+	if oauthID.Valid {
+		user.OAuthID = oauthID.String
+	}
+	if oauthProvider.Valid {
+		user.OAuthProvider = oauthProvider.String
+	}
 	user.IsOnline = true // For demo
 	return &user, nil
 }
 
 func (r *Repository) GetUserByEmail(email string) (*User, error) {
 	var user User
-	var bio sql.NullString
+	var bio, oauthID, oauthProvider sql.NullString
 	var avatarURL sql.NullString
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, created_at FROM users WHERE email = $1",
+		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, oauth_id, oauth_provider, created_at FROM users WHERE email = $1",
 		email,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &oauthID, &oauthProvider, &user.CreatedAt)
 
 	if err != nil {
 		return nil, err
@@ -119,13 +131,19 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 		avatarPath := fmt.Sprintf("/api/v1/users/%d/avatar", user.ID)
 		user.AvatarURL = &avatarPath
 	}
+	if oauthID.Valid {
+		user.OAuthID = oauthID.String
+	}
+	if oauthProvider.Valid {
+		user.OAuthProvider = oauthProvider.String
+	}
 	user.IsOnline = true // For demo
 	//user.Requires2FA = true // For demo
 	return &user, nil
 }
 
-//use r.DB.exec when you dont care the information once you execute.use queryrow if you want to know some variables after you exec
-//in this case we ignore the sql result
+// use r.DB.exec when you dont care the information once you execute.use queryrow if you want to know some variables after you exec
+// in this case we ignore the sql result
 func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
 	// _, err := r.DB.Exec(
 	// 	"UPDATE users SET first_name = $1, last_name = $2, bio = $3, date_of_birth = $4, gender = $5, avatar_url = $6 WHERE id = $7",
@@ -133,7 +151,7 @@ func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
 	// )
 	// err := r.DB.Model(user).Updates(req).Error
 	user, err := r.GetUserByID(id)
-	if (err != nil) {
+	if err != nil {
 		return fmt.Errorf("Failed to fetch id in UpdateUserProfile")
 	}
 	return r.GormDB.Model(user).Updates(req).Error
@@ -147,7 +165,7 @@ func (r *Repository) UpdateUserAvatarUrl(userID int, publicUrl string, mime stri
 	return err
 }
 
-//Currently not being used
+// Currently not being used
 func (r *Repository) GetUserAvatarBinary(userID int) ([]byte, string, error) {
 	var data []byte
 	var mime sql.NullString
@@ -168,38 +186,38 @@ func (r *Repository) GetUserAvatarBinary(userID int) ([]byte, string, error) {
 }
 
 func (r *Repository) SaveOTP(tempToken, email, otpCode string) error {
-    if r.GormDB == nil {
-        return fmt.Errorf("gorm db is not initialized")
-    }
-    expiryDate := time.Now().Add(5 * time.Minute)
-    otp := OTP{
-        Email:     email,
-        Code:      otpCode,
-        ExpiryDate: expiryDate,
-        Used:      false,
-        TempToken: tempToken,
-    }
-    return r.GormDB.Save(&otp).Error
+	if r.GormDB == nil {
+		return fmt.Errorf("gorm db is not initialized")
+	}
+	expiryDate := time.Now().Add(5 * time.Minute)
+	otp := OTP{
+		Email:      email,
+		Code:       otpCode,
+		ExpiryDate: expiryDate,
+		Used:       false,
+		TempToken:  tempToken,
+	}
+	return r.GormDB.Save(&otp).Error
 }
 
 func (r *Repository) VerifyOTPAndConsume(tempToken, otpCode string) (string, error) {
-    if r.GormDB == nil {
-        return "", fmt.Errorf("gorm db is not initialized")
-    }
-    var otp OTP
-    err := r.GormDB.Where(
-        "temp_token = ? AND code = ? AND used = ? AND expiry_date > ?",
-        tempToken, otpCode, false, time.Now(),
-    ).First(&otp).Error
-    if err != nil {
-        return "", err
-    }
-    err = r.GormDB.Model(&OTP{}).
-        Where("email = ?", otp.Email).
-        Updates(map[string]interface{}{"used": true, "temp_token": ""}).Error
-    if err != nil {
-        return "", err
-    }
+	if r.GormDB == nil {
+		return "", fmt.Errorf("gorm db is not initialized")
+	}
+	var otp OTP
+	err := r.GormDB.Where(
+		"temp_token = ? AND code = ? AND used = ? AND expiry_date > ?",
+		tempToken, otpCode, false, time.Now(),
+	).First(&otp).Error
+	if err != nil {
+		return "", err
+	}
+	err = r.GormDB.Model(&OTP{}).
+		Where("email = ?", otp.Email).
+		Updates(map[string]interface{}{"used": true, "temp_token": ""}).Error
+	if err != nil {
+		return "", err
+	}
 	return otp.Email, nil
 }
 
@@ -212,9 +230,45 @@ func (r *Repository) SaveListingImageBinary(listingID int, data []byte, mime str
 	return err
 }
 
+func (r *Repository) CreateOAuthUser(req OAuthUserPayload) (int64, error) {
+	if req.AvatarURL == "" {
+		req.AvatarURL = "https://ui-avatars.com/api/?name=" + req.FirstName + "+" + req.LastName
+	}
+
+	var id int64
+	// how to take from oauth user? is it in request?
+	query := `
+		INSERT INTO users (
+			username, email, first_name, last_name, avatar_url,
+			is_verified, oauth_id, oauth_provider
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id
+	`
+
+	err := r.DB.QueryRow(
+		query,
+		req.Username,
+		req.Email,
+		req.FirstName,
+		req.LastName,
+		req.AvatarURL,
+		true,
+		req.OAuthID,
+		req.OAuthProvider,
+	).Scan(&id)
+
+	if err != nil {
+		fmt.Printf("Create OAuth user database error: %v\n", err)
+		return 0, err
+	}
+
+	return id, nil
+}
+
 // func (r *Repository) GetFriends(userID int) ([]Friend, error) {
 // 	rows, err := r.DB.Query(`
-// 		SELECT u.id, u.username, u.avatar_url, f.created_at 
+// 		SELECT u.id, u.username, u.avatar_url, f.created_at
 // 		FROM friendships f
 // 		JOIN users u ON f.friend_id = u.id
 // 		WHERE f.user_id = $1

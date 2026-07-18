@@ -136,6 +136,10 @@ func SendEmail(receiverEmail, subject, htmlContent string) error {
 
 func (s *Service) CheckAndHashNewPassword(req *user.RegisterRequest) error {
 	//does password follow the upper letter/min_letters/non-username and contain special char check
+	if (req.Password == "") {
+		return fmt.Errorf("no password given")
+	}
+
 	checker := NewPasswordChecker()
 
 	if errors := checker.Check(req.Password, req.Username); len(errors) > 0 {

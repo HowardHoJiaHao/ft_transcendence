@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -48,10 +49,8 @@ func (h *Handler) Register(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
 	}
 
-	if req.Password != "" {
-		if err := h.service.CheckAndHashNewPassword(&req); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-		}
+	if err := h.service.CheckAndHashNewPassword(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
 	id, err := h.repo.CreateUser(req)
@@ -190,11 +189,22 @@ func (h *Handler) GoogleCallback(c echo.Context) error {
 
 	// Create user and get it
 	u, err := h.repo.GetUserByEmail(googleUser.Email)
-	if err != nil {
-		id, err := h.repo.CreateUser(user.RegisterRequest{
-			Email:     googleUser.Email,
-			Username:  googleUser.Name,
-			FirstName: googleUser.Name,
+	if err == nil && u != nil {
+		if u.OAuthProvider != "google" {
+			return c.JSON(http.StatusConflict, map[string]string{"error": "You already have an account with this email. Please sign in with your existing method."})
+		}
+	} else {
+		if err != sql.ErrNoRows {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load user"})
+		}
+		id, err := h.repo.CreateOAuthUser(user.OAuthUserPayload{
+			Email:         googleUser.Email,
+			Username:      googleUser.Email,
+			FirstName:     googleUser.GivenName,
+			LastName:      googleUser.FamilyName,
+			AvatarURL:     googleUser.Picture,
+			OAuthID:       googleUser.ID,
+			OAuthProvider: "google",
 		})
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
@@ -212,7 +222,16 @@ func (h *Handler) GoogleCallback(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
 	}
 
+	c.SetCookie(&http.Cookie{
+		Name:     "oauth_token",
+		Value:    jwtToken,
+		Path:     "/",
+		MaxAge:   600,
+		HttpOnly: false,
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	frontendURL := os.Getenv("FRONTEND_URL")
-	redirectURL := fmt.Sprintf("%s/auth/callback?token=%s", frontendURL, jwtToken)
+	redirectURL := fmt.Sprintf("%s/auth/callback", frontendURL)
 	return c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }

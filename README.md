@@ -90,6 +90,12 @@ NODE_ENV=development
 # Backend
 ENVIRONMENT=development
 SERVER_PORT=8080
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_REDIRECT_URL=http://localhost/api/v1/auth/google/callback
+FRONTEND_URL=http://localhost:3000
 ```
 
 ## Database Tables
