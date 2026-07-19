@@ -10,38 +10,51 @@ function readCookie(name: string) {
 }
 
 function AuthCallbackContent() {
-	const { login } = useAuth();
+	const { user, login } = useAuth();
 	const router = useRouter();
 
 	useEffect(() => {
 		const finishGoogleLogin = async () => {
+			console.log("1. Starting finishGoogleLogin flow..."); //debug
+			if (user) {
+				router.push('/');
+				return;
+			}
 			const token = readCookie('oauth_token');
+			console.log("2. Found cookie token:", token ? "YES (exists)" : "NO (null)"); //debug
 			if (!token) {
+			console.log("❌ Failed at Guard 1: No token found in cookies. Redirecting to /login"); //debug
 				router.push('/login');
 				return;
 			}
 
-			localStorage.setItem('token', token);
-			document.cookie = 'oauth_token=; Max-Age=0; Path=/';
-
+			console.log("3. Sending fetch request to /api/v1/me...");
 			const res = await fetch('/api/v1/me', {
 				headers: {
 					Authorization: `Bearer ${token}`,
 				},
 			});
 
+			console.log("4. Fetch response status:", res.status, "ok:", res.ok);
 			if (!res.ok) {
+				console.log("❌ Failed at Guard 2: Server returned error. Redirecting to /login");
 				router.push('/login');
 				return;
 			}
 
-			const user = await res.json();
-			login(user);
+			const userData = await res.json();
+			console.log("5. Successfully fetched user data:", user);
+
+			localStorage.setItem('token', token);
+			document.cookie = 'oauth_token=; Max-Age=0; Path=/';
+
+			login(userData);
 			router.push('/');
 		};
 
 		finishGoogleLogin();
-	}, [login, router]);
+		console.log("6. Auth context updated, navigating home...");
+	}, [login, router, user]);
 
 	return <p>Completing sign-in</p>
 }

@@ -231,7 +231,14 @@ func (h *Handler) GoogleCallback(c echo.Context) error {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	frontendURL := os.Getenv("FRONTEND_URL")
-	redirectURL := fmt.Sprintf("%s/auth/callback", frontendURL)
+	host := c.Request().Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = c.Request().Host
+	}
+	scheme := c.Request().Header.Get("X-Forwarded-Proto")
+	if scheme == "" {
+		scheme = "http"
+	}
+	redirectURL := fmt.Sprintf("%s://%s/auth/callback", scheme, host)
 	return c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
