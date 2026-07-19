@@ -194,7 +194,9 @@ export default function LoginPage ()
 				className={styles.input}
 				/>
 				
-				<button type="submit" className={styles.button}>{isRegister ? 'Sign Up' : 'Sign In'}</button> 
+				<button type="submit" className={styles.button}>
+					{isRegister ? 'Sign Up' : 'Sign In'}
+				</button>
 				<button type="button" className={styles.googleButton} onClick={() => window.location.href = '/api/v1/auth/google'}>
 					<img src="/google-icon.svg" alt="" className={styles.googleIcon}/>
 					Sign in with Google

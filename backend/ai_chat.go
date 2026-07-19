@@ -7,8 +7,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
+	auth "transcendence/modules/user/auth"
 )
 
 type AIChatMessage struct {
@@ -17,29 +20,54 @@ type AIChatMessage struct {
 }
 
 type AIChatRequest struct {
-	Message string          `json:"message"`
-	History []AIChatMessage `json:"history"`
-	UserID  int             `json:"userId"`
+	Message               string            `json:"message"`
+	History               []AIChatMessage   `json:"history"`
+	UserID                int               `json:"userId"`
+	AuthToken             string            `json:"authToken,omitempty"`
+	RecommendationProfile map[string]string `json:"recommendationProfile,omitempty"`
+}
+
+func getOptionalJWTAuth(c echo.Context) (int, string, error) {
+	authHeader := c.Request().Header.Get("Authorization")
+	if authHeader == "" {
+		return 0, "", nil
+	}
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return 0, "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid auth header")
+	}
+
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+	claims, err := auth.ValidateToken(tokenStr)
+	if err != nil {
+		return 0, "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid token")
+	}
+	return claims.UserId, tokenStr, nil
 }
 
 func handleAIChat(c echo.Context) error {
 	var userReq struct {
-		Message string          `json:"message"`
-		History []AIChatMessage `json:"history"`
+		Message               string            `json:"message"`
+		History               []AIChatMessage   `json:"history"`
+		RecommendationProfile map[string]string `json:"recommendationProfile"`
 	}
 
 	if err := c.Bind(&userReq); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
 	}
 
-	// 1. Resolve Auth user ID if present (optional auth context)
-	userID, _ := extractUserID(c)
+	// 1. Resolve JWT auth context if present. Guest AI chat remains allowed.
+	userID, authToken, err := getOptionalJWTAuth(c)
+	if err != nil {
+		return err
+	}
 
 	// 2. Prepare payload to Python AI Service
 	aiReq := AIChatRequest{
-		Message: userReq.Message,
-		History: userReq.History,
-		UserID:  userID,
+		Message:               userReq.Message,
+		History:               userReq.History,
+		UserID:                userID,
+		AuthToken:             authToken,
+		RecommendationProfile: userReq.RecommendationProfile,
 	}
 
 	jsonData, err := json.Marshal(aiReq)
@@ -59,7 +87,9 @@ func handleAIChat(c echo.Context) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	// Keep a small margin above the AI service's default 60-second total
+	// request budget so a broken downstream connection cannot hang forever.
+	client := &http.Client{Timeout: 70 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("Error contacting AI service: %v", err)

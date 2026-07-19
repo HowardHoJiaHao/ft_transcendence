@@ -77,11 +77,10 @@
 }
 
 .googleButton {
-  display: inline-flex;  /* Treats button contents as a row */
-  align-items: center;   /* Centers icon and text vertically */
-  justify-content: center; /* Centers everything horizontally */
-  gap: 10px;             /* The modern way to handle the spacing! */
-  
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: 100%;
   padding: 12px;
   background-color: #ffffff;

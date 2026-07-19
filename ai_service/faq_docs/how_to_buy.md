@@ -20,4 +20,4 @@ Welcome to RacketDiction! Finding and purchasing the perfect badminton equipment
 
 ## 4. Purchasing
 * Decide on a dealing method with the seller: **Meet Up** (cash or instant transfer on delivery) or **Mailing/Delivery** (mailing courier).
-* Verify seller feedback ratings. Try to deal with highly rated, verified sellers for absolute safety.
+* Review the rating and review information shown on the listing where available. These are useful signals, but they do not guarantee a safe transaction.

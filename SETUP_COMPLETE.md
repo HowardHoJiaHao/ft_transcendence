@@ -188,8 +188,8 @@ SERVER_PORT=8080
 # Google OAuth
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URL=http://localhost/api/v1/auth/google/callback
-FRONTEND_URL=http://localhost:3000
+GOOGLE_REDIRECT_URL=https://localhost/api/v1/auth/google/callback
+FRONTEND_URL=https://localhost
 ```
 
 ## 🎓 Ready to Implement

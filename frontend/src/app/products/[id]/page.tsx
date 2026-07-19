@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/components/Toast/ToastContext';
 import OnlineStatus from '@/components/OnlineStatus';
 import ChatModal from '@/app/(user)/chat/ChatModal'
 import styles from './product.module.css';
@@ -31,13 +32,16 @@ interface Product {
 	reviews: number;
 	isNew: boolean;
 	isFeatured: boolean;
+	stockQuantity: number;
+	status: string;
 	description: string;
 }
 
 export default function ProductPage({ params }: { params: Promise<{ id: string}> })
 {
 	const { user: currentUser } = useAuth();
-	const { addToCart } = useCart();
+	const { addToCart, items } = useCart();
+	const { showToast } = useToast();
 	const [chatOpen, setChatOpen] = useState(false);
 	const [chatMessages, setChatMessages] = useState<any[]>([]);
 	const [chatLoading, setChatLoading] = useState(false);
@@ -172,6 +176,20 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 			return;
 		setImageIndex((prev) => (prev + 1) % galleryImages.length);
 	};
+	const availableStock = product.stockQuantity ?? 0;
+	const cartQuantity = items.find(item => item.id === product.id)?.quantity ?? 0;
+	const remainingStock = Math.max(0, availableStock - cartQuantity);
+	const isAvailable = product.status === 'active' && availableStock > 0;
+	const isOwnListing = currentUser?.id === product.sellerId;
+	const canAddToCart = isAvailable && !isOwnListing && remainingStock > 0;
+	const handleAddToCart = () => {
+		if (!canAddToCart) {
+			showToast(isOwnListing ? 'You cannot buy your own listing' : remainingStock <= 0 ? 'All available stock is already in your cart' : 'This listing is not available', 'error');
+			return;
+		}
+		addToCart({id: product.id, title: product.title, price: product.price, image: product.image}, Math.min(quantity, remainingStock));
+		showToast('Added to cart', 'success');
+	};
 
 	return (
 		<main className={styles.main}>
@@ -218,19 +236,23 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 				<div className={styles.category}> Flexibility: {product.flexibilityCategory}</div>
 				<div className={styles.category}> Balance: {product.balanceCategory}</div>
 		  	    <p className="text-muted">{product.reviews} sold</p>
+				<p className="text-muted">
+				  {isAvailable ? `${availableStock} in stock` : 'Unavailable'}
+				  {cartQuantity > 0 && isAvailable ? ` (${cartQuantity} in cart)` : ''}
+				</p>
 		  	    <p className={styles.price}>${product.price.toFixed(2)} 
 				  {product.originalPrice && (
                     <span className={styles.originalPrice}> ${product.originalPrice.toFixed(2)} </span> )}
 				</p>
-				<div className="quantitySelector">
-				  <button className="quantityBtn" onClick={() => setQuantity(prev => Math.max(1, prev - 1))} disabled={quantity <= 1}>-</button>
-				    <span className="quantityDisplay">{quantity}</span>
-				  <button className="quantityBtn" onClick={() => setQuantity(prev => Math.max(1, prev + 1))}> + </button>
-				</div>
-		  	    <button className={styles.button} onClick={() => addToCart({id: product.id, title: product.title, price: product.price, image: product.image}, quantity)}>
-				  🛒 Add to Cart
-				</button>
-		  	  </div>
+                <div className="quantitySelector">
+                  <button className="quantityBtn" onClick={() => setQuantity(prev => Math.max(1, prev - 1))} disabled={quantity <= 1}>-</button>
+                  <span className="quantityDisplay">{quantity}</span>
+                  <button className="quantityBtn" onClick={() => setQuantity(prev => Math.min(remainingStock, prev + 1))} disabled={!canAddToCart || quantity >= remainingStock}> + </button>
+                </div>
+                <button className={styles.button} onClick={handleAddToCart} disabled={!canAddToCart}>
+                  {isOwnListing ? 'Your Listing' : remainingStock <= 0 && isAvailable ? 'All Stock In Cart' : isAvailable ? '🛒 Add to Cart' : 'Unavailable'}
+                </button>
+              </div>
 		    </div>
 
 			<div className={styles.shopCard}>

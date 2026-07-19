@@ -354,27 +354,6 @@ export default function ProfilePage() {
             <h1>My profile</h1>
             <p>Manage and protect your account</p>
 
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                margin: "12px 0 20px",
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                className="btn btn-secondary"
-                onClick={() => router.push("/profile/my-ads")}
-              >
-                📋 My Ads
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={() => router.push("/sell")}
-              >
-                + Post an Ad
-              </button>
-            </div>
             <hr className={styles.divider} />
             <div className={styles.avatarContainer}>
               <img
@@ -431,6 +410,19 @@ export default function ProfilePage() {
             </div>
 
             <hr className={styles.divider} />
+
+			<div className={styles.row}>
+			  <div className={styles.label}>Password</div>
+			  <div className={styles.static}>••••••••</div>
+			  <button
+				className="btn btn-secondary btn-sm"
+				onClick={() => router.push("/profile/change-password")}
+			  >
+				change
+			  </button>
+			</div>
+
+			<hr className={styles.divider} />
 
             <div className={styles.row}>
               <div className={styles.label}>First Name</div>

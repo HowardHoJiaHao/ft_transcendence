@@ -38,6 +38,7 @@ type Product struct {
 	Reviews             int       `json:"reviews"`
 	IsNew               bool      `json:"isNew"`
 	IsFeatured          bool      `json:"isFeatured"`
+	StockQuantity       int       `json:"stockQuantity"`
 	Status              string    `json:"status"`
 	ViewsCount          int       `json:"viewsCount"`
 	CreatedAt           time.Time `json:"createdAt"`
@@ -62,6 +63,7 @@ type CreateProductRequest struct {
 	Image               string   `json:"image"`
 	IsNew               bool     `json:"isNew"`
 	IsFeatured          bool     `json:"isFeatured"`
+	StockQuantity       *int     `json:"stockQuantity,omitempty"`
 }
 
 type UpdateProductRequest struct {
@@ -77,19 +79,21 @@ type UpdateProductRequest struct {
 	Price               float64  `json:"price"`
 	OriginalPrice       *float64 `json:"originalPrice,omitempty"`
 	Location            string   `json:"location"`
+	StockQuantity       *int     `json:"stockQuantity,omitempty"`
 	Status              string   `json:"status"`
 }
 
 const maxListingImageSize = 10 * 1024 * 1024
 
 // listingSelectCols is the shared SELECT column list used in all product queries.
-const listingSelectCols = `l.id, l.title, l.price, l.original_price, l.image,
+const listingSelectCols = `l.id, l.title, l.price, l.original_price, COALESCE(l.image, ''),
 	COALESCE(l.category, 'Others'), COALESCE(l.condition, 'Second-hand (Used)'),
 	COALESCE(l.dealing_method, ''), COALESCE(l.phone_number, ''),
-	l.weight_category, l.flexibility_category, l.balance_category,
-	l.location, l.seller_id, l.seller_name, COALESCE(u.avatar_url, ''),
-	l.rating, l.reviews, l.is_new, l.is_featured,
-	COALESCE(l.status, 'active'), COALESCE(l.views_count, 0), l.created_at, l.description`
+	COALESCE(l.weight_category, ''), COALESCE(l.flexibility_category, ''), COALESCE(l.balance_category, ''),
+	COALESCE(l.location, ''), l.seller_id, COALESCE(l.seller_name, ''), COALESCE(u.avatar_url, ''),
+	COALESCE(l.rating, 0), COALESCE(l.reviews, 0), l.is_new, l.is_featured,
+	COALESCE(l.stock_quantity, 0), COALESCE(l.status, 'active'), COALESCE(l.views_count, 0),
+	l.created_at, COALESCE(l.description, '')`
 
 // list all products with filters
 func getProducts(c echo.Context, gormDB *gorm.DB) error {
@@ -251,7 +255,7 @@ func scanProducts(rows *sql.Rows) ([]Product, error) {
 			&p.Category, &p.Condition, &p.DealingMethod, &p.PhoneNumber,
 			&p.WeightCategory, &p.FlexibilityCategory, &p.BalanceCategory,
 			&p.Location, &p.SellerId, &p.SellerName, &p.SellerAvatar, &p.Rating, &p.Reviews,
-			&p.IsNew, &p.IsFeatured, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
+			&p.IsNew, &p.IsFeatured, &p.StockQuantity, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
 		)
 		if err != nil {
 			log.Printf("Error scanning product: %v", err)
@@ -282,7 +286,36 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 		log.Printf("Error querying product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to fetch product"})
 	}
+
+	recordListingView(sqlDB, product.ID, product.SellerId, c)
+
 	return c.JSON(200, product)
+}
+
+// recordListingView increments the listing's view counter and logs an analytics
+// event, skipping the seller viewing their own listing to avoid inflating counts.
+func recordListingView(sqlDB *sql.DB, listingID int, sellerID int, c echo.Context) {
+	viewerID, err := extractUserID(c)
+	if err == nil && viewerID == sellerID {
+		return
+	}
+
+	if _, err := sqlDB.Exec(
+		"UPDATE listings SET views_count = views_count + 1 WHERE id = $1", listingID,
+	); err != nil {
+		log.Printf("Error incrementing views_count for listing %d: %v", listingID, err)
+	}
+
+	var userIDArg interface{}
+	if err == nil {
+		userIDArg = viewerID
+	}
+	if _, err := sqlDB.Exec(
+		"INSERT INTO analytics_events (user_id, event_type, listing_id) VALUES ($1, 'listing_viewed', $2)",
+		userIDArg, listingID,
+	); err != nil {
+		log.Printf("Error logging listing_viewed event for listing %d: %v", listingID, err)
+	}
 }
 
 func createProduct(c echo.Context, gormDB *gorm.DB) error {
@@ -295,8 +328,9 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "Invalid request body"})
 	}
-	if req.SellerID <= 0 {
-		return c.JSON(400, map[string]string{"error": "sellerId is required"})
+	sellerID, ok := c.Get("userId").(int)
+	if !ok || sellerID <= 0 {
+		return c.JSON(401, map[string]string{"error": "Unauthorized"})
 	}
 	if req.Title == "" {
 		return c.JSON(400, map[string]string{"error": "title is required"})
@@ -304,9 +338,24 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	if req.Price <= 0 {
 		return c.JSON(400, map[string]string{"error": "price must be greater than 0"})
 	}
+	stockQuantity := 1
+	if req.StockQuantity != nil {
+		stockQuantity = *req.StockQuantity
+	}
+	if stockQuantity < 1 {
+		return c.JSON(400, map[string]string{"error": "stockQuantity must be at least 1"})
+	}
 
-	if req.SellerName == "" {
-		req.SellerName = "Unknown Seller"
+	var sellerName string
+	if err := sqlDB.QueryRow("SELECT username FROM users WHERE id = $1", sellerID).Scan(&sellerName); err != nil {
+		if err == sql.ErrNoRows {
+			return c.JSON(404, map[string]string{"error": "Seller not found"})
+		}
+		log.Printf("Error fetching seller for product creation: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to validate seller"})
+	}
+	if sellerName == "" {
+		sellerName = "Unknown Seller"
 	}
 	if req.Location == "" {
 		req.Location = "Malaysia"
@@ -333,15 +382,16 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	insertQuery := `INSERT INTO listings (
 		seller_id, title, description, weight_category, flexibility_category, balance_category,
 		price, original_price, location, image, seller_name, is_new, is_featured, status,
-		category, condition, dealing_method, phone_number
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'active',$14,$15,$16,$17)
+		category, condition, dealing_method, phone_number, stock_quantity
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'active',$14,$15,$16,$17,$18)
 	RETURNING id`
 
 	var productID int
 	err = sqlDB.QueryRow(insertQuery,
-		req.SellerID, req.Title, req.Description, req.WeightCategory, req.FlexibilityCategory,
-		req.BalanceCategory, req.Price, req.OriginalPrice, req.Location, req.Image, req.SellerName,
+		sellerID, req.Title, req.Description, req.WeightCategory, req.FlexibilityCategory,
+		req.BalanceCategory, req.Price, req.OriginalPrice, req.Location, req.Image, sellerName,
 		req.IsNew, req.IsFeatured, req.Category, req.Condition, req.DealingMethod, req.PhoneNumber,
+		stockQuantity,
 	).Scan(&productID)
 	if err != nil {
 		log.Printf("Error creating product: %v", err)
@@ -406,7 +456,8 @@ func updateProduct(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	var sellerID int
-	qErr := sqlDB.QueryRow("SELECT seller_id FROM listings WHERE id = $1", id).Scan(&sellerID)
+	var currentStockQuantity int
+	qErr := sqlDB.QueryRow("SELECT seller_id, stock_quantity FROM listings WHERE id = $1", id).Scan(&sellerID, &currentStockQuantity)
 	if qErr == sql.ErrNoRows {
 		return c.JSON(404, map[string]string{"error": "Product not found"})
 	} else if qErr != nil {
@@ -429,15 +480,25 @@ func updateProduct(c echo.Context, gormDB *gorm.DB) error {
 	if req.Status == "" {
 		req.Status = "active"
 	}
+	stockQuantity := currentStockQuantity
+	if req.StockQuantity != nil {
+		stockQuantity = *req.StockQuantity
+	}
+	if stockQuantity < 0 {
+		return c.JSON(400, map[string]string{"error": "stockQuantity cannot be negative"})
+	}
+	if req.Status == "active" && stockQuantity == 0 {
+		req.Status = "sold"
+	}
 
 	_, err = sqlDB.Exec(`UPDATE listings SET
 		title=$1, description=$2, price=$3, original_price=$4, location=$5,
 		category=$6, condition=$7, dealing_method=$8, phone_number=$9,
 		weight_category=$10, flexibility_category=$11, balance_category=$12,
-		status=$13, updated_at=CURRENT_TIMESTAMP WHERE id=$14`,
+		status=$13, stock_quantity=$14, updated_at=CURRENT_TIMESTAMP WHERE id=$15`,
 		req.Title, req.Description, req.Price, req.OriginalPrice, req.Location,
 		req.Category, req.Condition, req.DealingMethod, req.PhoneNumber,
-		req.WeightCategory, req.FlexibilityCategory, req.BalanceCategory, req.Status, id)
+		req.WeightCategory, req.FlexibilityCategory, req.BalanceCategory, req.Status, stockQuantity, id)
 	if err != nil {
 		log.Printf("Error updating product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to update product"})
@@ -636,7 +697,7 @@ func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {
 		&p.Category, &p.Condition, &p.DealingMethod, &p.PhoneNumber,
 		&p.WeightCategory, &p.FlexibilityCategory, &p.BalanceCategory,
 		&p.Location, &p.SellerId, &p.SellerName, &p.SellerAvatar, &p.Rating, &p.Reviews,
-		&p.IsNew, &p.IsFeatured, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
+		&p.IsNew, &p.IsFeatured, &p.StockQuantity, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
 	)
 	return p, err
 }

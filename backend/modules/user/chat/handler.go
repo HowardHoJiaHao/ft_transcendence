@@ -23,7 +23,7 @@ func NewHandler(hub *Hub, repo *Repository, service *auth.Service) *Handler {
 
 func (h *Handler) RegisterRoutes(e *echo.Group) {
 	protected := e.Group("")
-	protected.Use(myMiddleware.JWTAuth())
+	protected.Use(myMiddleware.JWTAuth(h.Repo.DB))
 
 	e.GET("/ws", h.WebSocketHandler)
 	protected.POST("/messages", h.SendMessage)
@@ -39,8 +39,12 @@ func (h *Handler) WebSocketHandler(c echo.Context) error {
 	}
 
 	claims, err := auth.ValidateToken(userIdStr)
-	if err != nil {
+	if err != nil || claims.Role != "member" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
+	}
+	u, err := h.Repo.GetUserByID(claims.UserId)
+	if err != nil || u.AccountStatus != "active" {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "account suspended"})
 	}
 
 	userId := claims.UserId

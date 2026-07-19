@@ -4,28 +4,32 @@ import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation';
 
 function AuthCallbackContent() {
-	const { user, login } = useAuth();
+	const { login } = useAuth();
 	const router = useRouter();
 
 	useEffect(() => {
 		const finishGoogleLogin = async () => {
-			const res = await fetch('/api/v1/me', {
-				credentials: 'include',
-			});
+			try {
+				const res = await fetch('/api/v1/me', {
+					credentials: 'include',
+				});
 
-			if (!res.ok) {
-				router.push('/login');
-				return;
+				if (!res.ok) {
+					router.replace('/login');
+					return;
+				}
+
+				const userData = await res.json();
+
+				login(userData);
+				router.replace('/');
+			} catch {
+				router.replace('/login');
 			}
-
-			const userData = await res.json();
-
-			login(userData);
-			router.push('/');
 		};
 
 		finishGoogleLogin();
-	}, [login, router, user]);
+	}, [login, router]);
 
 	return <p>Completing sign-in</p>
 }

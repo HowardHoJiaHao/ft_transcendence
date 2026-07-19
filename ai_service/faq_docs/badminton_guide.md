@@ -4,17 +4,17 @@ Buying a badminton racket can be confusing due to technical specs. Here is every
 
 ## 1. Racket Weight Explained (1U to 8U)
 Racket weight is categorized using the "U" system. **The larger the number, the lighter the racket:**
-* **1U / 2U:** Extremely heavy (100g+). Mostly training rackets used to build wrist and arm strength (e.g. Mizuno Altius Training).
+* **1U (about 95g - 99g) / 2U (about 90g - 94g):** Heavy categories that require more strength and preparation time. Confirm the manufacturer's specification because naming can vary.
 * **3U (85g - 89g):** Standard heavy weight. Highly preferred by advanced attacking players and singles players for raw power on smashes (e.g. Yonex Astrox 99 Pro).
 * **4U (80g - 84g):** The sweet spot. Excellent balance of power and maneuverability. Great for doubles, intermediate players, and versatile styles (e.g. Victor Thruster Falcon).
 * **5U (75g - 79g):** Light weight. Perfect for quick defensive reactions, front-court net play, and reducing wrist fatigue (e.g. Li-Ning Windstorm 72).
-* **6U / 7U / 8U (60g - 74g):** Ultra-light rackets. Great for junior players, beginners, and fast net defense (e.g. Fleet Nano Power 8U).
+* **6U and lighter:** Ultra-light categories whose exact gram ranges vary by manufacturer. They can be quick to handle, but buyers should confirm the actual unstrung weight and avoid assuming every brand uses 7U or 8U identically.
 
 ## 2. Shaft Flexibility (Stiff vs Flexible)
 Shaft flex affects control and timing:
 * **Stiff Shaft:** Requires strong wrist speed and precise timing. Offers maximum control and power transfer for advanced/competitive players.
 * **Medium Flex:** Highly versatile. Offers a decent whip effect while maintaining control. Perfect for intermediate players.
-* **High Flexibility:** Offers a large "whip" effect. Generates easy power with slow swing speeds, making it ideal for beginners and players recovering from shoulder injuries.
+* **High Flexibility:** Offers a larger "whip" effect and can generate easier length with a slower swing. It may suit newer players, though control and feel remain personal preferences.
 
 ## 3. Racket Balance Point
 Balance affects the swing weight and style of play:

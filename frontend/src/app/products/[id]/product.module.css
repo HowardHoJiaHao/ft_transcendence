@@ -239,6 +239,11 @@
 	text-decoration: none;
 }
 
+.button:disabled {
+    background-color: #9ca3af;
+    cursor: not-allowed;
+}
+
 @media (max-width: 600px) {
     .productCard {
         flex-direction: column;

@@ -1,5 +1,5 @@
 'use client'; //means that it is for browser. it must be interactive
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useState, useEffect } from 'react';
 
 //createContext. create an antenna that can allow component connected to it using anything inside it w/o having to pass through parent and child
 //useContext. allow component to join the antenna
@@ -21,6 +21,7 @@ type User = {
 
 interface AuthContextType {
 	user: User | null;
+	loading: boolean;
 	login: (userData: User) => void;
 	logout: () => void;
 	updateUser: (updates: Partial<User>) => void;
@@ -32,6 +33,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined); //<> 
 export function AuthProvider({ children }: { children: React.ReactNode }) //by putting  { children } it defines whatever i put inside the <AuthProvider>  .... <AuthProvider> is a child. { children: React} the child be can be any react component
 {
 	const [user, setUser] = useState<User | null>(null); //typescript version <User | null> means can only hold these two types. null is the initial value
+	const [loading, setLoading] = useState(true);
 
 	//			RUN WHEN IT LOADS
 	useEffect(() =>
@@ -39,31 +41,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) //by p
 		const storedUser = localStorage.getItem('user') //goes to browser storage and see is there a string labeled user
 		if (storedUser)
 			setUser(JSON.parse(storedUser)); //translate string into live javascript object
+		setLoading(false);
 	}, []); //run the code exactly
 
-	const login = (userData: User) =>
+	const login = useCallback((userData: User) =>
 	{
 		setUser(userData); //put user data in state variable
 		localStorage.setItem('user', JSON.stringify(userData)); //store in local storage. label user and text in json format instead of typescript object
-	};
+	}, []);
 
-	const logout = () => 
+	const logout = useCallback(() =>
 	{
+		void fetch('/api/v1/auth/logout', {
+			method: 'POST',
+			credentials: 'include',
+		});
 		setUser(null);
 		localStorage.removeItem('user'); //removes saved user from website storage
-	};
+		localStorage.removeItem('token');
+	}, []);
 
-	const updateUser = (updates: Partial<User>) => {
+	const updateUser = useCallback((updates: Partial<User>) => {
 		setUser(prev => {
 			if (!prev) return prev;
 			const updated = { ...prev, ...updates };
 			localStorage.setItem('user', JSON.stringify(updated));
 			return updated;
 		});
-	};
+	}, []);
 
 	return (
-		<AuthContext.Provider value={{ user, login, logout, updateUser}}>
+		<AuthContext.Provider value={{ user, loading, login, logout, updateUser}}>
 			{children}
 		</AuthContext.Provider>
 	) //renders context and passes user, login, logout to descendants

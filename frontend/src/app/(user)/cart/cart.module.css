@@ -19,6 +19,33 @@
   color: #333;
 }
 
+.tabBar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.tabBtn {
+  border: none;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 12px 16px;
+  border-bottom: 3px solid transparent;
+}
+
+.tabBtn:hover {
+  color: #111;
+}
+
+.tabActive {
+  color: #111;
+  border-bottom-color: #111;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 1fr 300px;
@@ -55,6 +82,12 @@
 .itemInfo h3 {
   font-size: 16px;
   margin-bottom: 4px;
+}
+
+.meta {
+  color: #666;
+  font-size: 13px;
+  margin: 4px 0 0;
 }
 
 .price {
@@ -108,6 +141,11 @@
   border-radius: 4px;
 }
 
+.removeBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .summary {
   background: white;
   padding: 20px;
@@ -139,6 +177,70 @@
   border-top: 1px solid #eee;
 }
 
+.checkoutError {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 12px 0 0;
+  font-size: 14px;
+}
+
+.emptyText {
+  color: #666;
+  padding: 32px 0;
+}
+
+.purchaseList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.purchaseItem {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.purchaseSide {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  margin-left: auto;
+  min-width: 160px;
+}
+
+.statusBadge {
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+}
+
+.status_pending {
+  background: #fff8e1;
+  color: #8d6e00;
+}
+
+.status_completed {
+  background: #e6f4ea;
+  color: #1a7f37;
+}
+
+.status_cancelled,
+.status_refunded {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
 @media (max-width: 768px) {
   .layout {
     grid-template-columns: 1fr;
@@ -146,5 +248,15 @@
   
   .item {
     flex-wrap: wrap;
+  }
+
+  .purchaseItem {
+    flex-wrap: wrap;
+  }
+
+  .purchaseSide {
+    align-items: flex-start;
+    margin-left: 0;
+    width: 100%;
   }
 }

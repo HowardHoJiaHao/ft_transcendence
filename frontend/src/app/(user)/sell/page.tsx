@@ -2,9 +2,11 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import Header from "@/components/Header/Header";
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from "@/components/Toast/ToastContext";
+import { useI18n } from '@/context/LanguageContext';
 import styles from "./sell.module.css";
 
 const CATEGORIES = [
@@ -46,6 +48,7 @@ function SellPageInner() {
 
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState(isEditMode ? 2 : 1);
@@ -66,6 +69,7 @@ function SellPageInner() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [stockQuantity, setStockQuantity] = useState("1");
   const [location, setLocation] = useState("");
   const [dealingMethods, setDealingMethods] = useState<string[]>([]);
   const [weightCategory, setWeightCategory] = useState("4U");
@@ -92,6 +96,7 @@ function SellPageInner() {
         setTitle(p.title || "");
         setDescription(p.description || "");
         setPrice(p.price?.toString() || "");
+        setStockQuantity((p.stockQuantity ?? 1).toString());
         setLocation(p.location || "");
         setDealingMethods(
           p.dealingMethod ? p.dealingMethod.split(", ").filter(Boolean) : [],
@@ -122,6 +127,7 @@ function SellPageInner() {
     setTitle("");
     setDescription("");
     setPrice("");
+    setStockQuantity("1");
     setLocation("");
     setDealingMethods([]);
     setPhoneNumber("");
@@ -193,6 +199,11 @@ function SellPageInner() {
       showToast("Please enter a valid price", "error");
       return;
     }
+    const parsedStockQuantity = Number.parseInt(stockQuantity, 10);
+    if (!Number.isInteger(parsedStockQuantity) || parsedStockQuantity < 1) {
+      showToast("Please enter a valid stock quantity", "error");
+      return;
+    }
     if (!dealingMethods.length) {
       showToast("Please select at least one dealing method", "error");
       return;
@@ -203,7 +214,7 @@ function SellPageInner() {
     }
 
     setSubmitting(true);
-    const token = localStorage.getItem("token") || (user ? `token_${user.id}` : "");
+    const token = localStorage.getItem("token") || "";
     if (!token) {
       showToast("Please login again", "error");
       router.push("/login");
@@ -230,6 +241,7 @@ function SellPageInner() {
               title: title.trim(),
               description: description.trim(),
               price: parsedPrice,
+              stockQuantity: parsedStockQuantity,
               location: location.trim() || "Malaysia",
               weightCategory,
               flexibilityCategory,
@@ -255,8 +267,6 @@ function SellPageInner() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            sellerId: user.id,
-            sellerName: user.username,
             category,
             condition,
             dealingMethod: dealingMethods.join(", "),
@@ -264,6 +274,7 @@ function SellPageInner() {
             title: title.trim(),
             description: description.trim(),
             price: parsedPrice,
+            stockQuantity: parsedStockQuantity,
             location: location.trim() || "Malaysia",
             weightCategory,
             flexibilityCategory,
@@ -347,6 +358,14 @@ function SellPageInner() {
                 <span>Ad Successfully Submitted</span>
               </li>
             </ul>
+
+            {/* Shortcut to bulk CSV import for sellers with many products */}
+            <div className={styles.bulkImportBox}>
+              <p className={styles.bulkImportText}>{t('sell.bulkHint')}</p>
+              <Link href="/profile/my-ads/import" className={styles.bulkImportBtn}>
+                {t('myShop.importCsv')}
+              </Link>
+            </div>
           </div>
         </aside>
 
@@ -551,6 +570,23 @@ function SellPageInner() {
                       onChange={(e) => setPrice(e.target.value)}
                     />
                   </div>
+                </div>
+
+                {/* Stock */}
+                <div className={styles.fieldGroup}>
+                  <input
+                    type="number"
+                    className={styles.input}
+                    placeholder="Stock quantity"
+                    min="1"
+                    step="1"
+                    value={stockQuantity}
+                    onChange={(e) => setStockQuantity(e.target.value.replace(/[^\d]/g, ""))}
+                  />
+                  <p className={styles.charCountSmall}>
+                    Use 1 for a single second-hand item, or more if you have
+                    identical units available.
+                  </p>
                 </div>
 
                 {/* Location */}

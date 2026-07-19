@@ -1,3 +1,6 @@
+-- Enable pgvector extension for embeddings
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY, --primary key means the official address of row w/ characteristics of unique and cannot be NULL
@@ -12,14 +15,14 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_url VARCHAR(255), --link to the avatar
     avatar_data BYTEA,
     avatar_mime_type VARCHAR(50),
-    bio TEXT, 
+    bio TEXT,
     is_verified BOOLEAN DEFAULT FALSE,
     requires_2fa BOOLEAN DEFAULT FALSE,
+    account_status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (account_status IN ('active', 'suspended')),
     oauth_id VARCHAR(255),
     oauth_provider VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
     CONSTRAINT users_auth_check CHECK (
         password_hash IS NOT NULL
         OR (oauth_id IS NOT NULL AND oauth_provider IS NOT NULL)
@@ -32,17 +35,25 @@ CREATE TABLE IF NOT EXISTS users (
     --     avatar_data IS NULL
     --     OR (avatar_mime_type IS NOT NULL AND btrim(avatar_mime_type) <> '')
     -- )
-); 
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth_identity
+ON users(oauth_provider, oauth_id)
+WHERE oauth_provider IS NOT NULL AND oauth_id IS NOT NULL;
 
 -- Create products/listings table
 CREATE TABLE IF NOT EXISTS listings (
-    id SERIAL PRIMARY KEY, 
+    id SERIAL PRIMARY KEY,
     seller_id INT NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
     weight_category VARCHAR(100),
     flexibility_category VARCHAR(100),
 	balance_category VARCHAR(100),
+    category VARCHAR(100) DEFAULT 'Others',
+    condition VARCHAR(50) DEFAULT 'Second-hand (Used)',
+    dealing_method VARCHAR(100) DEFAULT 'Meet Up',
+    phone_number VARCHAR(20) DEFAULT '',
     price DECIMAL(10, 2) NOT NULL,
     original_price DECIMAL(10, 2),
     currency VARCHAR(10) DEFAULT 'RM',
@@ -53,12 +64,13 @@ CREATE TABLE IF NOT EXISTS listings (
     reviews INT DEFAULT 0,
     is_new BOOLEAN DEFAULT FALSE,
     is_featured BOOLEAN DEFAULT FALSE,
+    stock_quantity INT NOT NULL DEFAULT 1 CHECK (stock_quantity >= 0),
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'sold', 'archived')),
     views_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
     FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE --if user deletes, product is deleted too
-); 
+);
 
 -- Create listing_images table
 CREATE TABLE IF NOT EXISTS listing_images (
@@ -90,7 +102,7 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
-); 
+);
 
 -- Create reviews table
 CREATE TABLE IF NOT EXISTS reviews (
@@ -104,7 +116,7 @@ CREATE TABLE IF NOT EXISTS reviews (
     FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (reviewee_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL
-); 
+);
 
 -- Create orders table
 CREATE TABLE IF NOT EXISTS orders (
@@ -121,7 +133,7 @@ CREATE TABLE IF NOT EXISTS orders (
     FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
-); 
+);
 
 -- Create API keys table for authentication
 CREATE TABLE IF NOT EXISTS api_keys (
@@ -134,7 +146,22 @@ CREATE TABLE IF NOT EXISTS api_keys (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_used_at TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-); 
+);
+
+-- Audit log for every public-API request made with an API key
+CREATE TABLE IF NOT EXISTS api_request_logs (
+    id SERIAL PRIMARY KEY,
+    api_key_id INT,
+    user_id INT,
+    method VARCHAR(10),
+    path VARCHAR(255),
+    status INT,
+    ip_address VARCHAR(64),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_request_logs_key
+ON api_request_logs(api_key_id, created_at);
 
 -- Create analytics table
 CREATE TABLE IF NOT EXISTS analytics_events (
@@ -142,18 +169,12 @@ CREATE TABLE IF NOT EXISTS analytics_events (
     user_id INT,
     event_type VARCHAR(50) NOT NULL,
     event_data JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-); 
-
--- Create analytics table
-CREATE TABLE IF NOT EXISTS analytics (
-    id SERIAL PRIMARY KEY,
-    event_type VARCHAR(50) NOT NULL,
     listing_id INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (listing_id) REFERENCES listings(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_analytics_events_listing_id ON analytics_events(listing_id);
 
 -- Create friendships table
 CREATE TABLE IF NOT EXISTS friendships (
@@ -165,7 +186,18 @@ CREATE TABLE IF NOT EXISTS friendships (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id1) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id2) REFERENCES users(id) ON DELETE CASCADE
-); 
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id SERIAL PRIMARY KEY,
+    sender_id INT NOT NULL,
+	receiver_id INT NOT NULL,
+    content TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+	FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
+);
 
 CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver ON messages(sender_id, receiver_id);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_id, is_read);
@@ -206,7 +238,16 @@ INSERT INTO analytics_events (user_id, event_type, event_data) VALUES
 (6, 'order_placed', '{"listing_id":1,"quantity":1}'),
 (7, 'order_status_updated', '{"order_id":1,"status":"shipped"}'),
 (8, 'review_submitted', '{"listing_id":1,"rating":5}')
-ON CONFLICT DO NOTHING; 
+ON CONFLICT DO NOTHING;
+
+-- Create analytics table
+CREATE TABLE IF NOT EXISTS analytics (
+    id SERIAL PRIMARY KEY,
+    event_type VARCHAR(50) NOT NULL,
+    listing_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (listing_id) REFERENCES listings(id)
+);
 
 -- Enable pgvector extension and create faq_embeddings table
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -219,5 +260,166 @@ CREATE TABLE IF NOT EXISTS faq_embeddings (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_faq_embeddings_vector 
+CREATE INDEX IF NOT EXISTS idx_faq_embeddings_vector
 ON faq_embeddings USING ivfflat (embedding vector_cosine_ops);
+
+-- Versioned RacketBot knowledge base. The embedding column deliberately does
+-- not hardcode a dimension: ingestion validates and records the dimension for
+-- the configured embedding model before activating a new version.
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
+    id BIGSERIAL PRIMARY KEY,
+    chunk_id VARCHAR(255) NOT NULL,
+    source_id VARCHAR(255) NOT NULL,
+    source_file VARCHAR(255) NOT NULL,
+    document_title TEXT NOT NULL,
+    section_title TEXT NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    audience VARCHAR(50) NOT NULL DEFAULT 'all',
+    last_reviewed VARCHAR(32),
+    chunk_text TEXT NOT NULL,
+    content_hash CHAR(64) NOT NULL,
+    embedding_model VARCHAR(255) NOT NULL,
+    embedding_dimension INT NOT NULL,
+    ingestion_version VARCHAR(100) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
+    search_vector TSVECTOR GENERATED ALWAYS AS (
+        to_tsvector(
+            'english',
+            COALESCE(document_title, '') || ' ' ||
+            COALESCE(section_title, '') || ' ' ||
+            COALESCE(chunk_text, '')
+        )
+    ) STORED,
+    embedding VECTOR NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (ingestion_version, chunk_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_active
+ON knowledge_chunks (is_active, category);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_search
+ON knowledge_chunks USING GIN (search_vector);
+
+-- ============================================================
+-- Demo seed: seller analytics dashboard data
+-- Dates are relative to NOW() so the dashboard always shows a
+-- recent-looking 8-month sales history.
+-- ============================================================
+
+-- Demo seller account: howardho992002@gmail.com / password "aaa" (bcrypt), 2FA off
+INSERT INTO users (username, email, password_hash, first_name, last_name, avatar_url, is_verified, requires_2fa) VALUES
+('howard', 'howardho992002@gmail.com', '$2a$10$B41tPZmXQszHGGHj6qwRNOX9V4eTDKw1JOVg0jbl2SFgtqmitanjS', 'howard', '', 'https://ui-avatars.com/api/?name=howard', TRUE, FALSE)
+ON CONFLICT DO NOTHING;
+
+-- Listings for ahmad_store (seller 1), ids 20-26
+INSERT INTO listings (id, seller_id, title, description, category, condition, dealing_method, weight_category, flexibility_category, balance_category, price, original_price, location, image, seller_name, rating, reviews, is_new, is_featured, status, views_count, created_at, updated_at) VALUES
+(20, 1, 'Victor Jetspeed S12', 'Fast attacking racket, lightly used.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '4U', 'Stiff Shaft', 'Even Balance', 450, 550, 'Kuala Lumpur', 'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?w=400&h=300&fit=crop', 'Ahmad Store', 4.7, 12, FALSE, FALSE, 'sold', 34, NOW() - INTERVAL '95 days', NOW() - INTERVAL '80 days'),
+(21, 1, 'Yonex Mavis 350 Shuttlecocks (Tube of 6)', 'Unopened tube, nylon shuttlecocks.', 'Accessories', 'New', 'Delivery', '', '', '', 35, NULL, 'Kuala Lumpur', 'https://images.unsplash.com/photo-1613918431703-aa508db4f50f?w=400&h=300&fit=crop', 'Ahmad Store', 4.9, 8, TRUE, FALSE, 'sold', 21, NOW() - INTERVAL '70 days', NOW() - INTERVAL '66 days'),
+(22, 1, 'Badminton Kit Bag - 6 Racket Capacity', 'Padded compartments, barely used.', 'Bags', 'Second-hand (Used)', 'Meet Up', '', '', '', 120, 160, 'Kuala Lumpur', 'https://images.unsplash.com/photo-1584270354949-c26b0d5b4a0c?w=400&h=300&fit=crop', 'Ahmad Store', 4.6, 5, FALSE, FALSE, 'sold', 18, NOW() - INTERVAL '55 days', NOW() - INTERVAL '50 days'),
+(23, 1, 'Yonex Court Shoes SHB 65Z3 (US9)', 'Worn twice, like new condition.', 'Footwear', 'Second-hand (Used)', 'Meet Up', '', '', '', 220, 320, 'Kuala Lumpur', 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=400&h=300&fit=crop', 'Ahmad Store', 4.8, 9, FALSE, TRUE, 'sold', 40, NOW() - INTERVAL '38 days', NOW() - INTERVAL '30 days'),
+(24, 1, 'Li-Ning Turbo X1 4U', 'Control-oriented racket, great for doubles.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '4U', 'Medium Flex', 'Even Balance', 390, NULL, 'Kuala Lumpur', 'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=400&h=300&fit=crop', 'Ahmad Store', 4.5, 3, FALSE, FALSE, 'sold', 15, NOW() - INTERVAL '20 days', NOW() - INTERVAL '15 days'),
+(25, 1, 'Grip Tape Bundle (5 pcs)', 'Assorted overgrips, mixed colors.', 'Accessories', 'New', 'Delivery', '', '', '', 25, NULL, 'Kuala Lumpur', 'https://images.unsplash.com/photo-1607627000458-210e8d2bdb1d?w=400&h=300&fit=crop', 'Ahmad Store', 4.4, 2, TRUE, FALSE, 'active', 9, NOW() - INTERVAL '10 days', NOW() - INTERVAL '10 days'),
+(26, 1, 'Apacs Feather Weight X Speed', 'Ultra-light frame, needs restring.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '6U', 'High Flexibility', 'Head Light', 150, 210, 'Kuala Lumpur', 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ad?w=400&h=300&fit=crop', 'Ahmad Store', 4.3, 1, FALSE, FALSE, 'active', 62, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days')
+ON CONFLICT DO NOTHING;
+
+-- Listings for howard, ids 27-59
+INSERT INTO listings (id, seller_id, title, description, category, condition, dealing_method, weight_category, flexibility_category, balance_category, price, original_price, location, image, seller_name, rating, reviews, is_new, is_featured, status, views_count, created_at, updated_at) VALUES
+(27, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Yonex Nanoflare 800 Pro 4U', 'Speed-oriented racket, excellent condition.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '4U', 'Stiff Shaft', 'Head Light', 890, 1050, 'Subang Jaya', 'https://images.unsplash.com/photo-1542144612-1b3641ec3459?w=400&h=300&fit=crop', 'howard', 4.8, 15, FALSE, TRUE, 'sold', 58, NOW() - INTERVAL '120 days', NOW() - INTERVAL '105 days'),
+(28, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Victor Thruster Ryuga II', 'Head-heavy power racket, minor scratches.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '3U', 'Stiff Shaft', 'Head Heavy', 520, 650, 'Subang Jaya', 'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?w=400&h=300&fit=crop', 'howard', 4.6, 9, FALSE, FALSE, 'sold', 41, NOW() - INTERVAL '110 days', NOW() - INTERVAL '98 days'),
+(29, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'RSL Shuttlecocks (Tube of 12)', 'Feather shuttlecocks, tournament grade.', 'Accessories', 'New', 'Delivery', '', '', '', 60, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1613918431703-aa508db4f50f?w=400&h=300&fit=crop', 'howard', 4.9, 22, TRUE, FALSE, 'sold', 33, NOW() - INTERVAL '100 days', NOW() - INTERVAL '93 days'),
+(30, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Adidas Court Stabil Shoes (US10)', 'Worn a handful of times, great grip.', 'Footwear', 'Second-hand (Used)', 'Meet Up', '', '', '', 260, 380, 'Subang Jaya', 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=400&h=300&fit=crop', 'howard', 4.7, 11, FALSE, TRUE, 'sold', 47, NOW() - INTERVAL '90 days', NOW() - INTERVAL '80 days'),
+(31, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Badminton Racket Bag (3-in-1)', 'Holds 3 rackets, side pocket for shoes.', 'Bags', 'Second-hand (Used)', 'Meet Up', '', '', '', 95, 140, 'Subang Jaya', 'https://images.unsplash.com/photo-1584270354949-c26b0d5b4a0c?w=400&h=300&fit=crop', 'howard', 4.5, 6, FALSE, FALSE, 'sold', 29, NOW() - INTERVAL '85 days', NOW() - INTERVAL '77 days'),
+(32, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Li-Ning Aeronaut 7000 Combat', 'Tournament racket, comes with new grip.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '3U', 'Medium Flex', 'Even Balance', 610, 720, 'Subang Jaya', 'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=400&h=300&fit=crop', 'howard', 4.8, 13, FALSE, FALSE, 'sold', 52, NOW() - INTERVAL '75 days', NOW() - INTERVAL '65 days'),
+(33, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Overgrip Bundle (10 pcs, assorted)', 'Mixed brands, unused.', 'Accessories', 'New', 'Delivery', '', '', '', 40, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1607627000458-210e8d2bdb1d?w=400&h=300&fit=crop', 'howard', 4.4, 4, TRUE, FALSE, 'sold', 19, NOW() - INTERVAL '65 days', NOW() - INTERVAL '59 days'),
+(34, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Yonex Power Cushion 65 Z2 (US9)', 'Lightweight court shoes, good tread left.', 'Footwear', 'Second-hand (Used)', 'Meet Up', '', '', '', 230, 300, 'Subang Jaya', 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ad?w=400&h=300&fit=crop', 'howard', 4.6, 8, FALSE, FALSE, 'sold', 36, NOW() - INTERVAL '55 days', NOW() - INTERVAL '48 days'),
+(35, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Apacs Ziggler Speed 2U', 'Control frame, restrung last month.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '2U', 'Stiff Shaft', 'Head Heavy', 340, 420, 'Subang Jaya', 'https://images.unsplash.com/photo-1584270354949-c26b0d5b4a0c?w=400&h=300&fit=crop', 'howard', 4.5, 5, FALSE, FALSE, 'sold', 28, NOW() - INTERVAL '48 days', NOW() - INTERVAL '40 days'),
+(36, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Badminton Wristband Set (4 pairs)', 'Sweat-absorbent, unused.', 'Accessories', 'New', 'Delivery', '', '', '', 18, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=400&h=300&fit=crop', 'howard', 4.3, 2, TRUE, FALSE, 'sold', 14, NOW() - INTERVAL '35 days', NOW() - INTERVAL '30 days'),
+(37, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Yonex Astrox 88D Pro 3U', 'Doubles-focused racket, like new.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '3U', 'Stiff Shaft', 'Head Heavy', 780, 920, 'Subang Jaya', 'https://images.unsplash.com/photo-1542144612-1b3641ec3459?w=400&h=300&fit=crop', 'howard', 4.9, 17, FALSE, TRUE, 'active', 66, NOW() - INTERVAL '25 days', NOW() - INTERVAL '25 days'),
+(38, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Victor A960 Shuttlecocks (Tube of 6)', 'Nylon, durable for daily practice.', 'Accessories', 'New', 'Delivery', '', '', '', 28, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1613918431703-aa508db4f50f?w=400&h=300&fit=crop', 'howard', 4.4, 3, TRUE, FALSE, 'active', 22, NOW() - INTERVAL '18 days', NOW() - INTERVAL '18 days'),
+(39, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Mizuno Wave Fang Pro 2 (US9.5)', 'Premium court shoes, excellent cushioning.', 'Footwear', 'Second-hand (Used)', 'Meet Up', '', '', '', 310, 400, 'Subang Jaya', 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=400&h=300&fit=crop', 'howard', 4.7, 7, FALSE, FALSE, 'active', 31, NOW() - INTERVAL '12 days', NOW() - INTERVAL '12 days'),
+(40, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Felet TR Woven 7U', 'Ultra-light doubles racket, needs grip change.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '7U', 'High Flexibility', 'Head Light', 175, 240, 'Subang Jaya', 'https://images.unsplash.com/photo-1607627000458-210e8d2bdb1d?w=400&h=300&fit=crop', 'howard', 4.2, 1, FALSE, FALSE, 'active', 44, NOW() - INTERVAL '60 days', NOW() - INTERVAL '60 days'),
+(41, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Sports Towel + Cap Combo', 'Quick-dry towel with matching cap.', 'Accessories', 'New', 'Delivery', '', '', '', 22, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ad?w=400&h=300&fit=crop', 'howard', 4.1, 1, TRUE, FALSE, 'archived', 6, NOW() - INTERVAL '150 days', NOW() - INTERVAL '140 days'),
+(42, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Yonex Arcsaber 11 Pro 3U', 'All-round classic, well maintained.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '3U', 'Medium Flex', 'Even Balance', 720, 850, 'Subang Jaya', 'https://images.unsplash.com/photo-1542144612-1b3641ec3459?w=400&h=300&fit=crop', 'howard', 4.8, 14, FALSE, FALSE, 'sold', 45, NOW() - INTERVAL '220 days', NOW() - INTERVAL '208 days'),
+(43, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Victor Brave Sword 12 SE', 'Legendary speed frame, grommets replaced.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '3U', 'Stiff Shaft', 'Head Light', 480, 580, 'Subang Jaya', 'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?w=400&h=300&fit=crop', 'howard', 4.7, 10, FALSE, FALSE, 'sold', 38, NOW() - INTERVAL '210 days', NOW() - INTERVAL '195 days'),
+(44, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'BG80 String Reel (200m)', 'Half-used reel, kept dry.', 'Strings', 'Second-hand (Used)', 'Meet Up', '', '', '', 180, 260, 'Subang Jaya', 'https://images.unsplash.com/photo-1613918431703-aa508db4f50f?w=400&h=300&fit=crop', 'howard', 4.6, 6, FALSE, FALSE, 'sold', 20, NOW() - INTERVAL '200 days', NOW() - INTERVAL '190 days'),
+(45, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Yonex Team Jacket (L)', 'Tournament jacket, worn once.', 'Apparel', 'Second-hand (Used)', 'Delivery', '', '', '', 90, 150, 'Subang Jaya', 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=400&h=300&fit=crop', 'howard', 4.5, 4, FALSE, FALSE, 'sold', 16, NOW() - INTERVAL '190 days', NOW() - INTERVAL '178 days'),
+(46, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Li-Ning Court Shorts (M) x2', 'Two pairs, excellent condition.', 'Apparel', 'Second-hand (Used)', 'Delivery', '', '', '', 45, 80, 'Subang Jaya', 'https://images.unsplash.com/photo-1584270354949-c26b0d5b4a0c?w=400&h=300&fit=crop', 'howard', 4.4, 3, FALSE, FALSE, 'sold', 12, NOW() - INTERVAL '175 days', NOW() - INTERVAL '162 days'),
+(47, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Victor P9200 Shoes (US8.5)', 'Cushioned sole, good for wide feet.', 'Footwear', 'Second-hand (Used)', 'Meet Up', '', '', '', 190, 280, 'Subang Jaya', 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=400&h=300&fit=crop', 'howard', 4.6, 7, FALSE, FALSE, 'sold', 27, NOW() - INTERVAL '170 days', NOW() - INTERVAL '155 days'),
+(48, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Aerobite Hybrid String Set x5', 'Five packs, sealed.', 'Strings', 'New', 'Delivery', '', '', '', 110, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1607627000458-210e8d2bdb1d?w=400&h=300&fit=crop', 'howard', 4.7, 5, TRUE, FALSE, 'sold', 23, NOW() - INTERVAL '160 days', NOW() - INTERVAL '148 days'),
+(49, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Yonex Astrox 77 Play 4U', 'Entry attacking racket, near new.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '4U', 'Medium Flex', 'Head Heavy', 260, 330, 'Subang Jaya', 'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=400&h=300&fit=crop', 'howard', 4.5, 4, FALSE, FALSE, 'sold', 31, NOW() - INTERVAL '150 days', NOW() - INTERVAL '138 days'),
+(50, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Badminton Net + Posts (Portable)', 'Full set for driveway games.', 'Accessories', 'Second-hand (Used)', 'Meet Up', '', '', '', 140, 220, 'Subang Jaya', 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ad?w=400&h=300&fit=crop', 'howard', 4.3, 2, FALSE, FALSE, 'sold', 17, NOW() - INTERVAL '140 days', NOW() - INTERVAL '128 days'),
+(51, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Victor Thruster F Enhanced', 'Singles powerhouse, fresh grip.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '3U', 'Stiff Shaft', 'Head Heavy', 550, 680, 'Subang Jaya', 'https://images.unsplash.com/photo-1542144612-1b3641ec3459?w=400&h=300&fit=crop', 'howard', 4.8, 11, FALSE, TRUE, 'sold', 49, NOW() - INTERVAL '130 days', NOW() - INTERVAL '118 days'),
+(52, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Yonex Comfort Z3 Shoes (US10)', 'Top-tier shoes, light wear.', 'Footwear', 'Second-hand (Used)', 'Meet Up', '', '', '', 340, 480, 'Subang Jaya', 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=400&h=300&fit=crop', 'howard', 4.9, 13, FALSE, TRUE, 'sold', 44, NOW() - INTERVAL '28 days', NOW() - INTERVAL '21 days'),
+(53, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Exbolt 63 String Packs x8', 'Sealed, popular gauge.', 'Strings', 'New', 'Delivery', '', '', '', 150, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1613918431703-aa508db4f50f?w=400&h=300&fit=crop', 'howard', 4.6, 6, TRUE, FALSE, 'sold', 26, NOW() - INTERVAL '14 days', NOW() - INTERVAL '6 days'),
+(54, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Li-Ning Tournament Shirt (M) x3', 'Three shirts, barely worn.', 'Apparel', 'Second-hand (Used)', 'Delivery', '', '', '', 60, 105, 'Subang Jaya', 'https://images.unsplash.com/photo-1584270354949-c26b0d5b4a0c?w=400&h=300&fit=crop', 'howard', 4.4, 3, FALSE, FALSE, 'sold', 19, NOW() - INTERVAL '9 days', NOW() - INTERVAL '3 days'),
+(55, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Yonex Astrox 100ZZ 4U', 'Flagship attacking racket, kept mint.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '4U', 'Stiff Shaft', 'Head Heavy', 950, 1150, 'Subang Jaya', 'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=400&h=300&fit=crop', 'howard', 4.9, 20, FALSE, TRUE, 'active', 12, NOW() - INTERVAL '6 days', NOW() - INTERVAL '6 days'),
+(56, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Badminton Stringing Machine (Manual)', 'Hobbyist crank machine, works great.', 'Accessories', 'Second-hand (Used)', 'Meet Up', '', '', '', 850, 1300, 'Subang Jaya', 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ad?w=400&h=300&fit=crop', 'howard', 4.5, 4, FALSE, FALSE, 'active', 8, NOW() - INTERVAL '40 days', NOW() - INTERVAL '40 days'),
+(57, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Victor Crown Collection Cap', 'Limited edition, tags on.', 'Apparel', 'New', 'Delivery', '', '', '', 55, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=400&h=300&fit=crop', 'howard', 4.2, 1, TRUE, FALSE, 'active', 5, NOW() - INTERVAL '50 days', NOW() - INTERVAL '50 days'),
+(58, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Old Club Jersey Set (5 pcs)', 'Retired club jerseys, collector item.', 'Apparel', 'Second-hand (Used)', 'Meet Up', '', '', '', 75, 120, 'Subang Jaya', 'https://images.unsplash.com/photo-1584270354949-c26b0d5b4a0c?w=400&h=300&fit=crop', 'howard', 4.0, 1, FALSE, FALSE, 'archived', 11, NOW() - INTERVAL '130 days', NOW() - INTERVAL '95 days'),
+(59, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), 'Kason Vintage Racket (Display)', 'Wall display piece, not for play.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '3U', 'Medium Flex', 'Even Balance', 200, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=400&h=300&fit=crop', 'howard', 4.1, 2, FALSE, FALSE, 'archived', 7, NOW() - INTERVAL '115 days', NOW() - INTERVAL '88 days')
+ON CONFLICT DO NOTHING;
+
+SELECT setval('listings_id_seq', GREATEST((SELECT MAX(id) FROM listings), 1));
+
+-- Orders for ahmad_store (seller 1)
+INSERT INTO orders (buyer_id, seller_id, listing_id, quantity, total_price, status, payment_method, created_at, updated_at) VALUES
+(2, 1, 20, 1, 450, 'completed', 'cash', NOW() - INTERVAL '80 days', NOW() - INTERVAL '80 days'),
+(3, 1, 21, 1, 35,  'completed', 'card', NOW() - INTERVAL '66 days', NOW() - INTERVAL '66 days'),
+(4, 1, 22, 1, 120, 'completed', 'cash', NOW() - INTERVAL '50 days', NOW() - INTERVAL '50 days'),
+(5, 1, 23, 1, 220, 'completed', 'card', NOW() - INTERVAL '30 days', NOW() - INTERVAL '30 days'),
+(6, 1, 24, 1, 390, 'completed', 'cash', NOW() - INTERVAL '15 days', NOW() - INTERVAL '15 days'),
+(2, 1, 26, 1, 150, 'pending',   'cash', NOW() - INTERVAL '2 days',  NOW() - INTERVAL '2 days');
+
+-- Orders for howard (8 months of history)
+INSERT INTO orders (buyer_id, seller_id, listing_id, quantity, total_price, status, payment_method, created_at, updated_at)
+SELECT v.buyer, (SELECT id FROM users WHERE email='howardho992002@gmail.com'), v.listing, 1, v.price, v.status, v.method, NOW() - (v.days || ' days')::interval, NOW() - (v.days || ' days')::interval
+FROM (VALUES
+  (2, 27, 890, 'completed', 'cash', 105),
+  (3, 28, 520, 'completed', 'card', 98),
+  (4, 29, 60,  'completed', 'cash', 93),
+  (5, 30, 260, 'completed', 'card', 80),
+  (6, 31, 95,  'completed', 'cash', 77),
+  (7, 32, 610, 'completed', 'card', 65),
+  (8, 33, 40,  'completed', 'cash', 59),
+  (2, 34, 230, 'completed', 'card', 48),
+  (3, 35, 340, 'completed', 'cash', 40),
+  (4, 36, 18,  'completed', 'card', 30),
+  (5, 38, 28,  'pending',   'cash', 3),
+  (6, 40, 175, 'cancelled', 'card', 20),
+  (2, 42, 720, 'completed', 'cash', 208),
+  (3, 43, 480, 'completed', 'card', 195),
+  (4, 44, 180, 'completed', 'cash', 190),
+  (5, 45, 90,  'completed', 'card', 178),
+  (6, 46, 45,  'completed', 'cash', 162),
+  (7, 47, 190, 'completed', 'card', 155),
+  (8, 48, 110, 'completed', 'cash', 148),
+  (2, 49, 260, 'completed', 'card', 138),
+  (3, 50, 140, 'completed', 'cash', 128),
+  (4, 51, 550, 'completed', 'card', 118),
+  (5, 52, 340, 'completed', 'cash', 21),
+  (6, 53, 150, 'completed', 'card', 6),
+  (7, 54, 60,  'completed', 'cash', 3),
+  (8, 55, 950, 'pending',   'card', 1)
+) AS v(buyer, listing, price, status, method, days);
+
+-- Recent listing views for seller dashboard demo data
+INSERT INTO analytics_events (user_id, event_type, listing_id, created_at)
+SELECT viewer, 'listing_viewed', listing_id, NOW() - (days * INTERVAL '1 day')
+FROM (VALUES
+    (2, 20, 5),
+    (3, 21, 4),
+    (4, 22, 3),
+    (5, 23, 2),
+    (6, 24, 8),
+    (7, 25, 1),
+    (8, 26, 12),
+    (2, 27, 6),
+    (3, 28, 9),
+    (4, 29, 10),
+    (5, 30, 11),
+    (6, 31, 7),
+    (7, 32, 14),
+    (8, 33, 15)
+) AS v(viewer, listing_id, days);

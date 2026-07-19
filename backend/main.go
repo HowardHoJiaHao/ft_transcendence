@@ -9,10 +9,10 @@ import (
 	"github.com/labstack/echo/v4/middleware" //middleware parts
 
 	"transcendence/modules/user"
-    "transcendence/modules/user/auth"
-    "transcendence/modules/user/profile"
-    "transcendence/modules/user/friends"
+	"transcendence/modules/user/auth"
 	"transcendence/modules/user/chat"
+	"transcendence/modules/user/friends"
+	"transcendence/modules/user/profile"
 	"transcendence/myMiddleware"
 )
 
@@ -22,6 +22,10 @@ func main() {
 	// if err != nil {
 	// 	log.Fatalf("Error loading .env file") //logs info, print str, and exit
 	// }
+
+	if err := auth.ConfigureJWTSecretFromEnv(); err != nil {
+		log.Fatalf("Invalid auth configuration: %v", err)
+	}
 
 	//initialize database
 	rawDB, gormDB, cleanup, err := initDB()
@@ -55,15 +59,40 @@ func main() {
 
 	// protected product routes
 	protected := e.Group("/api/v1")
-	protected.Use(myMiddleware.JWTAuth())
+	protected.Use(myMiddleware.JWTAuth(rawDB))
 
 	protected.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
+	protected.POST("/products/import", func(c echo.Context) error { return importProducts(c, gormDB) })
 	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
 	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	protected.POST("/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
 
+	protected.POST("/orders", func(c echo.Context) error { return createOrders(c, gormDB) })
 	protected.GET("/orders", func(c echo.Context) error { return getOrders(c, gormDB) }) // howai AI maybe. merge residue 21 june
+	protected.PUT("/orders/:id/complete", func(c echo.Context) error { return completeOrder(c, gormDB) })
 	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) }) //howai AI maybe. merge residue 21 june
+
+	// Seller dashboard routes
+	protected.GET("/seller/orders", func(c echo.Context) error { return getSellerOrders(c, gormDB) })
+	protected.GET("/seller/dashboard/items", func(c echo.Context) error { return getSellerDashboardItems(c, gormDB) })
+	protected.GET("/seller/dashboard/summary", func(c echo.Context) error { return getSellerDashboardSummary(c, gormDB) })
+
+	// API key management (JWT-authed): generate/list/revoke keys, view request logs
+	protected.POST("/api-keys", func(c echo.Context) error { return createAPIKey(c, gormDB) })
+	protected.GET("/api-keys", func(c echo.Context) error { return listAPIKeys(c, gormDB) })
+	protected.DELETE("/api-keys/:id", func(c echo.Context) error { return revokeAPIKey(c, gormDB) })
+	protected.GET("/api-keys/logs", func(c echo.Context) error { return getAPIKeyLogs(c, gormDB) })
+
+	// Public developer API: authenticated by X-API-Key header, rate limited
+	// per key, every request logged to api_request_logs.
+	public := e.Group("/api/public/v1")
+	public.Use(myMiddleware.APIKeyAuth(rawDB))
+	public.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
+	public.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
+	public.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
+	public.POST("/products/import", func(c echo.Context) error { return importProducts(c, gormDB) })
+	public.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
+	public.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	
 	//User Module initialization
 	baseRepo := user.NewRepository(rawDB, gormDB)
@@ -88,9 +117,12 @@ func main() {
 
 	// Register routes
 	authHandler.RegisterRoutes(v1)
+	protected.POST("/auth/change-password/request", authHandler.RequestPasswordChange)
+	protected.POST("/auth/change-password/confirm", authHandler.ConfirmPasswordChange)
 	profileHandler.RegisterRoutes(v1)
 	friendsHandler.RegisterRoutes(v1)
 	chatHandler.RegisterRoutes(v1)
+	registerAdminRoutes(v1, rawDB)
 
 	// serve static files (avatars) from ./static mapped to /static URL
 	e.Static("/static", "static")

@@ -1,3 +1,4 @@
 # Database data files
 *.sql~
 *.sql.bak
+node_modules

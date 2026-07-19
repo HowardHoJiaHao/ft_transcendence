@@ -94,8 +94,14 @@ SERVER_PORT=8080
 # Google OAuth
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URL=http://localhost/api/v1/auth/google/callback
-FRONTEND_URL=http://localhost:3000
+GOOGLE_REDIRECT_URL=https://localhost/api/v1/auth/google/callback
+FRONTEND_URL=https://localhost
+
+# OpenRouter API
+OPENROUTER_API_KEY=your_api_key_here
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=google/gemma-4-31b-it:free
+OPENROUTER_EMBEDDING_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2:free
 ```
 
 ## Database Tables

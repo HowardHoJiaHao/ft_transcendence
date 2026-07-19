@@ -2,11 +2,13 @@ package auth
 
 import (
 	"regexp"
+
 	"github.com/golang-jwt/jwt/v5"
 )
 
 type Claims struct {
 	UserId int `json:"user_id"`
+	Role string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -22,10 +24,11 @@ type PasswordChecker struct {
 }
 
 type googleUserResponse struct {
-    ID         string `json:"id"`
-    Email      string `json:"email"`
-    Name       string `json:"name"`
-	GivenName  string `json:"given_name"`
-	FamilyName string `json:"family_name"`
-    Picture    string `json:"picture"`
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	VerifiedEmail bool   `json:"verified_email"`
+	Name          string `json:"name"`
+	GivenName     string `json:"given_name"`
+	FamilyName    string `json:"family_name"`
+	Picture       string `json:"picture"`
 }

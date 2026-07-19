@@ -255,6 +255,64 @@
   line-height: 1.5;
 }
 
+.recommendButton {
+  width: 100%;
+  border: 1px solid rgba(16, 185, 129, 0.42);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #047857 0%, #10b981 100%);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.recommendButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.25);
+}
+
+.recommendButton:disabled {
+  background: #334155;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.assessmentOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-left: 2px;
+}
+
+.assessmentOption {
+  flex: 1 1 calc(50% - 8px);
+  min-width: 128px;
+  min-height: 36px;
+  border: 1px solid rgba(0, 242, 254, 0.26);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(30, 41, 59, 0.82);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.assessmentOption:hover:not(:disabled) {
+  background: rgba(79, 172, 254, 0.18);
+  border-color: rgba(0, 242, 254, 0.5);
+  color: #ffffff;
+}
+
+.assessmentOption:disabled {
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 /* Chat Message Bubbles */
 .messageRow {
   display: flex;
@@ -386,6 +444,31 @@
   padding: 16px 20px;
   background: rgba(15, 23, 42, 0.95);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.footerRecommendButton {
+  width: 100%;
+  margin-bottom: 10px;
+  border: 1px solid rgba(16, 185, 129, 0.34);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(5, 150, 105, 0.18);
+  color: #d1fae5;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.footerRecommendButton:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.28);
+  border-color: rgba(16, 185, 129, 0.58);
+}
+
+.footerRecommendButton:disabled {
+  color: #64748b;
+  border-color: rgba(255, 255, 255, 0.08);
+  cursor: not-allowed;
 }
 
 .inputForm {
