@@ -227,7 +227,8 @@ func (h *Handler) GoogleCallback(c echo.Context) error {
 		Value:    jwtToken,
 		Path:     "/",
 		MaxAge:   600,
-		HttpOnly: false,
+		HttpOnly: true,
+		Secure:   os.Getenv("ENVIRONMENT") == "production",
 		SameSite: http.SameSiteLaxMode,
 	})
 

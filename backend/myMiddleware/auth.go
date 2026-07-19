@@ -11,11 +11,16 @@ func JWTAuth() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			authHeader := c.Request().Header.Get("Authorization")
-			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+			var tokenStr string
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				tokenStr = strings.TrimPrefix(authHeader, "Bearer ")
+			} else {
+				cookie, err := c.Cookie("oauth_token")
+				if err != nil || cookie.Value == "" {
+					return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+				}
+				tokenStr = cookie.Value
 			}
-
-			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 			claims, err := auth.ValidateToken(tokenStr)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
@@ -27,3 +32,24 @@ func JWTAuth() echo.MiddlewareFunc {
 	}
 
 }
+
+// func JWTAuth() echo.MiddlewareFunc {
+// 	return func(next echo.HandlerFunc) echo.HandlerFunc {
+// 		return func(c echo.Context) error {
+// 			authHeader := c.Request().Header.Get("Authorization")
+// 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+// 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+// 			}
+
+// 			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+// 			claims, err := auth.ValidateToken(tokenStr)
+// 			if err != nil {
+// 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
+// 			}
+
+// 			c.Set("userId", claims.UserId)
+// 			return next(c)
+// 		}
+// 	}
+
+// }
