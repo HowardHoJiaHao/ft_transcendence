@@ -7,6 +7,7 @@ import (
 	//"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4" //echo main framework
 	"github.com/labstack/echo/v4/middleware" //middleware parts
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"transcendence/modules/user"
 	"transcendence/modules/user/auth"
@@ -48,6 +49,7 @@ func main() {
 
 	//routes
 	e.GET("/health", healthCheckHandler)
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 	v1 := e.Group("/api/v1")
 	v1.GET("/status", statusHandler)
 	v1.POST("/ai/chat", handleAIChat)
