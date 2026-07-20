@@ -205,6 +205,20 @@ services:
     networks:
       - transcendence-network
 
+  discord-webhook-relay:
+    image: python:3.12-slim
+    container_name: transcendence-discord-webhook-relay
+    environment:
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+    volumes:
+      - ./monitoring/alertmanager/discord_webhook_bridge.py:/app/discord_webhook_bridge.py:ro
+    command: ["python", "/app/discord_webhook_bridge.py"]
+    ports:
+      - "127.0.0.1:5001:5001"
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
   grafana:
     image: grafana/grafana-oss:11.1.0
     container_name: transcendence-grafana

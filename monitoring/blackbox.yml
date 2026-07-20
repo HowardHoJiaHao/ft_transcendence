@@ -5,4 +5,7 @@ modules:
     http:
       valid_status_codes: []
       method: GET
+      follow_redirects: true
       preferred_ip_protocol: ip4
+      tls_config:
+        insecure_skip_verify: true

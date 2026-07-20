@@ -38,7 +38,7 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://nginx
+          - https://nginx
           - http://frontend:3000
           - http://backend:8080/health
     relabel_configs:
