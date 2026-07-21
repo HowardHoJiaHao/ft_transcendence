@@ -1,5 +1,10 @@
 # Development Setup Guide
 
+> This guide contains legacy scaffold details. For the current PostgreSQL,
+> Infisical, and WAF startup workflow, use `README.md` and
+> `docs/prd-cybersecurity-waf-infisical.md`. Direct host backend/database URLs
+> shown later in this file are no longer part of the secure Compose stack.
+
 ## Prerequisites
 
 ### Required
@@ -180,16 +185,17 @@ docker-compose exec backend go get github.com/user/package
 
 ```bash
 make db-connect
-# or
-docker-compose exec db mysql -u transcendence -p transcendence
 ```
 
-Password: `transcendence_pass`
+The database password is supplied by Infisical. Do not place it in this file or
+in shell command history.
 
 #### 2. Run SQL Queries
 
 ```bash
-docker-compose exec db mysql -u transcendence -p transcendence -e "SELECT * FROM users;"
+make db-connect
+# Then run PostgreSQL statements, for example:
+# SELECT * FROM users;
 ```
 
 #### 3. Create Migration
@@ -197,15 +203,14 @@ docker-compose exec db mysql -u transcendence -p transcendence -e "SELECT * FROM
 Add new SQL to `db/init.sql` and restart:
 
 ```bash
-docker-compose down
-docker-compose up -d
+make down
+make setup
 ```
 
 #### 4. Export Database
 
-```bash
-docker-compose exec db mysqldump -u transcendence -p transcendence > backup.sql
-```
+Use `pg_dump` inside the database container. Backup handling is outside the
+cybersecurity MVP and must not expose the Infisical password in shell history.
 
 #### 5. Import Database
 

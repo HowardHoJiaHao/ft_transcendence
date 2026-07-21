@@ -121,9 +121,7 @@ export default function AIFloatingChat() {
     try {
       const token = localStorage.getItem('token') || '';
       const configuredApiURL = process.env.NEXT_PUBLIC_API_URL?.trim() || '';
-      const apiURL = /^https?:\/\/localhost:8080\/?$/.test(configuredApiURL)
-        ? ''
-        : configuredApiURL.replace(/\/$/, '');
+      const apiURL = configuredApiURL.replace(/\/$/, '');
       
       const requestBody = JSON.stringify({
         message: requestMessage,

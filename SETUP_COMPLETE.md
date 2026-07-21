@@ -1,5 +1,9 @@
 # 🚀 Transcendence Marketplace - Docker Setup Complete!
 
+> This file records the original scaffold setup. The current canonical setup is
+> `make setup` with Infisical and the OWASP CRS WAF. Use `README.md` for active
+> commands and service URLs.
+
 ## ✨ What's Been Set Up
 
 Your complete Docker infrastructure for the Transcendence marketplace project is ready!
@@ -168,17 +172,16 @@ Your database includes tables for:
 
 ## 🔒 Environment Variables
 
-Default `.env` includes:
+Runtime secrets are supplied by Infisical. `.env.example` documents names only:
 
 ```env
 # Database
-DB_ROOT_PASSWORD=root
 DB_USER=transcendence
-DB_PASSWORD=transcendence_pass
+DB_PASSWORD=
 DB_NAME=transcendence
 
 # Frontend
-NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_API_URL=
 NODE_ENV=development
 
 # Backend

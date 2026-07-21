@@ -32,7 +32,7 @@ const BALANCE_CATEGORIES = ["Head Heavy", "Even Balance", "Head Light"];
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8080";
+  "";
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 
 type Condition = (typeof CONDITIONS)[number]; // treat conditions like this is enum, but string union type

@@ -220,7 +220,7 @@ export default function LoginPage ()
 // 	headers: { 'Content-Type': 'application/json' },
 // 	body: JSON.stringify ( {tempToken, otpCode})
 // }
-// const endpoint = isRegister ? 'http://localhost:8080/api/v1/auth/register' : 'http://localhost:8080/api/v1/auth/login';
+// const endpoint = isRegister ? '/api/v1/auth/register' : '/api/v1/auth/login';
 // const loginRequest = 
 // {
 // 	method: 'POST',
@@ -239,7 +239,7 @@ export default function LoginPage ()
 	// 	{
 	// 		if (showOtp)
 	// 		{
-	// 			const res = await fetch('http://localhost:8080/api/v1/auth/verify-otp', 
+	// 			const res = await fetch('/api/v1/auth/verify-otp',
 	// 			{
 	// 				method: 'POST',
 	// 				headers: { 'Content-Type': 'application/json' },
@@ -262,7 +262,7 @@ export default function LoginPage ()
 	// 			return ;
 	// 		}
 
-	// 		const endpoint = isRegister ? 'http://localhost:8080/api/v1/auth/register' : 'http://localhost:8080/api/v1/auth/login';
+	// 		const endpoint = isRegister ? '/api/v1/auth/register' : '/api/v1/auth/login';
 	// 		const res = await fetch(endpoint, 
 	// 		{
 	// 			method: 'POST',
