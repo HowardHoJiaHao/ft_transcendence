@@ -1,4 +1,4 @@
-.PHONY: help check-docker check-infisical-cli check-curl check-tools check-infisical-project check-secrets build up down restart logs logs-waf logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check test-waf infisical-init setup setup-backend setup-frontend build-up
+.PHONY: help check-docker check-infisical-cli check-curl check-tools check-infisical-project check-secrets build up down restart logs logs-waf logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check test-waf install-infisical infisical-init setup setup-backend setup-frontend build-up
 
 INFISICAL_ENV ?= dev
 INFISICAL_PATH ?= /
@@ -25,6 +25,7 @@ help:
 	@echo "make ps              - Show container status and published ports"
 	@echo "make health-check    - Test the WAF and backend through HTTPS"
 	@echo "make test-waf        - Run normal, redirect, SQLi, and XSS checks"
+	@echo "make install-infisical - Install the Infisical CLI on Debian/Ubuntu"
 	@echo "make infisical-init  - Log in and link this clone to Infisical"
 	@echo "make db-connect      - Open psql inside the PostgreSQL container"
 	@echo "make db-migrate      - Apply db/init.sql to the running database"
@@ -125,6 +126,21 @@ db-connect: check-docker
 
 db-migrate: check-docker
 	$(COMPOSE) exec -T db psql -U $(DB_USER) -d $(DB_NAME) < db/init.sql
+
+install-infisical: check-curl
+	@if command -v infisical >/dev/null 2>&1; then \
+		echo "✅ Infisical CLI is already installed: $$(infisical --version)"; \
+	elif command -v apt-get >/dev/null 2>&1; then \
+		echo "Installing the Infisical CLI for Debian/Ubuntu..."; \
+		curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash && \
+		sudo apt-get update && \
+		sudo apt-get install -y infisical && \
+		infisical --version; \
+	else \
+		echo "❌ Automatic Infisical installation is supported only on Debian/Ubuntu."; \
+		echo "See: https://infisical.com/docs/cli/overview"; \
+		exit 1; \
+	fi
 
 infisical-init: check-infisical-cli
 	infisical login
