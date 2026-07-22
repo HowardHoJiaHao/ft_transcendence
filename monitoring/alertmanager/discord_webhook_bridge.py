@@ -1,6 +1,9 @@
 import json
+import logging
+from logging.handlers import TimedRotatingFileHandler
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from urllib import request
 
 
@@ -27,6 +30,42 @@ if not RELAY_BEARER_TOKEN:
     RELAY_BEARER_TOKEN = _read_secret_file("/run/secrets/relay_bearer_token").strip()
 
 
+LOG_DIR = Path(os.environ.get("RELAY_LOG_DIR", "/var/log/alertmanager-relay"))
+LOG_FILE = LOG_DIR / "relay.log"
+
+
+def _build_logger() -> logging.Logger:
+    logger = logging.getLogger("alertmanager_relay")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    if logger.handlers:
+        return logger
+
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    file_handler = TimedRotatingFileHandler(
+        LOG_FILE,
+        when="D",
+        interval=1,
+        backupCount=5,
+        encoding="utf-8",
+        utc=True,
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    return logger
+
+
+LOGGER = _build_logger()
+
+
 class AlertHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         # If a bearer token is configured, validate Authorization header
@@ -37,6 +76,7 @@ class AlertHandler(BaseHTTPRequestHandler):
                 self.send_response(401)
                 self.end_headers()
                 self.wfile.write(b"unauthorized")
+                LOGGER.warning("unauthorized request from %s", self.client_address[0])
                 return
 
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -48,9 +88,10 @@ class AlertHandler(BaseHTTPRequestHandler):
             self.send_response(400)
             self.end_headers()
             self.wfile.write(b"invalid json")
+            LOGGER.warning("invalid json from %s", self.client_address[0])
             return
 
-        print("received alertmanager payload", flush=True)
+        LOGGER.info("received alertmanager payload")
 
         alerts = payload.get("alerts", [])
         lines = []
@@ -89,13 +130,13 @@ class AlertHandler(BaseHTTPRequestHandler):
 
         try:
             with request.urlopen(req, timeout=10) as response:
-                print("discord webhook accepted", response.status, flush=True)
+                LOGGER.info("discord webhook accepted status=%s", response.status)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(b'{"status":"ok"}')
         except Exception as exc:
-            print("discord webhook failed", exc, flush=True)
+            LOGGER.exception("discord webhook failed: %s", exc)
             self.send_response(502)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -107,5 +148,5 @@ class AlertHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = HTTPServer(("0.0.0.0", 5001), AlertHandler)
-    print("discord webhook bridge listening on 0.0.0.0:5001")
+    LOGGER.info("discord webhook bridge listening on 0.0.0.0:5001")
     server.serve_forever()
