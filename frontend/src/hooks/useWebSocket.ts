@@ -11,7 +11,9 @@ function connect(token: string) {
 	if (ws?.readyState === WebSocket.OPEN)
 		return ;
 
-	ws = new WebSocket(`wss://localhost/api/v1/ws?token=${token}`);
+	const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+	const endpoint = `${protocol}//${window.location.host}/api/v1/ws?token=${encodeURIComponent(token)}`;
+	ws = new WebSocket(endpoint);
 
 	ws.onopen = () => console.log('WS connected');
 	ws.onclose = (event) =>

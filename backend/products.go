@@ -318,12 +318,22 @@ func recordListingView(sqlDB *sql.DB, listingID int, sellerID int, c echo.Contex
 	}
 }
 
+// gormDB is an interface/middleman for golang to talk to the rawDB 
+// the flow
+// Go function
+//     ↓ <- the gormDB lives here, wrapping te rawDB
+// rawDB / sqlDB
+//     ↓
+// pgx
+//     ↓
+// PostgreSQL
 func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
 
+	// error handling, if json malformed
 	var req CreateProductRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "Invalid request body"})
@@ -338,6 +348,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	if req.Price <= 0 {
 		return c.JSON(400, map[string]string{"error": "price must be greater than 0"})
 	}
+	// error handling
 	stockQuantity := 1
 	if req.StockQuantity != nil {
 		stockQuantity = *req.StockQuantity
@@ -346,6 +357,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(400, map[string]string{"error": "stockQuantity must be at least 1"})
 	}
 
+	// looks up the seller username
 	var sellerName string
 	if err := sqlDB.QueryRow("SELECT username FROM users WHERE id = $1", sellerID).Scan(&sellerName); err != nil {
 		if err == sql.ErrNoRows {
@@ -354,6 +366,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		log.Printf("Error fetching seller for product creation: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to validate seller"})
 	}
+	// fill up the missing blank if these are empty
 	if sellerName == "" {
 		sellerName = "Unknown Seller"
 	}
@@ -379,6 +392,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		req.DealingMethod = "Meet Up"
 	}
 
+	// insert the listing into the listing table, saves the listing into the database
 	insertQuery := `INSERT INTO listings (
 		seller_id, title, description, weight_category, flexibility_category, balance_category,
 		price, original_price, location, image, seller_name, is_new, is_featured, status,
@@ -386,6 +400,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'active',$14,$15,$16,$17,$18)
 	RETURNING id`
 
+	// store the new row id. fetch the full product response
 	var productID int
 	err = sqlDB.QueryRow(insertQuery,
 		sellerID, req.Title, req.Description, req.WeightCategory, req.FlexibilityCategory,
@@ -398,10 +413,12 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(500, map[string]string{"error": "Failed to create product"})
 	}
 
+	// fetch the full product again, from the provided productID
 	product, err := fetchProductByID(sqlDB, productID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Product created, but failed to fetch response"})
 	}
+	// backend return the created product object back to the frontend
 	return c.JSON(201, product)
 }
 

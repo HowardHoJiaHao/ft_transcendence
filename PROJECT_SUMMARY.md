@@ -1,5 +1,9 @@
 # 📋 Project Setup Summary
 
+> This summary contains legacy scaffold sections. For the current PostgreSQL,
+> Infisical, and WAF architecture, use `README.md` and
+> `docs/prd-cybersecurity-waf-infisical.md`.
+
 ## ✅ Complete Docker Setup for Transcendence Marketplace
 
 Your full-stack marketplace application is now ready with Docker infrastructure!
@@ -244,14 +248,14 @@ All services communicate through Docker's DNS using service names.
 
 ---
 
-## 🔒 Default Credentials
+## 🔒 Runtime Credentials
 
 ### Database
 ```
-Host: localhost
-Port: 3306
+Host: db (inside the Docker network)
+Port: 5432
 User: transcendence
-Password: transcendence_pass
+Password: supplied by Infisical as DB_PASSWORD
 Database: transcendence
 ```
 
@@ -262,7 +266,8 @@ ENVIRONMENT: development
 SERVER_PORT: 8080
 ```
 
-⚠️ **Change these in `.env` before production deployment!**
+Only the WAF publishes host ports. The normal local workflow is `make setup`;
+real secrets must not be stored in a tracked `.env` file.
 
 ---
 
@@ -397,7 +402,7 @@ Happy coding! 🚀
 
 ---
 
-**Created:** March 26, 2026  
-**Project:** Transcendence Marketplace (42 School)  
-**Stack:** Next.js + Go + MySQL + Docker  
+**Created:** March 26, 2026
+**Project:** Transcendence Marketplace (42 School)
+**Current stack:** Next.js + Go + FastAPI + PostgreSQL/pgvector + Docker + OWASP CRS
 **Status:** ✅ Complete and Ready for Development

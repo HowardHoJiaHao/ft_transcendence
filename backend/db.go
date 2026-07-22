@@ -146,7 +146,7 @@ func setupRaw() (*sql.DB, error) {
 	dbPort		:= os.Getenv("DB_PORT")
 	dbName		:= os.Getenv("DB_NAME")
 
-	//define the connection string. make it into this format "host=localhost port=5432 user=transcendence password=transcendence_pass dbname=transcendence sslmode=disable"
+	// Build the PostgreSQL connection string from runtime environment values.
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPassword, dbName) //use sprintf to print the string into dsn variable
 

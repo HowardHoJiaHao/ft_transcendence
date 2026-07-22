@@ -1,259 +1,236 @@
 # Transcendence Marketplace
 
-A full-stack marketplace application built with Next.js (frontend), Go (backend), and MySQL (database).
+A full-stack badminton and racket marketplace built with Next.js, Go Echo,
+FastAPI, PostgreSQL with pgvector, and Docker Compose.
 
-## Project Structure
+The local stack is protected by an OWASP CRS Web Application Firewall. Runtime
+secrets are retrieved from Infisical Cloud and injected into Docker Compose by
+the Infisical CLI.
 
+## Architecture
+
+```text
+Browser
+  -> WAF (Nginx + ModSecurity + OWASP CRS)
+  -> internal Nginx router
+  -> frontend:3000 or backend:8080
+                         -> db:5432
+                         -> ai:8000
 ```
-transcendence/
-├── frontend/          # Next.js React application
-├── backend/           # Go Echo server
-├── db/               # MySQL database initialization
-├── docker-compose.yml # Docker orchestration
-└── .env.example      # Environment variables template
-```
+
+Only the WAF publishes host ports:
+
+- HTTP: <http://localhost>
+- HTTPS: <https://localhost>
+
+The development HTTPS certificate is self-signed, so browsers and `curl` will
+require an explicit local trust exception.
 
 ## Prerequisites
 
-- Docker & Docker Compose
+- Docker with Docker Compose v2
+- Make
+- curl
 - Git
+- Infisical CLI
+- Access to the team's `ft-transcendence` Infisical Cloud project
 
-## Quick Start
+## One-time Infisical setup
 
-### 1. Clone and Setup
-
-```bash
-cd /home/abin-moh/test/trans
-cp .env.example .env
-```
-
-### 2. Start Services
+From the repository root:
 
 ```bash
-docker-compose up -d
+make infisical-init
 ```
 
-This will start:
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8080
-- **Database**: MySQL on localhost:3306
+This logs in to Infisical and runs `infisical init`. Select the team project and
+the `dev` environment. In WSL, `infisical login -i` can be used when browser
+login is inconvenient.
 
-### 3. Verify Services
+The generated `.infisical.json` contains project metadata rather than secret
+values and should be reviewed and committed by the project owner.
+
+Required Infisical secrets at path `/`:
+
+```text
+DB_PASSWORD
+JWT_SECRET
+ADMIN_PASSWORD_HASH
+DEEPSEEK_API_KEY
+OPENROUTER_API_KEY
+```
+
+Requirements:
+
+- `JWT_SECRET` must contain at least 32 characters.
+- `ADMIN_PASSWORD_HASH` must be a bcrypt hash.
+- `DB_PASSWORD` must match the password in an existing PostgreSQL volume.
+- `BREVO_API_KEY` is required when demonstrating 2FA or password-change email.
+
+Do not put real secret values in `.env.example` or tracked documentation.
+
+## Start the application
 
 ```bash
-# Check all containers are running
-docker-compose ps
-
-# Check backend health
-curl http://localhost:8080/health
-
-# Check frontend
-open http://localhost:3000
+make setup
 ```
 
-## Services
+`make setup` checks Docker, Compose, curl, Infisical, project linkage, and the
+required secrets. It then builds and starts the complete stack under the same
+Infisical-injected process and waits for container health.
 
-### Frontend (Next.js)
-- **Port**: 3000
-- **Path**: `./frontend`
-- **Dev Mode**: `npm run dev`
-- **Build**: `npm run build`
-
-### Backend (Go)
-- **Port**: 8080
-- **Path**: `./backend`
-- **Main File**: `main.go`
-- **Uses**: Echo framework + MySQL driver
-
-### Database (PosgresSQL)
-- **Port**: 5432
-- **Default User**: `transcendence`
-- **Default Password**: `transcendence_pass`
-- **Default Database**: `transcendence`
-- **Initialization**: `./db/init.sql`
-
-## Environment Variables
-
-Configure in `.env` file:
-
-```env
-# Database
-DB_ROOT_PASSWORD=root
-DB_USER=transcendence
-DB_PASSWORD=transcendence_pass
-DB_NAME=transcendence
-
-# Frontend
-NEXT_PUBLIC_API_URL=http://localhost:8080
-NODE_ENV=development
-
-# Backend
-ENVIRONMENT=development
-SERVER_PORT=8080
-
-# Google OAuth
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URL=https://localhost/api/v1/auth/google/callback
-FRONTEND_URL=https://localhost
-
-# OpenRouter API
-OPENROUTER_API_KEY=your_api_key_here
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_MODEL=google/gemma-4-31b-it:free
-OPENROUTER_EMBEDDING_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2:free
-```
-
-## Database Tables
-
-The following tables are automatically created on startup:
-
-- **users** - User accounts and authentication
-- **listings** - Product/service listings
-- **listing_images** - Images for listings
-- **messages** - User-to-user messaging
-- **reviews** - User reviews and ratings
-- **orders** - Purchase orders
-- **api_keys** - API authentication keys
-- **analytics_events** - Event tracking and analytics
-
-## API Endpoints
-
-### Health Check
-```bash
-curl http://localhost:8080/health
-```
-
-### Status
-```bash
-curl http://localhost:8080/api/v1/status
-```
-
-## Common Commands
-
-### View Logs
-```bash
-# All services
-docker-compose logs -f
-
-# Specific service
-docker-compose logs -f backend
-docker-compose logs -f frontend
-docker-compose logs -f db
-```
-
-### Stop Services
-```bash
-docker-compose down
-```
-
-### Stop and Remove Data
-```bash
-docker-compose down -v
-```
-
-### Rebuild Services
-```bash
-docker-compose build
-```
-
-### Access Database
-```bash
-docker-compose exec db mysql -u transcendence -p transcendence
-```
-
-### Access Backend Container
-```bash
-docker-compose exec backend sh
-```
-
-### Access Frontend Container
-```bash
-docker-compose exec frontend sh
-```
-
-## Development
-
-### Frontend Development
+To require the optional Brevo credential as part of startup validation:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+make setup REQUIRE_BREVO=1
 ```
 
-### Backend Development
+Verify the running stack:
+
+```bash
+make ps
+make health-check
+make test-waf
+```
+
+## Existing PostgreSQL volumes
+
+The `POSTGRES_PASSWORD` environment value initializes a new PostgreSQL volume;
+it does not change the password in an existing `postgres_data` volume.
+
+For an existing development volume, either:
+
+1. use its current password as the initial Infisical `DB_PASSWORD`; or
+2. connect with `make db-connect`, run `\password transcendence` interactively,
+   and then set the same new value in Infisical.
+
+Do not use `make clean` or `make reset` as a password migration unless deleting
+all local database data is intentional.
+
+## Common commands
+
+```text
+make help             Show all supported commands
+make setup            Build and start the full Infisical + WAF stack
+make up               Start the stack with Infisical secrets
+make restart          Recreate containers with freshly retrieved secrets
+make build            Build application images without retrieving secrets
+make down             Stop containers without requiring Infisical
+make ps               Show container status and published ports
+make logs             Follow all logs
+make logs-waf         Follow ModSecurity and CRS audit output
+make logs-backend     Follow Go backend logs
+make logs-frontend    Follow Next.js logs
+make logs-db          Follow PostgreSQL logs
+make health-check     Check WAF and backend reachability
+make test-waf         Run HTTP redirect, normal, SQLi, and XSS tests
+make db-connect       Open psql in the database container
+make db-migrate       Apply db/init.sql
+```
+
+`make clean` and `make reset` delete the PostgreSQL volume and all local
+database data.
+
+## WAF demonstration
+
+Run:
+
+```bash
+make test-waf
+```
+
+The expected result is:
+
+```text
+HTTP to HTTPS redirect              301 or 308
+Normal backend request              200
+SQL injection request               403
+XSS request                         403
+```
+
+Then inspect the rule matches:
+
+```bash
+make logs-waf
+```
+
+The committed WAF configuration uses blocking mode and CRS paranoia level 1.
+Do not disable ModSecurity for all of `/api/`. If a legitimate request is
+blocked, identify the rule and add the narrowest route- or parameter-specific
+exclusion.
+
+## Application validation
+
+After changing the stack, test:
+
+- frontend loading and login;
+- product listing and CRUD operations;
+- avatar upload;
+- up to six listing images of 10 MiB each;
+- WebSocket chat;
+- progressively streamed AI responses;
+- administrator login and user management.
+
+Service-specific checks:
 
 ```bash
 cd backend
-go get ./...
-go run main.go
+go test ./...
+go build ./...
 ```
 
-### Database Connection
-
-Connection string for Go backend:
-```
-user:password@tcp(host:port)/database?parseTime=true
+```bash
+cd frontend
+npm run build
 ```
 
-## Features Ready for Implementation
-
-- ✅ Docker infrastructure
-- ✅ Database schema with core tables
-- ✅ Basic API endpoints
-- ✅ Frontend structure with Next.js
-- ⏳ User authentication & 2FA
-- ⏳ File upload system
-- ⏳ Advanced search & filtering
-- ⏳ ML recommendation system
-- ⏳ Public API with rate limiting
-- ⏳ WAF + HashiCorp Vault
-- ⏳ Analytics dashboard
-- ⏳ Monitoring (Prometheus/Grafana)
-- ⏳ OAuth 2.0 (Google/42)
+```bash
+cd ai_service
+python -m py_compile *.py
+python -m unittest discover -s tests -v
+```
 
 ## Troubleshooting
 
-### Port Already in Use
-```bash
-# Find process using port
-lsof -i :3000
-lsof -i :8080
-lsof -i :3306
+### This clone is not linked to Infisical
 
-# Kill process
-kill -9 <PID>
+Run:
+
+```bash
+make infisical-init
 ```
 
-### Database Connection Failed
+### Infisical secret validation fails
+
+Confirm that the CLI login is valid, the clone is linked to the correct
+project, the `dev` environment is selected, and the required names exist at
+path `/`. The validation script never prints secret values.
+
+### Database authentication fails after migration
+
+The Infisical value probably differs from the password stored in the existing
+PostgreSQL volume. Follow the existing-volume procedure above. Do not delete the
+volume if its data must be retained.
+
+### A legitimate request returns 403
+
+Inspect:
+
 ```bash
-# Check MySQL is running
-docker-compose ps db
-
-# Check logs
-docker-compose logs db
-
-# Recreate with fresh data
-docker-compose down -v
-docker-compose up -d
+make logs-waf
 ```
 
-### Frontend Won't Connect to Backend
-Check `NEXT_PUBLIC_API_URL` in `.env` matches your setup and CORS is enabled.
+Record the CRS rule ID, verify the request is legitimate, and add only a narrow
+exclusion. Retest both the application flow and `make test-waf`.
 
-## Next Steps
+### Docker is unavailable in WSL
 
-1. Implement user authentication system
-2. Add real-time messaging with WebSockets
-3. Implement file upload with storage
-4. Add search and filtering
-5. Integrate payment processing
-6. Add notification system
-7. Implement ML recommendations
-8. Set up monitoring and logging
-9. Add security features (2FA, WAF, Vault)
-10. Deploy to production
+Start Docker Desktop and enable integration for the active WSL distribution,
+then rerun `make setup`.
+
+## Detailed cybersecurity requirements
+
+See [docs/prd-cybersecurity-waf-infisical.md](docs/prd-cybersecurity-waf-infisical.md).
 
 ## License
 

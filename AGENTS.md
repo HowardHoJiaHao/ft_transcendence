@@ -11,7 +11,8 @@ Main services:
   for chat and tool calling, OpenRouter for RAG embeddings, PostgreSQL, and
   pgvector.
 - `db/`: PostgreSQL schema and seed data.
-- `nginx/`: Reverse proxy for frontend/backend routing.
+- `nginx/`: Internal reverse proxy for frontend/backend routing on port `8081`.
+- `waf` Compose service: public Nginx, ModSecurity, and OWASP CRS entry point.
 - `docker-compose.yml`: Main local orchestration.
 
 The active database is PostgreSQL with pgvector, not MySQL. Some older docs still mention MySQL; prefer `docker-compose.yml`, `Makefile`, `db/init.sql`, and source code as the source of truth.
@@ -51,15 +52,24 @@ make logs-db
 make db-connect
 make db-migrate
 make health-check
+make logs-waf
+make test-waf
+make infisical-init
 ```
 
 Service URLs:
 - Frontend through nginx: `https://localhost` or `http://localhost`
 - Frontend container service: `frontend:3000`
 - Backend container service: `backend:8080`
-- Backend health: `http://localhost:8080/health` only if exposed directly
-- AI service: `http://localhost:8000`
-- PostgreSQL: `localhost:5432`
+- Internal Nginx router: `nginx:8081`
+- AI container service: `ai:8000`
+- PostgreSQL container service: `db:5432`
+- Only the WAF publishes host ports `80` and `443`.
+
+`make setup`, `make up`, and `make restart` require an authenticated Infisical
+CLI, a repository `.infisical.json`, and the required `dev` secrets. Read-only
+local lifecycle commands such as `make ps` and `make logs` do not require
+Infisical. Never restore a known database-password fallback.
 
 ### MVP Admin Access
 

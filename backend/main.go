@@ -42,8 +42,8 @@ func main() {
 	e.Use(middleware.Logger()) //log every incoming process
 	e.Use(middleware.Recover()) //recover will prevent panick to affect all healthy threads. it only panick current threads
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"http://localhost:3000", "http://localhost"}, //only allow from these origins
-		AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"}, //only allow from these methods
+			AllowOrigins: []string{"http://localhost:3000", "http://localhost", "https://localhost"}, //only allow from these origins
+			AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"}, //only allow from these methods
 	}))
 
 	//routes
