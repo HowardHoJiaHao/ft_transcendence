@@ -16,6 +16,9 @@ node_modules/
 __pycache__/
 *.py[cod]
 
+# Go build artifacts
+/backend/transcendence
+
 # Docker
 docker-compose.override.yml
 
