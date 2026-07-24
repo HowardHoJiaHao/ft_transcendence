@@ -39,8 +39,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) //by p
 	useEffect(() =>
 	{
 		const storedUser = localStorage.getItem('user') //goes to browser storage and see is there a string labeled user
-		if (storedUser)
-			setUser(JSON.parse(storedUser)); //translate string into live javascript object
+		if (storedUser) {
+			try {
+				const parsed = JSON.parse(storedUser) as Partial<User>;
+				if (
+					parsed &&
+					typeof parsed.id === 'number' &&
+					typeof parsed.username === 'string' &&
+					typeof parsed.email === 'string'
+				) {
+					setUser(parsed as User); //translate string into live javascript object
+				} else {
+					localStorage.removeItem('user');
+				}
+			} catch {
+				// Browser storage is user-controlled and may be corrupted.
+				localStorage.removeItem('user');
+			}
+		}
 		setLoading(false);
 	}, []); //run the code exactly
 
