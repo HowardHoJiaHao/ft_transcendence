@@ -1,0 +1,187 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build and type-check
+        working-directory: frontend
+        run: npm run build
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Check formatting
+        working-directory: backend
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "The following Go files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Run static analysis
+        working-directory: backend
+        run: go vet ./...
+
+      - name: Run tests
+        working-directory: backend
+        run: go test ./...
+
+      - name: Build
+        working-directory: backend
+        run: go build ./...
+
+  ai-service:
+    name: AI service
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ai_service/requirements.txt
+
+      - name: Install dependencies
+        working-directory: ai_service
+        run: python -m pip install -r requirements.txt
+
+      - name: Check installed dependencies
+        working-directory: ai_service
+        run: python -m pip check
+
+      - name: Compile Python modules
+        working-directory: ai_service
+        run: python -m py_compile *.py
+
+      - name: Run unit tests
+        working-directory: ai_service
+        run: python -m unittest discover -s tests -v
+
+  database:
+    name: PostgreSQL schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: transcendence_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d transcendence_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Apply schema and seed data
+        env:
+          PGPASSWORD: ci_password
+        run: >-
+          psql
+          --host localhost
+          --username ci_user
+          --dbname transcendence_ci
+          --set ON_ERROR_STOP=1
+          --file db/init.sql
+
+      - name: Verify pgvector and core tables
+        env:
+          PGPASSWORD: ci_password
+        run: |
+          psql --host localhost --username ci_user --dbname transcendence_ci \
+            --set ON_ERROR_STOP=1 \
+            --command "SELECT extname FROM pg_extension WHERE extname = 'vector';"
+          psql --host localhost --username ci_user --dbname transcendence_ci \
+            --set ON_ERROR_STOP=1 \
+            --command "SELECT id FROM users LIMIT 1;"
+          psql --host localhost --username ci_user --dbname transcendence_ci \
+            --set ON_ERROR_STOP=1 \
+            --command "SELECT id FROM listings LIMIT 1;"
+          psql --host localhost --username ci_user --dbname transcendence_ci \
+            --set ON_ERROR_STOP=1 \
+            --command "SELECT id FROM knowledge_chunks LIMIT 1;"
+
+  compose:
+    name: Docker Compose configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Validate Compose configuration
+        env:
+          DB_PASSWORD: ci-only-not-a-secret
+          JWT_SECRET: ci-only-not-a-secret
+          ADMIN_PASSWORD_HASH: ci-only-not-a-secret
+          DEEPSEEK_API_KEY: ci-only-not-a-secret
+          OPENROUTER_API_KEY: ci-only-not-a-secret
+        run: docker compose config --quiet
