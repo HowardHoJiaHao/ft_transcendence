@@ -1,8 +1,8 @@
 package chat
 
 import (
-	"time"
 	"fmt"
+	"time"
 
 	"transcendence/modules/user"
 )
@@ -16,7 +16,7 @@ func NewRepository(baseRepo *user.Repository) *Repository {
 }
 
 func (r *Repository) CreateMessage(senderId, receiverId int, content string) (*Message, error) {
-	msg := Message {
+	msg := Message{
 		SenderId:   senderId,
 		ReceiverId: receiverId,
 		Content:    content,
@@ -32,7 +32,7 @@ func (r *Repository) CreateMessage(senderId, receiverId int, content string) (*M
 	return &msg, nil
 }
 
-//distinct maybe unnecessary
+// distinct maybe unnecessary
 func (r *Repository) GetConversations(userId int) ([]Conversation, error) {
 	query := `
 		SELECT DISTINCT
@@ -84,11 +84,11 @@ func (r *Repository) GetMessagesBetween(user1Id, user2Id int) ([]Message, error)
 		Order("created_at ASC").
 		Find(&messages).Error
 
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch messages: %w", err)
-		}
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch messages: %w", err)
+	}
 
-		return messages, nil
+	return messages, nil
 }
 
 func (r *Repository) MarkAsRead(receiverId, senderId int) error {

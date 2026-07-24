@@ -54,28 +54,28 @@ func (h *Handler) WebSocketHandler(c echo.Context) error {
 func (h *Handler) SendMessage(c echo.Context) error {
 	senderId, ok := c.Get("userId").(int)
 	if !ok {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error":"unauthorized"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	}
 
 	var req InboundMessage
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error":"invalid request"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
 	}
 
 	if req.ReceiverId == 0 || req.Content == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error":"receiver_id and content required"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "receiver_id and content required"})
 	}
 
 	if req.ReceiverId == senderId {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error":"cannot send message to yourself"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot send message to yourself"})
 	}
 
 	msg, err := h.Repo.CreateMessage(senderId, req.ReceiverId, req.Content)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error":"failed to save message"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to save message"})
 	}
 
-	outbound := OutboundMessage {
+	outbound := OutboundMessage{
 		Type:       "private_message",
 		SenderId:   msg.SenderId,
 		ReceiverId: msg.ReceiverId,
@@ -89,7 +89,7 @@ func (h *Handler) SendMessage(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "sent",
-		"data"  : msg,
+		"data":   msg,
 	})
 }
 
@@ -125,7 +125,7 @@ func (h *Handler) GetMessages(c echo.Context) error {
 
 	_ = h.Repo.MarkAsRead(currentUserId, otherUserId)
 
-	return c.JSON(http.StatusOK, map[string]interface{}{"messages":messages})
+	return c.JSON(http.StatusOK, map[string]interface{}{"messages": messages})
 }
 
 func (h *Handler) DeleteConversation(c echo.Context) error {

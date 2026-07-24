@@ -11,34 +11,34 @@ import (
 )
 
 type OutgoingMessage struct {
-	ToUserId	int
-	Payload		[]byte
+	ToUserId int
+	Payload  []byte
 }
 
 type Client struct {
-	Hub			*Hub
-	Conn		*websocket.Conn
-	Send		chan []byte
-	UserId		int
+	Hub    *Hub
+	Conn   *websocket.Conn
+	Send   chan []byte
+	UserId int
 }
 
 type Hub struct {
-	Clients		map[int]*Client
-	Send		chan OutgoingMessage
-	Broadcast	chan []byte
-	Register	chan *Client
-	Unregister	chan int
-	Repo		*Repository
+	Clients    map[int]*Client
+	Send       chan OutgoingMessage
+	Broadcast  chan []byte
+	Register   chan *Client
+	Unregister chan int
+	Repo       *Repository
 }
 
 func NewHub(repo *Repository) *Hub {
 	return &Hub{
-		Clients:	make(map[int] *Client),
-		Send:		make(chan OutgoingMessage, 256),
-		Broadcast:	make(chan []byte, 256),
-		Register:	make(chan *Client, 256),
-		Unregister:	make(chan int, 256),
-		Repo:		repo,
+		Clients:    make(map[int]*Client),
+		Send:       make(chan OutgoingMessage, 256),
+		Broadcast:  make(chan []byte, 256),
+		Register:   make(chan *Client, 256),
+		Unregister: make(chan int, 256),
+		Repo:       repo,
 	}
 }
 
@@ -57,7 +57,7 @@ func (h *Hub) Run() {
 				userIds = append(userIds, userId)
 			}
 			initialMsg := OnlineUsersMessage{
-				Type: "online_users",
+				Type:    "online_users",
 				UserIds: userIds,
 			}
 			initialPayload, _ := json.Marshal(initialMsg)
@@ -80,14 +80,14 @@ func (h *Hub) Run() {
 				}
 			}
 
-		case userId := <- h.Unregister:
+		case userId := <-h.Unregister:
 			if Client, ok := h.Clients[userId]; ok {
 				Client.Conn.Close()
 				delete(h.Clients, userId)
 				log.Printf("✗ User %d disconnected(%d online)", userId, len(h.Clients))
 			}
 			offlineMsg := OnlineStatusMessage{
-				Type: "user_offline",
+				Type:   "user_offline",
 				UserId: userId,
 			}
 			payload, _ := json.Marshal(offlineMsg)
@@ -98,8 +98,7 @@ func (h *Hub) Run() {
 				}
 			}
 
-
-		case msg := <- h.Send:
+		case msg := <-h.Send:
 			if client, ok := h.Clients[msg.ToUserId]; ok {
 				select {
 				case client.Send <- msg.Payload:
@@ -108,7 +107,7 @@ func (h *Hub) Run() {
 					delete(h.Clients, msg.ToUserId)
 				}
 			}
-		case message := <- h.Broadcast:
+		case message := <-h.Broadcast:
 			for userId, client := range h.Clients { // range means that for loop has access to h.Clients and userId, client comes from what range return for map which key and value
 				select {
 				case client.Send <- message:
@@ -122,10 +121,10 @@ func (h *Hub) Run() {
 }
 
 func (h *Hub) SendPrivateMessage(toUserId int, data []byte) {
-	h.Send  <- OutgoingMessage{ToUserId: toUserId, Payload: data}
+	h.Send <- OutgoingMessage{ToUserId: toUserId, Payload: data}
 }
 
-var upgrader = websocket.Upgrader {
+var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		//implement validation
 		return true
@@ -139,10 +138,10 @@ func (h *Hub) ServeWS(c echo.Context, userId int) error {
 		return err
 	}
 	client := &Client{
-		Hub: h,
-		Conn: conn,
-		Send: make(chan []byte, 256),
-		UserId: userId, 
+		Hub:    h,
+		Conn:   conn,
+		Send:   make(chan []byte, 256),
+		UserId: userId,
 	}
 	h.Register <- client
 	go client.readPump(h)
@@ -157,7 +156,7 @@ func (c *Client) readPump(h *Hub) {
 		c.Conn.Close()
 	}()
 
-	c.Conn.SetReadLimit(512 * 1024) //set limit 5KB. prevent user from sending too big data. it can crash the server
+	c.Conn.SetReadLimit(512 * 1024)                          //set limit 5KB. prevent user from sending too big data. it can crash the server
 	c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second)) //handle request takes more than 60 sec
 	c.Conn.SetPongHandler(func(string) error {
 		c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -208,7 +207,7 @@ func (c *Client) readPump(h *Hub) {
 	}
 }
 
-//writemessage parameters are 1) message type 2) the payload
+// writemessage parameters are 1) message type 2) the payload
 func (c *Client) writePump() {
 	//create a heartbeat timer
 	ticker := time.NewTicker(54 * time.Second)
@@ -241,7 +240,7 @@ func (c *Client) writePump() {
 			if err := w.Close(); err != nil {
 				return
 			}
-		
+
 		case <-ticker.C:
 			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {

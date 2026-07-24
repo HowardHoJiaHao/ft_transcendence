@@ -2,10 +2,10 @@ package main
 
 import (
 	"log" //logging errors and important events
-	"os" //provide platform independent interface
+	"os"  //provide platform independent interface
 
 	//"github.com/joho/godotenv"
-	"github.com/labstack/echo/v4" //echo main framework
+	"github.com/labstack/echo/v4"            //echo main framework
 	"github.com/labstack/echo/v4/middleware" //middleware parts
 
 	"transcendence/modules/user"
@@ -29,7 +29,7 @@ func main() {
 
 	//initialize database
 	rawDB, gormDB, cleanup, err := initDB()
-	if (err != nil) {
+	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
@@ -39,11 +39,11 @@ func main() {
 	e := echo.New()
 
 	//middleware. run things pre/post route handler
-	e.Use(middleware.Logger()) //log every incoming process
+	e.Use(middleware.Logger())  //log every incoming process
 	e.Use(middleware.Recover()) //recover will prevent panick to affect all healthy threads. it only panick current threads
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-			AllowOrigins: []string{"http://localhost:3000", "http://localhost", "https://localhost"}, //only allow from these origins
-			AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"}, //only allow from these methods
+		AllowOrigins: []string{"http://localhost:3000", "http://localhost", "https://localhost"}, //only allow from these origins
+		AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"},       //only allow from these methods
 	}))
 
 	//routes
@@ -51,7 +51,7 @@ func main() {
 	v1 := e.Group("/api/v1")
 	v1.GET("/status", statusHandler)
 	v1.POST("/ai/chat", handleAIChat)
- 
+
 	// Product routes
 	v1.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
 	v1.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
@@ -93,7 +93,7 @@ func main() {
 	public.POST("/products/import", func(c echo.Context) error { return importProducts(c, gormDB) })
 	public.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
 	public.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
-	
+
 	//User Module initialization
 	baseRepo := user.NewRepository(rawDB, gormDB)
 
@@ -127,7 +127,7 @@ func main() {
 	// serve static files (avatars) from ./static mapped to /static URL
 	e.Static("/static", "static")
 
-	//start server 
+	//start server
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
 		port = "8080"
@@ -137,17 +137,17 @@ func main() {
 	e.Logger.Fatal(e.Start(":" + port)) //start is a function that enters infinite loop, wait, listens for http request. the port given should be in this format :XXXX
 }
 
-//dummy healthcheckhandler
+// dummy healthcheckhandler
 func healthCheckHandler(c echo.Context) error { //everytime a user enter /health give type echo.context to c
 	return c.JSON(200, map[string]interface{}{ //use a helper of echo context that take the data and change into json string. gives 200 error status. and declare a map with key(string) and value (can be any type). interface means can be any type
 		"status": "ok",
 	})
 }
 
-//dummy statushandler
+// dummy statushandler
 func statusHandler(c echo.Context) error {
 	return c.JSON(200, map[string]interface{}{
-		"status": "running", //the map element
+		"status":  "running", //the map element
 		"version": "1.0.0",
 	})
 }
