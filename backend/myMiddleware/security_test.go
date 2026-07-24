@@ -362,3 +362,40 @@ func TestAPIKeyAuthSetsTrustedIdentityAndWritesAuditLog(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAPIKeyAuthAuditsHandlerErrorsWithTheirHTTPStatus(t *testing.T) {
+	rateMu.Lock()
+	rateWindows = map[int]*rateWindow{}
+	rateMu.Unlock()
+
+	db, mock := newMockDB(t)
+	key := "sk_live_error"
+	mock.ExpectQuery("SELECT id, user_id, rate_limit, is_active FROM api_keys").
+		WithArgs(HashAPIKey(key)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "rate_limit", "is_active"}).
+			AddRow(12, 42, 100, true))
+	mock.ExpectExec("UPDATE api_keys SET last_used_at").
+		WithArgs(12).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO api_request_logs").
+		WithArgs(12, 42, http.MethodPost, "/api/public/v1/products", http.StatusUnprocessableEntity, sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	e := echo.New()
+	request := httptest.NewRequest(http.MethodPost, "/api/public/v1/products", nil)
+	request.Header.Set("X-API-Key", key)
+	recorder := httptest.NewRecorder()
+	context := e.NewContext(request, recorder)
+
+	handler := APIKeyAuth(db)(func(c echo.Context) error {
+		return echo.NewHTTPError(http.StatusUnprocessableEntity, "invalid listing")
+	})
+	err := handler(context)
+	httpError, ok := err.(*echo.HTTPError)
+	if !ok || httpError.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("handler error = %v, want HTTP 422", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

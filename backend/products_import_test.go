@@ -1,8 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/labstack/echo/v4"
 )
 
 func TestValidateImportRow(t *testing.T) {
@@ -101,4 +108,51 @@ func TestApplyImportDefaultsPreservesProvidedListingValues(t *testing.T) {
 		item.DealingMethod != "Delivery" {
 		t.Fatalf("provided listing values were overwritten: %+v", item)
 	}
+}
+
+func TestImportProductsRollsBackEntireBatchWhenOneInsertFails(t *testing.T) {
+	gormDB, mock := newTestGormDB(t)
+	mock.ExpectQuery("SELECT username FROM users WHERE id").
+		WithArgs(42).
+		WillReturnRows(sqlmock.NewRows([]string{"username"}).AddRow("Trusted Seller"))
+	mock.ExpectBegin()
+	mock.ExpectQuery("INSERT INTO listings").
+		WithArgs(
+			42, "First", "", "4U", "Medium Flex", "Even Balance",
+			100.0, nil, "Malaysia", "", "Trusted Seller", false, false,
+			"Others", "Second-hand (Used)", "Meet Up", "", 1,
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(101))
+	mock.ExpectQuery("INSERT INTO listings").
+		WithArgs(
+			42, "Second", "", "4U", "Medium Flex", "Even Balance",
+			200.0, nil, "Malaysia", "", "Trusted Seller", false, false,
+			"Others", "Second-hand (Used)", "Meet Up", "", 1,
+		).
+		WillReturnError(errors.New("second insert failed"))
+	mock.ExpectRollback()
+
+	e := echo.New()
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/products/import",
+		bytes.NewBufferString(`{
+			"items": [
+				{"sellerId": 999, "title": "First", "price": 100},
+				{"sellerId": 999, "title": "Second", "price": 200}
+			]
+		}`),
+	)
+	request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	recorder := httptest.NewRecorder()
+	context := e.NewContext(request, recorder)
+	context.Set("userId", 42)
+
+	if err := importProducts(context, gormDB); err != nil {
+		t.Fatalf("importProducts() error = %v", err)
+	}
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+	}
+	expectNoOutstandingSQL(t, mock)
 }
