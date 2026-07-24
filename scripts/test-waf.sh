@@ -49,6 +49,22 @@ test_redirect()
 	[ "$actual" = "301" ] || [ "$actual" = "308" ]
 }
 
+test_chat_history()
+{
+	chat_body=$(mktemp) || return 1
+	trap 'rm -f "$chat_body"' EXIT HUP INT TERM
+	chat_timeout=${CHAT_CURL_TIMEOUT:-75}
+	chat_status=$(curl -ksS --max-time "$chat_timeout" \
+		-o "$chat_body" \
+		-w "%{http_code}" \
+		-H 'Content-Type: application/json' \
+		--data '{"message":"Reply with a short greeting.","history":[{"role":"user","content":"History message 1."},{"role":"assistant","content":"History message 2."},{"role":"user","content":"History message 3."},{"role":"assistant","content":"History message 4."},{"role":"user","content":"History message 5."},{"role":"assistant","content":"History message 6."},{"role":"user","content":"History message 7."},{"role":"assistant","content":"History message 8."},{"role":"user","content":"History message 9."},{"role":"assistant","content":"History message 10."}]}' \
+		"$BASE_URL/api/v1/ai/chat") || chat_status=000
+
+	printf '%-35s expected=200 actual=%s\n' "Chat request with history" "$chat_status"
+	[ "$chat_status" = "200" ] && grep -q 'data: \[DONE\]' "$chat_body"
+}
+
 wait_for_waf || exit 1
 
 failed=0
@@ -66,6 +82,7 @@ test_status \
 	"XSS request" \
 	"403" \
 	"$BASE_URL/?q=%3Cscript%3Ealert%281%29%3C%2Fscript%3E" || failed=1
+test_chat_history || failed=1
 
 if [ "$failed" -ne 0 ]; then
 	echo "❌ One or more WAF tests failed."
