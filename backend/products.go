@@ -318,14 +318,20 @@ func recordListingView(sqlDB *sql.DB, listingID int, sellerID int, c echo.Contex
 	}
 }
 
-// gormDB is an interface/middleman for golang to talk to the rawDB 
+// gormDB is an interface/middleman for golang to talk to the rawDB
 // the flow
 // Go function
-//     ↓ <- the gormDB lives here, wrapping te rawDB
+//
+//	↓ <- the gormDB lives here, wrapping te rawDB
+//
 // rawDB / sqlDB
-//     ↓
+//
+//	↓
+//
 // pgx
-//     ↓
+//
+//	↓
+//
 // PostgreSQL
 func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()

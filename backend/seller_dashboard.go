@@ -47,11 +47,11 @@ type MonthlyCategoryStat struct {
 }
 
 type SellerSummary struct {
-	TotalRevenue      float64             `json:"totalRevenue"`
-	PendingOrders     int                 `json:"pendingOrders"`
-	ItemsSold         int                 `json:"itemsSold"`
-	ItemsActive       int                 `json:"itemsActive"`
-	ItemsArchived     int                 `json:"itemsArchived"`
+	TotalRevenue      float64               `json:"totalRevenue"`
+	PendingOrders     int                   `json:"pendingOrders"`
+	ItemsSold         int                   `json:"itemsSold"`
+	ItemsActive       int                   `json:"itemsActive"`
+	ItemsArchived     int                   `json:"itemsArchived"`
 	SellThroughRate   float64               `json:"sellThroughRate"` // percent, 0-100
 	AvgDaysToSell     float64               `json:"avgDaysToSell"`
 	MonthlyRevenue    []SellerMonthlyStat   `json:"monthlyRevenue"`
