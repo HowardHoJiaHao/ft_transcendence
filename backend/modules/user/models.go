@@ -31,14 +31,14 @@ type User struct {
 }
 
 type RegisterRequest struct {
-	Username     string     `json:"username"`
-	Email        string     `json:"email"`
-	Password     string     `json:"password"`
-	FirstName    string     `json:"firstName"`
-	LastName     string     `json:"lastName"`
-	PhoneNo      *string    `json:"phoneNo"`
-	DateOfBirth  *time.Time `json:"dateOfBirth"`
-	Gender       *string    `json:"gender"`
+	Username    string     `json:"username"`
+	Email       string     `json:"email"`
+	Password    string     `json:"password"`
+	FirstName   string     `json:"firstName"`
+	LastName    string     `json:"lastName"`
+	PhoneNo     *string    `json:"phoneNo"`
+	DateOfBirth *time.Time `json:"dateOfBirth"`
+	Gender      *string    `json:"gender"`
 }
 
 type LoginRequest struct {
@@ -54,14 +54,14 @@ type LoginResponse struct {
 }
 
 type UpdateProfileRequest struct {
-	FirstName    string     `json:"firstName"`
-	LastName     string     `json:"lastName"`
-	Bio          string     `json:"bio"`
-	DateOfBirth  *time.Time `json:"dateOfBirth"`
-	Gender       *string    `json:"gender"`
-	AvatarURL    *string    `json:"avatar"`
-	Email        *string    `json:"email"`
-	PhoneNo      *string    `json:"phoneNo"`
+	FirstName   string     `json:"firstName"`
+	LastName    string     `json:"lastName"`
+	Bio         string     `json:"bio"`
+	DateOfBirth *time.Time `json:"dateOfBirth"`
+	Gender      *string    `json:"gender"`
+	AvatarURL   *string    `json:"avatar"`
+	Email       *string    `json:"email"`
+	PhoneNo     *string    `json:"phoneNo"`
 }
 
 type OTP struct {
