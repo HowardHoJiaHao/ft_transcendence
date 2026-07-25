@@ -20,8 +20,12 @@ Browser
 
 Only the WAF publishes host ports:
 
-- HTTP: <http://localhost>
-- HTTPS: <https://localhost>
+- HTTP: <http://localhost:8088>
+- HTTPS: <https://localhost:8443>
+
+These high-numbered ports work with rootless Docker, which cannot normally
+bind ports below 1024. If either port is in use, choose free alternatives when
+starting the stack, for example: `WAF_HTTP_PORT=8089 WAF_HTTPS_PORT=8444 make setup`.
 
 The development HTTPS certificate is self-signed, so browsers and `curl` will
 require an explicit local trust exception.

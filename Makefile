@@ -60,7 +60,7 @@ setup: check-tools check-infisical-project
 	@$(WITH_INFISICAL) docker compose --env-file .env.infisical up -d --build --force-recreate --wait --wait-timeout 180
 	@echo ""
 	@echo "✅ Full project setup complete."
-	@echo "Application: https://localhost"
+	@echo "Application: https://localhost:$${WAF_HTTPS_PORT:-8443}"
 	@echo "Containers:  make ps"
 	@echo "WAF logs:    make logs-waf"
 	@echo "WAF test:    make test-waf"
@@ -99,16 +99,16 @@ ps: check-docker
 
 health-check: check-curl
 	@echo "Checking WAF..."
-	@curl -ksSf --max-time 10 https://localhost/healthz >/dev/null && \
+	@curl -ksSf --max-time 10 "https://localhost:$${WAF_HTTPS_PORT:-8443}/healthz" >/dev/null && \
 		echo "✅ WAF is responding." || \
 		{ echo "❌ WAF is not responding."; exit 1; }
 	@echo "Checking backend through WAF..."
-	@curl -ksSf --max-time 10 https://localhost/api/v1/status >/dev/null && \
+	@curl -ksSf --max-time 10 "https://localhost:$${WAF_HTTPS_PORT:-8443}/api/v1/status" >/dev/null && \
 		echo "✅ Backend is reachable through the WAF." || \
 		{ echo "❌ Backend is not reachable through the WAF."; exit 1; }
 
 test-waf: check-curl
-	@sh scripts/test-waf.sh
+	@BASE_URL="https://localhost:$${WAF_HTTPS_PORT:-8443}" HTTP_URL="http://localhost:$${WAF_HTTP_PORT:-8088}" sh scripts/test-waf.sh
 
 shell-backend: check-docker
 	$(COMPOSE) exec backend sh
