@@ -1,3 +1,11 @@
+# Deprecated host-CLI setup
+
+This guide describes the former host-installed Infisical CLI workflow and is
+kept only for historical context. The active non-interactive setup uses the
+official Dockerized CLI with `.env.infisical-auth` and requires neither `sudo`,
+a browser session, nor a host installation. Follow
+[`docs/INFISICAL_DOCKER.md`](docs/INFISICAL_DOCKER.md) instead.
+
 first
 
 curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash
@@ -579,4 +587,4 @@ text
 
 The shortest accurate explanation for your teammate is:
 
-> Install Docker and the Infisical CLI, accept the Infisical invitation, clone the repository, run infisical login, and then run make setup.
+> Install Docker, accept the Infisical invitation, clone the repository, run `make infisical-login`, and then run `make setup`. No host Infisical CLI is required.
