@@ -59,7 +59,7 @@ func GenerateToken(userID int) (string, error) {
 	}
 	claims := Claims{
 		UserId: userID,
-		Role: "member",
+		Role:   "member",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 		},
@@ -164,9 +164,9 @@ func SendEmail(receiverEmail, subject, htmlContent string) error {
 	recipient := []brevo.SendSmtpEmailTo{{Email: receiverEmail}}
 
 	email := brevo.SendSmtpEmail{
-		Sender:    sender,
-		To:        recipient,
-		Subject:   subject,
+		Sender:      sender,
+		To:          recipient,
+		Subject:     subject,
 		HtmlContent: htmlContent,
 	}
 
@@ -200,7 +200,7 @@ func (s *Service) CheckAndHashNewPassword(req *user.RegisterRequest) error {
 
 func NewPasswordChecker() *PasswordChecker {
 	return &PasswordChecker{
-		MinLength: 8,
+		MinLength:     8,
 		CheckUsername: true,
 		Rules: []PasswordRule{
 			{regexp.MustCompile(`[A-Z]`), "must contain uppercase letter"},

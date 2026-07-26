@@ -1,21 +1,24 @@
 services:
-  # PostgreSQL Database
   db:
     image: pgvector/pgvector:pg15
     container_name: transcendence-postgres
     environment:
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME:-transcendence}
       POSTGRES_USER: ${DB_USER:-transcendence}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - transcendence-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}",
+        ]
       timeout: 20s
       retries: 10
       interval: 10s
@@ -116,14 +119,26 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: transcendence-backend
-    env_file:
-      - .env
     environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      SERVER_PORT: "8080"
       DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-transcendence}
+      DB_USER: ${DB_USER:-transcendence}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-wongdakfat}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      AI_SERVICE_URL: http://ai:8000
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL}
     ports:
       - "127.0.0.1:8080:8080"
-    expose:
-      - "8080"
+    # expose:
+      # - "8080"
     volumes:
       - ./uploads:/app/uploads
       - ./avatar:/app/avatar
@@ -141,14 +156,12 @@ services:
     networks:
       - transcendence-network
 
-  # NextJS
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: transcendence-frontend
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://localhost}
       NODE_ENV: ${NODE_ENV:-development}
     expose:
       - "3000"
@@ -164,33 +177,31 @@ services:
     networks:
       - transcendence-network
 
-  # need to change wai keong
-  # Python AI Service (FastAPI + LangChain + RAG)
   ai:
     build:
       context: ./ai_service
       dockerfile: Dockerfile
     container_name: transcendence-ai
-    ports:
-      - "8000:8000"
     environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-v4-flash}
-      - RACKETBOT_MODEL_CALL_LIMIT=${RACKETBOT_MODEL_CALL_LIMIT:-10}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
-      - OPENROUTER_EMBEDDING_MODEL=${OPENROUTER_EMBEDDING_MODEL:-nvidia/llama-nemotron-embed-vl-1b-v2:free}
-      - RACKETBOT_MODEL_TIMEOUT_SECONDS=${RACKETBOT_MODEL_TIMEOUT_SECONDS:-25}
-      - RACKETBOT_MODEL_MAX_RETRIES=${RACKETBOT_MODEL_MAX_RETRIES:-1}
-      - RACKETBOT_REQUEST_TIMEOUT_SECONDS=${RACKETBOT_REQUEST_TIMEOUT_SECONDS:-60}
-      - RAG_EMBEDDING_BATCH_SIZE=${RAG_EMBEDDING_BATCH_SIZE:-2}
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-transcendence}
-      - DB_PASSWORD=${DB_PASSWORD:-transcendence_pass}
-      - DB_NAME=${DB_NAME:-transcendence}
-      - BACKEND_URL=http://backend:8080 # maybe need to change
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      RACKETBOT_MODEL_CALL_LIMIT: ${RACKETBOT_MODEL_CALL_LIMIT:-10}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      OPENROUTER_EMBEDDING_MODEL: ${OPENROUTER_EMBEDDING_MODEL:-nvidia/llama-nemotron-embed-vl-1b-v2:free}
+      RACKETBOT_MODEL_TIMEOUT_SECONDS: ${RACKETBOT_MODEL_TIMEOUT_SECONDS:-25}
+      RACKETBOT_MODEL_MAX_RETRIES: ${RACKETBOT_MODEL_MAX_RETRIES:-1}
+      RACKETBOT_REQUEST_TIMEOUT_SECONDS: ${RACKETBOT_REQUEST_TIMEOUT_SECONDS:-60}
+      RAG_EMBEDDING_BATCH_SIZE: ${RAG_EMBEDDING_BATCH_SIZE:-2}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-transcendence}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-transcendence}
+      BACKEND_URL: http://backend:8080
+    expose:
+      - "8000"
     depends_on:
       db:
         condition: service_healthy
@@ -202,17 +213,14 @@ services:
       start_period: 15s
     networks:
       - transcendence-network
-  # end of need to change wai keong
 
-  # Nginx
   nginx:
     build:
       context: ./nginx
       dockerfile: Dockerfile
     container_name: transcendence-nginx
-    ports:
-      - "80:80"
-      - "443:443"
+    expose:
+      - "8081"
     depends_on:
       frontend:
         condition: service_healthy
@@ -353,6 +361,33 @@ services:
     depends_on:
       - prometheus
     restart: unless-stopped
+    networks:
+      - transcendence-network
+  waf:
+    image: owasp/modsecurity-crs:4.25.0-nginx-lts
+    container_name: transcendence-waf
+    ports:
+      - "80:8080"
+      - "443:8443"
+    environment:
+      BACKEND: http://nginx:8081
+      SERVER_NAME: localhost
+      NGINX_ALWAYS_TLS_REDIRECT: "on"
+      MODSEC_RULE_ENGINE: "On"
+      MODSEC_AUDIT_ENGINE: "RelevantOnly"
+      BLOCKING_PARANOIA: "1"
+      DETECTION_PARANOIA: "1"
+      REPORTING_LEVEL: "2"
+      ALLOWED_METHODS: "GET HEAD POST PUT PATCH DELETE OPTIONS"
+      MODSEC_REQ_BODY_LIMIT: "73400320"
+      MAX_FILE_SIZE: "10485760"
+      COMBINED_FILE_SIZES: "62914560"
+    volumes:
+      # Loaded before CRS rules. Keep application-specific exclusions narrow.
+      - ./waf/racketbot-before.conf:/opt/owasp-crs/plugins/racketbot-before.conf:ro
+    depends_on:
+      nginx:
+        condition: service_healthy
     networks:
       - transcendence-network
 

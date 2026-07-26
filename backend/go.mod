@@ -3,6 +3,7 @@ module transcendence
 go 1.25
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/getbrevo/brevo-go v1.1.3
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
@@ -11,6 +12,7 @@ require (
 	github.com/labstack/echo/v4 v4.11.3
 	github.com/prometheus/client_golang v1.20.5
 	golang.org/x/crypto v0.24.0
+	golang.org/x/oauth2 v0.21.0
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.30.5
 )

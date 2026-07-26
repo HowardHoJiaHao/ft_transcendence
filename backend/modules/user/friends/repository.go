@@ -21,7 +21,7 @@ func (r *Repository) GetFriends(userID int) ([]Friend, error) {
 		JOIN users u ON f.user_id2 = u.id
 		WHERE f.user_id1 = $1 AND f.status = 'accepted'
 		ORDER BY f.created_at DESC
-	`, userID)//--JOIN combine two table. ON only combine two rows w/ specific value match
+	`, userID) //--JOIN combine two table. ON only combine two rows w/ specific value match
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (r *Repository) AddFriend(userId, friendId int) error {
 		INSERT INTO friendships (user_id1, user_id2, status)
 		VALUES ($1, $2, 'accepted')
 		ON CONFLICT (user_id1, user_id2) DO NOTHING`
-	
+
 	_, err = r.DB.Exec(query, userId, friendId)
 	//bidirectional for simplicity
 	_, err = r.DB.Exec(query, friendId, userId)

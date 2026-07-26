@@ -1,6 +1,8 @@
 .env
+.env.*
+!.env.example
+!**/.env.example
 .next
-.env.local
 .DS_Store
 .vscode
 .idea
@@ -13,6 +15,9 @@ node_modules/
 # Python
 __pycache__/
 *.py[cod]
+
+# Go build artifacts
+/backend/transcendence
 
 # Docker
 docker-compose.override.yml

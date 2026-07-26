@@ -3,10 +3,10 @@ package main
 import (
 	"database/sql" //needed for *sql.DB type used in the real health check (rawDB.Ping())
 	"log" //logging errors and important events
-	"os" //provide platform independent interface
+	"os"  //provide platform independent interface
 
 	//"github.com/joho/godotenv"
-	"github.com/labstack/echo/v4" //echo main framework
+	"github.com/labstack/echo/v4"            //echo main framework
 	"github.com/labstack/echo/v4/middleware" //middleware parts
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -31,7 +31,7 @@ func main() {
 
 	//initialize database
 	rawDB, gormDB, cleanup, err := initDB()
-	if (err != nil) {
+	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
@@ -41,11 +41,11 @@ func main() {
 	e := echo.New()
 
 	//middleware. run things pre/post route handler
-	e.Use(middleware.Logger()) //log every incoming process
+	e.Use(middleware.Logger())  //log every incoming process
 	e.Use(middleware.Recover()) //recover will prevent panick to affect all healthy threads. it only panick current threads
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"http://localhost:3000", "http://localhost"}, //only allow from these origins
-		AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"}, //only allow from these methods
+		AllowOrigins: []string{"http://localhost:3000", "http://localhost", "https://localhost"}, //only allow from these origins
+		AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"},       //only allow from these methods
 	}))
 
 	//routes
@@ -54,7 +54,7 @@ func main() {
 	v1 := e.Group("/api/v1")
 	v1.GET("/status", statusHandler)
 	v1.POST("/ai/chat", handleAIChat)
- 
+
 	// Product routes
 	v1.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
 	v1.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
@@ -96,7 +96,7 @@ func main() {
 	public.POST("/products/import", func(c echo.Context) error { return importProducts(c, gormDB) })
 	public.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
 	public.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
-	
+
 	//User Module initialization
 	baseRepo := user.NewRepository(rawDB, gormDB)
 
@@ -130,7 +130,7 @@ func main() {
 	// serve static files (avatars) from ./static mapped to /static URL
 	e.Static("/static", "static")
 
-	//start server 
+	//start server
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
 		port = "8080"
@@ -161,10 +161,10 @@ func healthCheckHandler(c echo.Context, rawDB *sql.DB) error {
 	})
 }
 
-//dummy statushandler
+// dummy statushandler
 func statusHandler(c echo.Context) error {
 	return c.JSON(200, map[string]interface{}{
-		"status": "running", //the map element
+		"status":  "running", //the map element
 		"version": "1.0.0",
 	})
 }

@@ -28,8 +28,32 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 	//load from localstorage
 	useEffect(() => {
 		const saved = localStorage.getItem('cart');
-		if (saved)
-			setItems(JSON.parse(saved));
+		if (!saved)
+			return;
+		try {
+			const parsed = JSON.parse(saved) as unknown;
+			if (
+				Array.isArray(parsed) &&
+				parsed.every(item =>
+					item &&
+					typeof item.id === 'number' &&
+					typeof item.title === 'string' &&
+					typeof item.price === 'number' &&
+					Number.isFinite(item.price) &&
+					item.price > 0 &&
+					typeof item.image === 'string' &&
+					Number.isInteger(item.quantity) &&
+					item.quantity > 0
+				)
+			) {
+				setItems(parsed as CartItem[]);
+			} else {
+				localStorage.removeItem('cart');
+			}
+		} catch {
+			// Browser storage is user-controlled and may be corrupted.
+			localStorage.removeItem('cart');
+		}
 	}, []);
 
 	//save to localstorage
@@ -39,6 +63,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
 	//addtocart
 	const addToCart = (product: Omit<CartItem, 'quantity'>, quantity: number = 1) => {
+		if (
+			!Number.isInteger(quantity) ||
+			quantity <= 0 ||
+			!Number.isFinite(product.price) ||
+			product.price <= 0
+		) {
+			return;
+		}
 		setItems(prev => {
 			const existing = prev.find(i => i.id === product.id);
 			if (existing)
@@ -57,6 +89,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 			removeFromCart(id);
 			return ;
 		}
+		if (!Number.isInteger(quantity))
+			return;
 		setItems(prev =>
 			prev.map(i => i.id === id ? {...i, quantity } : i)
 		);

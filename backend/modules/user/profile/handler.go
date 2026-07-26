@@ -117,8 +117,8 @@ func (h *Handler) UploadAvatar(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{
-		"message":    "avatar uploaded",
-		"avatarUrl":  publicUrl,
+		"message":   "avatar uploaded",
+		"avatarUrl": publicUrl,
 	})
 }
 
@@ -144,7 +144,7 @@ func (h *Handler) UploadAvatar(c echo.Context) error {
 // 	})
 // }
 
-//Currently not being used
+// Currently not being used
 func (h *Handler) GetAvatar(c echo.Context) error {
 	userID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {

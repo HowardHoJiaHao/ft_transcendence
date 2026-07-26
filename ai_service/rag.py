@@ -66,7 +66,7 @@ def get_db_connection():
         host=os.getenv("DB_HOST", "db"),
         port=os.getenv("DB_PORT", "5432"),
         user=os.getenv("DB_USER", "transcendence"),
-        password=os.getenv("DB_PASSWORD", "transcendence_pass"),
+        password=os.environ["DB_PASSWORD"],
         dbname=os.getenv("DB_NAME", "transcendence"),
         connect_timeout=int(os.getenv("RAG_DB_CONNECT_TIMEOUT", "5")),
     )

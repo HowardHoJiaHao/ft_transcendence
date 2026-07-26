@@ -83,7 +83,7 @@ func runUsersMigration(db *sql.DB) error {
 	return nil
 }
 
-//just to try use runlistingsmigration
+// just to try use runlistingsmigration
 func runListingsMigration(db *sql.DB) error {
 	migrations := []string{
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'Others'`,
@@ -140,13 +140,13 @@ func runAnalyticsEventsMigration(db *sql.DB) error {
 
 func setupRaw() (*sql.DB, error) {
 	//define environment configuration
-	dbUser		:= os.Getenv("DB_USER")
-	dbPassword	:= os.Getenv("DB_PASSWORD")
-	dbHost		:= os.Getenv("DB_HOST")
-	dbPort		:= os.Getenv("DB_PORT")
-	dbName		:= os.Getenv("DB_NAME")
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbName := os.Getenv("DB_NAME")
 
-	//define the connection string. make it into this format "host=localhost port=5432 user=transcendence password=transcendence_pass dbname=transcendence sslmode=disable"
+	// Build the PostgreSQL connection string from runtime environment values.
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPassword, dbName) //use sprintf to print the string into dsn variable
 

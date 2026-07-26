@@ -27,6 +27,8 @@ type AIChatRequest struct {
 	RecommendationProfile map[string]string `json:"recommendationProfile,omitempty"`
 }
 
+var aiHTTPClient = &http.Client{Timeout: 70 * time.Second}
+
 func getOptionalJWTAuth(c echo.Context) (int, string, error) {
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader == "" {
@@ -89,8 +91,7 @@ func handleAIChat(c echo.Context) error {
 
 	// Keep a small margin above the AI service's default 60-second total
 	// request budget so a broken downstream connection cannot hang forever.
-	client := &http.Client{Timeout: 70 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := aiHTTPClient.Do(req)
 	if err != nil {
 		log.Printf("Error contacting AI service: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "AI Customer Service is temporarily unavailable"})
