@@ -55,3 +55,18 @@ groups:
         annotations:
           summary: "Web endpoint probe failed"
           description: "Blackbox exporter could not successfully probe one of the monitored endpoints."
+
+      # Disaster recovery: alert if the last successful backup is too old.
+      # This is independent of container names/IDs (which some Docker setups,
+      # like Docker Desktop on Mac, don't expose reliably via cAdvisor) - it
+      # just checks the actual timestamp the backup script itself reported.
+      # Threshold: 2x the backup interval (default 6h backups -> alert after 12h),
+      # so one missed cycle doesn't false-alarm, but two missed ones do.
+      - alert: BackupStale
+        expr: (time() - backup_last_success_timestamp_seconds) > 43200
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database backup is stale"
+          description: "No successful backup reported in over 12 hours. Check 'docker logs transcendence-db-backup'."

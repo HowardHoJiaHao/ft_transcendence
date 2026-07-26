@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql" //needed for *sql.DB type used in the real health check (rawDB.Ping())
 	"log" //logging errors and important events
 	"os" //provide platform independent interface
 
@@ -48,7 +49,7 @@ func main() {
 	}))
 
 	//routes
-	e.GET("/health", healthCheckHandler)
+	e.GET("/health", func(c echo.Context) error { return healthCheckHandler(c, rawDB) })
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 	v1 := e.Group("/api/v1")
 	v1.GET("/status", statusHandler)
@@ -139,10 +140,24 @@ func main() {
 	e.Logger.Fatal(e.Start(":" + port)) //start is a function that enters infinite loop, wait, listens for http request. the port given should be in this format :XXXX
 }
 
-//dummy healthcheckhandler
-func healthCheckHandler(c echo.Context) error { //everytime a user enter /health give type echo.context to c
-	return c.JSON(200, map[string]interface{}{ //use a helper of echo context that take the data and change into json string. gives 200 error status. and declare a map with key(string) and value (can be any type). interface means can be any type
+// healthCheckHandler does a REAL check, not just "server process is alive".
+// Concept: a health check is only useful if it verifies the things this
+// service actually depends on. Our backend is useless without the database,
+// so we ping it here. If the ping fails, we return 503 (Service Unavailable)
+// instead of 200 - this is what lets Docker's healthcheck, Prometheus's
+// blackbox-exporter probe, and disaster-recovery scripts correctly detect
+// "backend is up but broken" instead of just "backend process exists".
+func healthCheckHandler(c echo.Context, rawDB *sql.DB) error {
+	if err := rawDB.Ping(); err != nil {
+		return c.JSON(503, map[string]interface{}{
+			"status": "degraded",
+			"db":     "unreachable",
+			"error":  err.Error(),
+		})
+	}
+	return c.JSON(200, map[string]interface{}{
 		"status": "ok",
+		"db":     "connected",
 	})
 }
 

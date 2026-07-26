@@ -20,19 +20,52 @@ services:
       retries: 10
       interval: 10s
 
+  # node-exporter:
+  #   image: prom/node-exporter:v1.8.1
+  #   container_name: transcendence-node-exporter
+  #   command:
+  #     - --path.rootfs=/host
+  #     - --collector.textfile.directory=/metrics
+  #   # pid: host
+  #   ports:
+  #     - "127.0.0.1:9100:9100"
+  #   volumes:
+  #     - /:/host:ro,rslave
+  #     - backup_metrics:/metrics:ro
+  #   restart: unless-stopped
+  #   networks:
+  #     - transcendence-network
+
+  # cadvisor:
+  #   image: gcr.io/cadvisor/cadvisor:v0.49.1
+  #   container_name: transcendence-cadvisor
+  #   privileged: true
+  #   devices:
+  #     - /dev/kmsg
+  #   ports:
+  #     - "127.0.0.1:8081:8080"
+  #   volumes:
+  #     - /:/rootfs:ro,rslave
+  #     - /var/run:/var/run:rw
+  #     - /sys:/sys:ro,rslave
+  #     - /var/lib/docker/:/var/lib/docker:ro,rslave
+  #     - /dev/disk/:/dev/disk:ro
+  #   restart: unless-stopped
+  #   networks:
+  #     - transcendence-network
   node-exporter:
     image: prom/node-exporter:v1.8.1
     container_name: transcendence-node-exporter
     command:
-      - --path.rootfs=/host
-    pid: host
+      - --collector.textfile.directory=/metrics
     ports:
       - "127.0.0.1:9100:9100"
     volumes:
-      - /:/host:ro,rslave
+      - backup_metrics:/metrics:ro
     restart: unless-stopped
     networks:
       - transcendence-network
+
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
@@ -43,14 +76,12 @@ services:
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
-      - /:/rootfs:ro
       - /var/run:/var/run:rw
-      - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
     restart: unless-stopped
     networks:
       - transcendence-network
+
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.15.0
@@ -79,7 +110,7 @@ services:
     networks:
       - transcendence-network
 
-  # Go 
+  # Go
   backend:
     build:
       context: ./backend
@@ -101,6 +132,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - transcendence-network
 
@@ -116,7 +153,14 @@ services:
     expose:
       - "3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - transcendence-network
 
@@ -150,9 +194,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - transcendence-network
-  # end of need to change wai keong 
+  # end of need to change wai keong
 
   # Nginx
   nginx:
@@ -164,8 +214,16 @@ services:
       - "80:80"
       - "443:443"
     depends_on:
-      - frontend
-      - backend
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-kf", "https://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - transcendence-network
 
@@ -221,6 +279,63 @@ services:
     networks:
       - transcendence-network
 
+  # Loki: stores and makes searchable all container logs (the "historical
+  # logging" that was flagged as missing). Metrics = numbers over time.
+  # Logs = actual text output. This is the log equivalent of Prometheus.
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: transcendence-loki
+    command: -config.file=/etc/loki/loki-config.yml
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  # Promtail: reads every container's logs (via the docker socket) and ships
+  # them to Loki. This is the "collector" — no app code changes needed.
+  promtail:
+    image: grafana/promtail:3.1.0
+    container_name: transcendence-promtail
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro,rslave
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  # Disaster recovery: automatic database backups on a schedule.
+  # RPO (Recovery Point Objective) = how much data we could lose in the worst
+  # case = the BACKUP_INTERVAL_SECONDS value (default 6h below).
+  db-backup:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    container_name: transcendence-db-backup
+    environment:
+      DB_HOST: db
+      DB_USER: ${DB_USER:-transcendence}
+      DB_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
+      DB_NAME: ${DB_NAME:-transcendence}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - ./backups:/backups
+      - backup_metrics:/metrics
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
   grafana:
     image: grafana/grafana-oss:11.1.0
     container_name: transcendence-grafana
@@ -246,6 +361,8 @@ volumes:
   prometheus_data:
   alertmanager_data:
   grafana_data:
+  loki_data:
+  backup_metrics:
 
 networks:
   transcendence-network:

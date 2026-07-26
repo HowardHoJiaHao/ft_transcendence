@@ -1,0 +1,32 @@
+# promtail-config.yml
+# Promtail's ONE job: read logs from every container, attach a label saying
+# which container/service it came from, send to Loki. It does not store
+# anything itself.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  # remembers "how far did I already read" so a restart doesn't re-send
+  # everything from the beginning
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Auto-discovers every running Docker container and reads its logs.
+  # This is why Promtail needs the docker socket mounted (see docker-compose.yml).
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Use the container's name as the "service" label (e.g. transcendence-backend)
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: "container"
+      # Also keep the compose service name if available (e.g. "backend" not "transcendence-backend")
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: "service"
