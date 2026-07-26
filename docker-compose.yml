@@ -367,8 +367,10 @@ services:
     image: owasp/modsecurity-crs:4.25.0-nginx-lts
     container_name: transcendence-waf
     ports:
-      - "80:8080"
-      - "443:8443"
+      # Rootless Docker cannot bind privileged host ports (<1024). These
+      # defaults are also configurable when either host port is already used.
+      - "${WAF_HTTP_PORT:-8088}:8080"
+      - "${WAF_HTTPS_PORT:-8443}:8443"
     environment:
       BACKEND: http://nginx:8081
       SERVER_NAME: localhost

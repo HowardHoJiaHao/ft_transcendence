@@ -1,36 +1,39 @@
-.PHONY: help check-docker check-infisical-cli check-curl check-tools check-infisical-project check-secrets build up down restart logs logs-waf logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check test-waf install-infisical infisical-init setup setup-backend setup-frontend build-up
+.PHONY: help check-docker check-curl check-tools check-infisical-project check-secrets build up down restart logs logs-waf logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check test-waf infisical-auth-init infisical-auth-check infisical-auth-clear setup setup-backend setup-frontend build-up
 
 INFISICAL_ENV ?= dev
 INFISICAL_PATH ?= /
+INFISICAL_CLI_IMAGE ?= infisical/cli:0.43.113
 REQUIRE_BREVO ?= 0
 DB_USER ?= transcendence
 DB_NAME ?= transcendence
 
 COMPOSE := docker compose
-INFISICAL_RUN := infisical run --env=$(INFISICAL_ENV) --path=$(INFISICAL_PATH) --
+WITH_INFISICAL := INFISICAL_CLI_IMAGE="$(INFISICAL_CLI_IMAGE)" INFISICAL_ENV="$(INFISICAL_ENV)" INFISICAL_PATH="$(INFISICAL_PATH)" REQUIRE_BREVO="$(REQUIRE_BREVO)" ./scripts/with-infisical-env.sh
 
 help:
 	@echo "Transcendence Marketplace - Available Commands"
 	@echo "=============================================="
-	@echo "make setup           - Build and start the full stack with Infisical and WAF"
-	@echo "make up              - Start the full stack with Infisical secrets"
-	@echo "make restart         - Recreate the stack with freshly retrieved secrets"
-	@echo "make build           - Build local application images (no secrets required)"
-	@echo "make down            - Stop local containers (no Infisical access required)"
-	@echo "make logs            - Follow all container logs"
-	@echo "make logs-waf        - Follow ModSecurity and OWASP CRS logs"
-	@echo "make logs-backend    - Follow backend logs"
-	@echo "make logs-frontend   - Follow frontend logs"
-	@echo "make logs-db         - Follow PostgreSQL logs"
-	@echo "make ps              - Show container status and published ports"
-	@echo "make health-check    - Test the WAF and backend through HTTPS"
-	@echo "make test-waf        - Run normal, redirect, SQLi, and XSS checks"
-	@echo "make install-infisical - Install the Infisical CLI on Debian/Ubuntu"
-	@echo "make infisical-init  - Log in and link this clone to Infisical"
-	@echo "make db-connect      - Open psql inside the PostgreSQL container"
-	@echo "make db-migrate      - Apply db/init.sql to the running database"
-	@echo "make clean           - DESTRUCTIVE: remove containers and database volume"
-	@echo "make reset           - DESTRUCTIVE: remove data and recreate the full stack"
+	@echo "make setup            - Build and start the full stack with fresh Infisical secrets"
+	@echo "make up               - Start the full stack with fresh Infisical secrets"
+	@echo "make restart          - Rebuild and recreate the stack with fresh secrets"
+	@echo "make build            - Build local application images (no secrets required)"
+	@echo "make down             - Stop local containers (no Infisical access required)"
+	@echo "make logs             - Follow all container logs"
+	@echo "make logs-waf         - Follow ModSecurity and OWASP CRS logs"
+	@echo "make logs-backend     - Follow backend logs"
+	@echo "make logs-frontend    - Follow frontend logs"
+	@echo "make logs-db          - Follow PostgreSQL logs"
+	@echo "make ps               - Show container status and published ports"
+	@echo "make health-check     - Test the WAF and backend through HTTPS"
+	@echo "make test-waf         - Run normal, redirect, SQLi, and XSS checks"
+	@echo "make check-secrets    - Fetch and validate the Infisical dev secrets"
+	@echo "make infisical-auth-init  - Create the local Infisical token file"
+	@echo "make infisical-auth-check - Validate the local Infisical token file"
+	@echo "make infisical-auth-clear - Delete only the local Infisical token file"
+	@echo "make db-connect       - Open psql inside the PostgreSQL container"
+	@echo "make db-migrate       - Apply db/init.sql to the running database"
+	@echo "make clean            - DESTRUCTIVE: remove containers and database volume"
+	@echo "make reset            - DESTRUCTIVE: remove data and recreate the full stack"
 
 check-docker:
 	@command -v docker >/dev/null 2>&1 || \
@@ -40,38 +43,33 @@ check-docker:
 	@docker info >/dev/null 2>&1 || \
 		{ echo "❌ The Docker daemon is not reachable. Start Docker and enable WSL integration if applicable."; exit 1; }
 
-check-infisical-cli:
-	@command -v infisical >/dev/null 2>&1 || \
-		{ echo "❌ Infisical CLI is not installed."; echo "See: https://infisical.com/docs/cli/overview"; exit 1; }
-
 check-curl:
 	@command -v curl >/dev/null 2>&1 || \
 		{ echo "❌ curl is not installed."; exit 1; }
 
-check-tools: check-docker check-infisical-cli check-curl
+check-tools: check-docker
 
 check-infisical-project:
 	@test -f .infisical.json || \
-		{ echo "❌ This clone is not linked to Infisical."; echo "Run: make infisical-init"; exit 1; }
+		{ echo "❌ This clone is not linked to Infisical. Restore the team .infisical.json file."; exit 1; }
 
 check-secrets: check-tools check-infisical-project
-	@$(INFISICAL_RUN) sh -c 'REQUIRE_BREVO=$(REQUIRE_BREVO) ./scripts/check-secrets.sh' || \
-		{ echo "❌ Infisical secret validation failed. Check login, project access, and the dev secret set."; exit 1; }
+	@$(WITH_INFISICAL) true
 
 setup: check-tools check-infisical-project
-	@$(INFISICAL_RUN) sh -c 'REQUIRE_BREVO=$(REQUIRE_BREVO) ./scripts/check-secrets.sh && docker compose up -d --build --force-recreate --wait --wait-timeout 180'
+	@$(WITH_INFISICAL) docker compose --env-file .env.infisical up -d --build --force-recreate --wait --wait-timeout 180
 	@echo ""
 	@echo "✅ Full project setup complete."
-	@echo "Application: https://localhost"
+	@echo "Application: https://localhost:$${WAF_HTTPS_PORT:-8443}"
 	@echo "Containers:  make ps"
 	@echo "WAF logs:    make logs-waf"
 	@echo "WAF test:    make test-waf"
 
 up: check-tools check-infisical-project
-	@$(INFISICAL_RUN) sh -c 'REQUIRE_BREVO=$(REQUIRE_BREVO) ./scripts/check-secrets.sh && docker compose up -d --wait --wait-timeout 180'
+	@$(WITH_INFISICAL) docker compose --env-file .env.infisical up -d --wait --wait-timeout 180
 
 restart: check-tools check-infisical-project
-	@$(INFISICAL_RUN) sh -c 'REQUIRE_BREVO=$(REQUIRE_BREVO) ./scripts/check-secrets.sh && docker compose up -d --build --force-recreate --wait --wait-timeout 180'
+	@$(WITH_INFISICAL) docker compose --env-file .env.infisical up -d --build --force-recreate --wait --wait-timeout 180
 
 build: check-docker
 	$(COMPOSE) build
@@ -101,16 +99,16 @@ ps: check-docker
 
 health-check: check-curl
 	@echo "Checking WAF..."
-	@curl -ksSf --max-time 10 https://localhost/healthz >/dev/null && \
+	@curl -ksSf --max-time 10 "https://localhost:$${WAF_HTTPS_PORT:-8443}/healthz" >/dev/null && \
 		echo "✅ WAF is responding." || \
 		{ echo "❌ WAF is not responding."; exit 1; }
 	@echo "Checking backend through WAF..."
-	@curl -ksSf --max-time 10 https://localhost/api/v1/status >/dev/null && \
+	@curl -ksSf --max-time 10 "https://localhost:$${WAF_HTTPS_PORT:-8443}/api/v1/status" >/dev/null && \
 		echo "✅ Backend is reachable through the WAF." || \
 		{ echo "❌ Backend is not reachable through the WAF."; exit 1; }
 
 test-waf: check-curl
-	@sh scripts/test-waf.sh
+	@BASE_URL="https://localhost:$${WAF_HTTPS_PORT:-8443}" HTTP_URL="http://localhost:$${WAF_HTTP_PORT:-8088}" sh scripts/test-waf.sh
 
 shell-backend: check-docker
 	$(COMPOSE) exec backend sh
@@ -127,24 +125,23 @@ db-connect: check-docker
 db-migrate: check-docker
 	$(COMPOSE) exec -T db psql -U $(DB_USER) -d $(DB_NAME) < db/init.sql
 
-install-infisical: check-curl
-	@if command -v infisical >/dev/null 2>&1; then \
-		echo "✅ Infisical CLI is already installed: $$(infisical --version)"; \
-	elif command -v apt-get >/dev/null 2>&1; then \
-		echo "Installing the Infisical CLI for Debian/Ubuntu..."; \
-		curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash && \
-		sudo apt-get update && \
-		sudo apt-get install -y infisical && \
-		infisical --version; \
-	else \
-		echo "❌ Automatic Infisical installation is supported only on Debian/Ubuntu."; \
-		echo "See: https://infisical.com/docs/cli/overview"; \
+infisical-auth-init:
+	@if [ -e .env.infisical-auth ]; then \
+		echo "❌ .env.infisical-auth already exists; it was not overwritten."; \
 		exit 1; \
+	else \
+		cp .env.infisical-auth.example .env.infisical-auth && \
+		chmod 600 .env.infisical-auth && \
+		echo "✅ Created .env.infisical-auth with mode 600." && \
+		echo "Edit the file and set INFISICAL_TOKEN. Never commit or share it."; \
 	fi
 
-infisical-init: check-infisical-cli
-	infisical login
-	infisical init
+infisical-auth-check:
+	@./scripts/check-infisical-auth.sh
+
+infisical-auth-clear:
+	@rm -f .env.infisical-auth
+	@echo "✅ Removed only .env.infisical-auth."
 
 clean: check-docker
 	@echo "⚠️  Removing containers and the PostgreSQL data volume. This deletes local database data."
@@ -152,7 +149,7 @@ clean: check-docker
 
 reset: check-tools check-infisical-project
 	@echo "⚠️  Removing containers and the PostgreSQL data volume. This deletes local database data."
-	@$(INFISICAL_RUN) sh -c 'REQUIRE_BREVO=$(REQUIRE_BREVO) ./scripts/check-secrets.sh && docker compose down -v --rmi local && docker compose up -d --build --wait --wait-timeout 180'
+	@$(WITH_INFISICAL) sh -c 'docker compose --env-file .env.infisical down -v --rmi local && docker compose --env-file .env.infisical up -d --build --wait --wait-timeout 180'
 
 # Legacy aliases now use the secure full-stack workflow so they cannot start a
 # dependency chain without the required injected secrets.

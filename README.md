@@ -5,7 +5,7 @@ FastAPI, PostgreSQL with pgvector, and Docker Compose.
 
 The local stack is protected by an OWASP CRS Web Application Firewall. Runtime
 secrets are retrieved from Infisical Cloud and injected into Docker Compose by
-the Infisical CLI.
+the official Dockerized Infisical CLI.
 
 ## Architecture
 
@@ -20,8 +20,12 @@ Browser
 
 Only the WAF publishes host ports:
 
-- HTTP: <http://localhost>
-- HTTPS: <https://localhost>
+- HTTP: <http://localhost:8088>
+- HTTPS: <https://localhost:8443>
+
+These high-numbered ports work with rootless Docker, which cannot normally
+bind ports below 1024. If either port is in use, choose free alternatives when
+starting the stack, for example: `WAF_HTTP_PORT=8089 WAF_HTTPS_PORT=8444 make setup`.
 
 The development HTTPS certificate is self-signed, so browsers and `curl` will
 require an explicit local trust exception.
@@ -32,23 +36,24 @@ require an explicit local trust exception.
 - Make
 - curl
 - Git
-- Infisical CLI
-- Access to the team's `ft-transcendence` Infisical Cloud project
+- A project-scoped Infisical programmatic access token
 
-## One-time Infisical setup
+No local Infisical CLI installation or `sudo` access is required.
+
+## One-time Infisical authentication setup
 
 From the repository root:
 
 ```bash
-make infisical-init
+make infisical-auth-init
+nano .env.infisical-auth
+chmod 600 .env.infisical-auth
 ```
 
-This logs in to Infisical and runs `infisical init`. Select the team project and
-the `dev` environment. In WSL, `infisical login -i` can be used when browser
-login is inconvenient.
-
-The generated `.infisical.json` contains project metadata rather than secret
-values and should be reviewed and committed by the project owner.
+Set `INFISICAL_TOKEN` in `.env.infisical-auth`. The token should be read-only
+and scoped to this project and its `dev` environment. Normal startup is fully
+non-interactive and never invokes Infisical login. The committed
+`.infisical.json` contains only the project reference.
 
 Required Infisical secrets at path `/`:
 
@@ -75,9 +80,10 @@ Do not put real secret values in `.env.example` or tracked documentation.
 make setup
 ```
 
-`make setup` checks Docker, Compose, curl, Infisical, project linkage, and the
-required secrets. It then builds and starts the complete stack under the same
-Infisical-injected process and waits for container health.
+`make setup` checks Docker and Compose, exports fresh `dev` secrets through the
+Dockerized CLI, validates them, and starts the complete stack. The generated
+`.env.infisical` file has mode `600` and is removed as soon as Compose finishes
+creating and starting the containers.
 
 To require the optional Brevo credential as part of startup validation:
 
@@ -114,6 +120,10 @@ make help             Show all supported commands
 make setup            Build and start the full Infisical + WAF stack
 make up               Start the stack with Infisical secrets
 make restart          Recreate containers with freshly retrieved secrets
+make check-secrets    Fetch and validate required secrets
+make infisical-auth-init  Create the local token file
+make infisical-auth-check Validate the local token file
+make infisical-auth-clear Delete only the local token file
 make build            Build application images without retrieving secrets
 make down             Stop containers without requiring Infisical
 make ps               Show container status and published ports
@@ -194,17 +204,14 @@ python -m unittest discover -s tests -v
 
 ### This clone is not linked to Infisical
 
-Run:
-
-```bash
-make infisical-init
-```
+Restore the team-owned `.infisical.json` file from the repository. It contains
+the Infisical project reference but no secret values.
 
 ### Infisical secret validation fails
 
-Confirm that the CLI login is valid, the clone is linked to the correct
-project, the `dev` environment is selected, and the required names exist at
-path `/`. The validation script never prints secret values.
+Run `make infisical-auth-check`, confirm that the token has project access, and
+check that the required names exist in environment `dev` at path `/`. The
+validation scripts never print the token or secret values.
 
 ### Database authentication fails after migration
 
