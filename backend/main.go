@@ -2,8 +2,8 @@ package main
 
 import (
 	"database/sql" //needed for *sql.DB type used in the real health check (rawDB.Ping())
-	"log" //logging errors and important events
-	"os"  //provide platform independent interface
+	"log"          //logging errors and important events
+	"os"           //provide platform independent interface
 
 	//"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"            //echo main framework
