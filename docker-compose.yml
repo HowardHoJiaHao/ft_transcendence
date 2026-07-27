@@ -136,10 +136,8 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL}
       FRONTEND_URL: ${FRONTEND_URL:-}
-    ports:
-      - "127.0.0.1:8080:8080"
-    # expose:
-      # - "8080"
+    expose:
+      - "8080"
     volumes:
       - ./uploads:/app/uploads
       - ./avatar:/app/avatar
