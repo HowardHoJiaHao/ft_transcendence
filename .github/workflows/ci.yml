@@ -21,6 +21,9 @@ jobs:
     name: Frontend
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
 
     steps:
       - name: Check out repository
@@ -33,11 +36,11 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
+      - name: Install locked dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Run unit tests
+      - name: Run authentication, cart, localization, and CSV tests
         working-directory: frontend
         run: npm test
 
@@ -48,7 +51,7 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -71,17 +74,25 @@ jobs:
             exit 1
           fi
 
+      - name: Verify module checksums
+        working-directory: backend
+        run: go mod verify
+
       - name: Run static analysis
         working-directory: backend
         run: go vet ./...
 
-      - name: Run tests
+      - name: Run authorization, marketplace, order, import, and chat tests
         working-directory: backend
-        run: go test -race ./...
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Report package coverage
+        working-directory: backend
+        run: go tool cover -func=coverage.out
 
       - name: Build
         working-directory: backend
-        run: go build ./...
+        run: go build -mod=readonly ./...
 
   ai-service:
     name: AI service
@@ -107,18 +118,24 @@ jobs:
         working-directory: ai_service
         run: python -m pip check
 
-      - name: Compile Python modules
+      - name: Compile all Python modules
         working-directory: ai_service
-        run: python -m py_compile *.py
+        run: python -m compileall -q .
 
-      - name: Run unit tests
+      - name: Run agent, authorization, RAG, tool, and recommender tests
         working-directory: ai_service
         run: python -m unittest discover -s tests -v
 
   database:
-    name: PostgreSQL schema
+    name: PostgreSQL and pgvector schema
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: ci_user
+      PGPASSWORD: ci_password
+      PGDATABASE: transcendence_ci
 
     services:
       postgres:
@@ -144,48 +161,332 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
 
-      - name: Apply schema and seed data
-        env:
-          PGPASSWORD: ci_password
-        run: >-
-          psql
-          --host localhost
-          --username ci_user
-          --dbname transcendence_ci
-          --set ON_ERROR_STOP=1
-          --file db/init.sql
+      - name: Apply fresh schema and seed data
+        run: psql --set ON_ERROR_STOP=1 --file db/init.sql
 
-      - name: Verify pgvector and core tables
-        env:
-          PGPASSWORD: ci_password
+      - name: Verify marketplace, identity, messaging, analytics, and RAG schema
+        shell: bash
         run: |
-          psql --host localhost --username ci_user --dbname transcendence_ci \
-            --set ON_ERROR_STOP=1 \
-            --command "SELECT extname FROM pg_extension WHERE extname = 'vector';"
-          psql --host localhost --username ci_user --dbname transcendence_ci \
-            --set ON_ERROR_STOP=1 \
-            --command "SELECT id FROM users LIMIT 1;"
-          psql --host localhost --username ci_user --dbname transcendence_ci \
-            --set ON_ERROR_STOP=1 \
-            --command "SELECT id FROM listings LIMIT 1;"
-          psql --host localhost --username ci_user --dbname transcendence_ci \
-            --set ON_ERROR_STOP=1 \
-            --command "SELECT id FROM knowledge_chunks LIMIT 1;"
+          assert_sql_true() {
+            description="$1"
+            query="$2"
+            result="$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command "$query")"
+            if [ "$result" != "t" ]; then
+              echo "Schema assertion failed: $description"
+              exit 1
+            fi
+          }
 
-  compose:
-    name: Docker Compose configuration
+          assert_sql_true \
+            "pgvector extension" \
+            "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector');"
+
+          assert_sql_true \
+            "required feature tables" \
+            "SELECT bool_and(to_regclass('public.' || table_name) IS NOT NULL)
+             FROM unnest(ARRAY[
+               'users',
+               'listings',
+               'listing_images',
+               'orders',
+               'friendships',
+               'messages',
+               'reviews',
+               'api_keys',
+               'api_request_logs',
+               'analytics_events',
+               'knowledge_chunks'
+             ]) AS required(table_name);"
+
+          assert_sql_true \
+            "required cross-feature columns" \
+            "SELECT count(*) = 17
+             FROM (VALUES
+               ('users', 'account_status'),
+               ('users', 'oauth_id'),
+               ('users', 'requires_2fa'),
+               ('listings', 'seller_id'),
+               ('listings', 'stock_quantity'),
+               ('listings', 'status'),
+               ('orders', 'buyer_id'),
+               ('orders', 'seller_id'),
+               ('orders', 'quantity'),
+               ('orders', 'status'),
+               ('api_keys', 'key_hash'),
+               ('api_keys', 'rate_limit'),
+               ('analytics_events', 'listing_id'),
+               ('knowledge_chunks', 'embedding'),
+               ('knowledge_chunks', 'ingestion_version'),
+               ('knowledge_chunks', 'is_active'),
+               ('knowledge_chunks', 'search_vector')
+             ) AS required(table_name, column_name)
+             JOIN information_schema.columns actual
+               ON actual.table_schema = 'public'
+              AND actual.table_name = required.table_name
+              AND actual.column_name = required.column_name;"
+
+          assert_sql_true \
+            "authorization, audit, messaging, and RAG indexes" \
+            "SELECT bool_and(to_regclass('public.' || index_name) IS NOT NULL)
+             FROM unnest(ARRAY[
+               'idx_users_oauth_identity',
+               'idx_api_request_logs_key',
+               'idx_messages_sender_receiver',
+               'idx_knowledge_chunks_active',
+               'idx_knowledge_chunks_search'
+             ]) AS required(index_name);"
+
+          assert_sql_true \
+            "vector-backed knowledge columns" \
+            "SELECT count(*) = 2
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name IN ('faq_embeddings', 'knowledge_chunks')
+               AND column_name = 'embedding'
+               AND udt_name = 'vector';"
+
+          assert_sql_true \
+            "generated full-text RAG search column" \
+            "SELECT is_generated = 'ALWAYS'
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name = 'knowledge_chunks'
+               AND column_name = 'search_vector';"
+
+          assert_sql_true \
+            "usable marketplace seed data" \
+            "SELECT
+               (SELECT count(*) > 0 FROM users)
+               AND (SELECT count(*) > 0 FROM listings);"
+
+  backend-smoke:
+    name: Backend API and PostgreSQL smoke test
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+    needs:
+      - backend
+      - database
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: ci_user
+      PGPASSWORD: ci_password
+      PGDATABASE: transcendence_ci
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      DB_USER: ci_user
+      DB_PASSWORD: ci_password
+      DB_NAME: transcendence_ci
+      SERVER_PORT: "8080"
+      JWT_SECRET: ci-jwt-secret-that-is-longer-than-thirty-two-characters
+      ADMIN_USERNAME: ci-admin
+      ADMIN_PASSWORD_HASH: ci-admin-password
+      AI_SERVICE_URL: http://127.0.0.1:18000
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: transcendence_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d transcendence_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Validate Compose configuration
-        env:
-          DB_PASSWORD: ci-only-not-a-secret
-          JWT_SECRET: ci-only-not-a-secret
-          ADMIN_PASSWORD_HASH: ci-only-not-a-secret
-          DEEPSEEK_API_KEY: ci-only-not-a-secret
-          OPENROUTER_API_KEY: ci-only-not-a-secret
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Apply database schema
+        run: psql --set ON_ERROR_STOP=1 --file db/init.sql
+
+      - name: Build backend smoke-test binary
+        working-directory: backend
+        run: go build -mod=readonly -o "$RUNNER_TEMP/transcendence-backend" .
+
+      - name: Exercise health, marketplace, admin, and authorization boundaries
+        shell: bash
+        run: |
+          backend_log="$RUNNER_TEMP/backend-smoke.log"
+          "$RUNNER_TEMP/transcendence-backend" >"$backend_log" 2>&1 &
+          backend_pid=$!
+
+          cleanup() {
+            status=$?
+            kill "$backend_pid" 2>/dev/null || true
+            wait "$backend_pid" 2>/dev/null || true
+            if [ "$status" -ne 0 ]; then
+              echo "Backend log:"
+              sed -n '1,240p' "$backend_log"
+            fi
+          }
+          trap cleanup EXIT
+
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/health >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "true" ]; then
+            echo "Backend did not become ready"
+            exit 1
+          fi
+
+          assert_status() {
+            expected="$1"
+            url="$2"
+            shift 2
+            actual="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$@" "$url")"
+            if [ "$actual" != "$expected" ]; then
+              echo "Expected HTTP $expected from $url, got $actual"
+              exit 1
+            fi
+          }
+
+          health_body="$(curl --fail --silent --show-error http://127.0.0.1:8080/health)"
+          grep --quiet '"db":"connected"' <<<"$health_body"
+
+          curl --fail --silent --show-error http://127.0.0.1:8080/api/v1/status >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8080/api/v1/products >/dev/null
+          metrics_body="$(curl --fail --silent --show-error http://127.0.0.1:8080/metrics)"
+          grep --quiet "go_gc_duration_seconds" <<<"$metrics_body"
+
+          assert_status "401" "http://127.0.0.1:8080/api/v1/orders"
+          assert_status "401" "http://127.0.0.1:8080/api/v1/admin/summary"
+          assert_status "401" "http://127.0.0.1:8080/api/public/v1/products"
+
+          admin_token="$(
+            curl --fail --silent --show-error \
+              --header "Content-Type: application/json" \
+              --data '{"username":"ci-admin","password":"ci-admin-password"}' \
+              http://127.0.0.1:8080/api/v1/admin/auth/login |
+              python3 -c 'import json, sys; print(json.load(sys.stdin)["token"])'
+          )"
+          test -n "$admin_token"
+
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $admin_token" \
+            http://127.0.0.1:8080/api/v1/admin/summary >/dev/null
+
+          assert_status \
+            "403" \
+            "http://127.0.0.1:8080/api/v1/orders" \
+            --header "Authorization: Bearer $admin_token"
+
+  containers:
+    name: Containers, reverse proxy, and WAF
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs:
+      - frontend
+      - backend
+      - ai-service
+      - database
+    env:
+      DB_USER: ci_user
+      DB_PASSWORD: ci_password
+      DB_NAME: transcendence_ci
+      JWT_SECRET: ci-jwt-secret-that-is-longer-than-thirty-two-characters
+      ADMIN_USERNAME: ci-admin
+      ADMIN_PASSWORD_HASH: ci-admin-password
+      DEEPSEEK_API_KEY: ci-deepseek-key
+      OPENROUTER_API_KEY: ci-openrouter-key
+      GOOGLE_CLIENT_ID: ""
+      GOOGLE_CLIENT_SECRET: ""
+      GOOGLE_REDIRECT_URL: ""
+      WAF_HTTP_PORT: "18088"
+      WAF_HTTPS_PORT: "18443"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Validate Docker Compose configuration
         run: docker compose config --quiet
+
+      - name: Build AI and backup images
+        run: docker compose build ai db-backup
+
+      - name: Build and start the core marketplace stack
+        run: >-
+          docker compose up
+          --detach
+          --build
+          --wait
+          --wait-timeout 180
+          db backend frontend nginx waf
+
+      - name: Exercise public routing, authorization gates, and WAF rules
+        shell: bash
+        run: |
+          https_base="https://127.0.0.1:${WAF_HTTPS_PORT}"
+          http_base="http://127.0.0.1:${WAF_HTTP_PORT}"
+
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl --insecure --fail --silent "$https_base/healthz" >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != "true" ]; then
+            echo "WAF did not become ready"
+            exit 1
+          fi
+
+          assert_status() {
+            expected="$1"
+            url="$2"
+            actual="$(curl --insecure --silent --show-error --output /dev/null --write-out '%{http_code}' "$url")"
+            if [ "$actual" != "$expected" ]; then
+              echo "Expected HTTP $expected from $url, got $actual"
+              exit 1
+            fi
+          }
+
+          redirect_status="$(
+            curl --silent --show-error \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              "$http_base/"
+          )"
+          if [ "$redirect_status" != "301" ] && [ "$redirect_status" != "308" ]; then
+            echo "Expected an HTTP-to-HTTPS redirect, got $redirect_status"
+            exit 1
+          fi
+
+          assert_status "200" "$https_base/healthz"
+          assert_status "200" "$https_base/api/v1/status"
+          assert_status "200" "$https_base/api/v1/products"
+          assert_status "401" "$https_base/api/v1/orders"
+          assert_status "401" "$https_base/api/public/v1/products"
+          assert_status "403" "$https_base/api/v1/products?id=1%27%20OR%201%3D1%2D%2D"
+          assert_status "403" "$https_base/?q=%3Cscript%3Ealert%281%29%3C%2Fscript%3E"
+
+      - name: Show container logs after failure
+        if: failure()
+        run: docker compose logs --no-color --tail 240
+
+      - name: Stop CI containers
+        if: always()
+        run: docker compose down --volumes --remove-orphans
