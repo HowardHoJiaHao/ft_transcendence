@@ -36,11 +36,13 @@ func (h *Handler) GetCurrentUser(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
 	}
 
-	user, err := h.repo.GetUserByID(userId)
+	userData, err := h.repo.GetUserByID(userId)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
 	}
-	return c.JSON(http.StatusOK, user)
+
+	token, _ := c.Get("token").(string)
+	return c.JSON(http.StatusOK, user.LoginResponse{Token: token, User: *userData})
 }
 
 func (h *Handler) GetProfile(c echo.Context) error {
