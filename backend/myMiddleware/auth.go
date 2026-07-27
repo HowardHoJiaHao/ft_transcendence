@@ -39,6 +39,7 @@ func JWTAuth(db *sql.DB) echo.MiddlewareFunc {
 			}
 
 			c.Set("userId", claims.UserId)
+			c.Set("token", tokenStr)
 			return next(c)
 		}
 	}

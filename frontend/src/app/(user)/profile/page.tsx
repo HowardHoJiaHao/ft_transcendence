@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from '@/context/AuthContext';
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useToast } from "@/components/Toast/ToastContext";
 import Header from "@/components/Header/Header";
 import styles from "./profile.module.css";
@@ -21,7 +21,7 @@ interface UserProfile {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user: ctxUser, logout, updateUser } = useAuth();
+  const { user: ctxUser, loading: authLoading, updateUser } = useRequireAuth('/');
   const { showToast } = useToast();
   const [user, setUser] = useState<UserProfile | null>(ctxUser ?? null);
   const [loading, setLoading] = useState(!ctxUser);
@@ -32,6 +32,10 @@ export default function ProfilePage() {
     gender: ctxUser?.gender ?? "",
     dateOfBirth: ctxUser?.dateOfBirth ?? "",
   });
+
+  useEffect(() => 
+    {setUser(ctxUser ?? null);
+  }, [ctxUser]);
 
   //OTP Handling
   const [showOtp, setShowOtp] = useState(false);
@@ -170,7 +174,8 @@ export default function ProfilePage() {
         }
 
         const data = await res.json();
-        setUser(data);
+        if (data.token) localStorage.setItem("token", data.token);
+        setUser(data.user);
       } catch (err) {
         if (err instanceof Error) setError(err.message);
         else setError("An unexpected error occured");
@@ -278,7 +283,7 @@ export default function ProfilePage() {
       showToast("Connection error. is the server running?", "error");
     }
   };
-  if (loading) return <div style={{ padding: 24 }}>Loading profile...</div>;
+  if (authLoading || loading) return <div style={{ padding: 24 }}>Loading profile...</div>;
   if (error)
     return (
       <div style={{ padding: 24 }}>
@@ -475,7 +480,7 @@ export default function ProfilePage() {
                     value="PreferNotToTell"
                     checked={false}
                     onChange={() => {
-                      showToast("🏳️‍🌈🏳️‍🌈🏳️‍🌈 ARE YOU GAY?", "success");
+                      showToast("Please choose your gender! 🏳️‍🌈", "success");
                     }}
                   />
                   Prefer not to tell
