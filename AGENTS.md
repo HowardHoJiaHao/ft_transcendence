@@ -70,7 +70,9 @@ make db-migrate
 make health-check
 make logs-waf
 make test-waf
-make infisical-init
+make infisical-auth-init
+make infisical-auth-check
+make infisical-auth-clear
 ```
 
 Service URLs:
@@ -87,10 +89,12 @@ it passes through the WAF and internal Nginx router. `NEXT_PUBLIC_API_URL` is an
 optional frontend override and defaults to an empty string. Check existing usage
 before introducing or relying on any additional public API-base variable.
 
-`make setup`, `make up`, and `make restart` require an authenticated Infisical
-CLI, a repository `.infisical.json`, and the required `dev` secrets. Read-only
-local lifecycle commands such as `make ps` and `make logs` do not require
-Infisical. Never restore a known database-password fallback.
+`make setup`, `make up`, and `make restart` use the official Dockerized
+Infisical CLI, the repository `.infisical.json`, and a local
+`.env.infisical-auth` containing `INFISICAL_TOKEN`. Startup is non-interactive
+and does not require a host-installed Infisical CLI, a saved browser session,
+or `sudo`. Read-only lifecycle commands such as `make ps` and `make logs` do
+not require Infisical. Never restore a known database-password fallback.
 
 ### MVP Admin Access
 

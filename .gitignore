@@ -1,7 +1,10 @@
 .env
 .env.*
+.env.infisical
+.env.infisical-auth
 !.env.example
 !**/.env.example
+!.env.infisical-auth.example
 .next
 .DS_Store
 .vscode
@@ -36,3 +39,5 @@ Thumbs.db
 node_modules/
 
 static/avatars/
+backups/
+monitoring/alertmanager/logs/

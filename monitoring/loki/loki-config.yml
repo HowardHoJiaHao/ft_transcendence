@@ -1,0 +1,42 @@
+# loki-config.yml
+# Loki = "Prometheus, but for text logs instead of numbers".
+# This is the storage/query engine. Promtail (separate container) is the
+# agent that actually reads container logs and sends them here.
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# Keep 15 days of logs (matches Prometheus's retention.time already set to 15d)
+# so metrics and logs cover the same historical window.
+limits_config:
+  retention_period: 360h   # 15 days
+  ingestion_rate_mb: 8
+  ingestion_burst_size_mb: 16
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem

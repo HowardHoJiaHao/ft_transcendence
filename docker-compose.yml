@@ -6,6 +6,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME:-transcendence}
       POSTGRES_USER: ${DB_USER:-transcendence}
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -21,6 +23,97 @@ services:
       retries: 10
       interval: 10s
 
+  # node-exporter:
+  #   image: prom/node-exporter:v1.8.1
+  #   container_name: transcendence-node-exporter
+  #   command:
+  #     - --path.rootfs=/host
+  #     - --collector.textfile.directory=/metrics
+  #   # pid: host
+  #   ports:
+  #     - "127.0.0.1:9100:9100"
+  #   volumes:
+  #     - /:/host:ro,rslave
+  #     - backup_metrics:/metrics:ro
+  #   restart: unless-stopped
+  #   networks:
+  #     - transcendence-network
+
+  # cadvisor:
+  #   image: gcr.io/cadvisor/cadvisor:v0.49.1
+  #   container_name: transcendence-cadvisor
+  #   privileged: true
+  #   devices:
+  #     - /dev/kmsg
+  #   ports:
+  #     - "127.0.0.1:8081:8080"
+  #   volumes:
+  #     - /:/rootfs:ro,rslave
+  #     - /var/run:/var/run:rw
+  #     - /sys:/sys:ro,rslave
+  #     - /var/lib/docker/:/var/lib/docker:ro,rslave
+  #     - /dev/disk/:/dev/disk:ro
+  #   restart: unless-stopped
+  #   networks:
+  #     - transcendence-network
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: transcendence-node-exporter
+    command:
+      - --collector.textfile.directory=/metrics
+    ports:
+      - "127.0.0.1:9100:9100"
+    volumes:
+      - backup_metrics:/metrics:ro
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: transcendence-cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - /var/run:/var/run:rw
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: transcendence-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://${DB_USER:-transcendence}:${DB_PASSWORD:-transcendence_pass}@db:5432/${DB_NAME:-transcendence}?sslmode=disable
+    ports:
+      - "127.0.0.1:9187:9187"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: transcendence-blackbox-exporter
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    ports:
+      - "127.0.0.1:9115:9115"
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  # Go
   backend:
     build:
       context: ./backend
@@ -42,8 +135,10 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL}
-    expose:
-      - "8080"
+    ports:
+      - "127.0.0.1:8080:8080"
+    # expose:
+      # - "8080"
     volumes:
       - ./uploads:/app/uploads
       - ./avatar:/app/avatar
@@ -52,6 +147,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - transcendence-network
 
@@ -65,7 +166,14 @@ services:
     expose:
       - "3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - transcendence-network
 
@@ -97,6 +205,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - transcendence-network
 
@@ -108,23 +222,155 @@ services:
     expose:
       - "8081"
     depends_on:
-      - frontend
-      - backend
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8081/"]
-      interval: 5s
+      interval: 15s
       timeout: 5s
-      retries: 12
+      retries: 5
       start_period: 10s
     networks:
       - transcendence-network
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: transcendence-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - node-exporter
+      - cadvisor
+      - postgres-exporter
+      - blackbox-exporter
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: transcendence-alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./monitoring/alertmanager:/etc/alertmanager:ro
+      - alertmanager_data:/alertmanager
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  discord-webhook-relay:
+    image: python:3.12-slim
+    container_name: transcendence-discord-webhook-relay
+    environment:
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      RELAY_LOG_DIR: /var/log/alertmanager-relay
+    volumes:
+      - ./monitoring/alertmanager/discord_webhook_bridge.py:/app/discord_webhook_bridge.py:ro
+      - ./monitoring/alertmanager/logs:/var/log/alertmanager-relay
+    command: ["python", "/app/discord_webhook_bridge.py"]
+    ports:
+      - "127.0.0.1:5001:5001"
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  # Loki: stores and makes searchable all container logs (the "historical
+  # logging" that was flagged as missing). Metrics = numbers over time.
+  # Logs = actual text output. This is the log equivalent of Prometheus.
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: transcendence-loki
+    command: -config.file=/etc/loki/loki-config.yml
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  # Promtail: reads every container's logs (via the docker socket) and ships
+  # them to Loki. This is the "collector" — no app code changes needed.
+  promtail:
+    image: grafana/promtail:3.1.0
+    container_name: transcendence-promtail
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro,rslave
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  # Disaster recovery: automatic database backups on a schedule.
+  # RPO (Recovery Point Objective) = how much data we could lose in the worst
+  # case = the BACKUP_INTERVAL_SECONDS value (default 6h below).
+  db-backup:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    container_name: transcendence-db-backup
+    environment:
+      DB_HOST: db
+      DB_USER: ${DB_USER:-transcendence}
+      DB_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
+      DB_NAME: ${DB_NAME:-transcendence}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - ./backups:/backups
+      - backup_metrics:/metrics
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - transcendence-network
+
+  grafana:
+    image: grafana/grafana-oss:11.1.0
+    container_name: transcendence-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - transcendence-network
   waf:
     image: owasp/modsecurity-crs:4.25.0-nginx-lts
     container_name: transcendence-waf
     ports:
-      - "80:8080"
-      - "443:8443"
+      # Rootless Docker cannot bind privileged host ports (<1024). These
+      # defaults are also configurable when either host port is already used.
+      - "${WAF_HTTP_PORT:-8088}:8080"
+      - "${WAF_HTTPS_PORT:-8443}:8443"
     environment:
       BACKEND: http://nginx:8081
       SERVER_NAME: localhost
@@ -149,6 +395,11 @@ services:
 
 volumes:
   postgres_data:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:
+  loki_data:
+  backup_metrics:
 
 networks:
   transcendence-network:
