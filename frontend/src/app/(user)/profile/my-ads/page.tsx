@@ -24,7 +24,6 @@ import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
 import Header from '@/components/Header/Header';
 import { downloadCsv } from '@/lib/csv';
-import styles from './my-ads.module.css';
 
 // A seller listing as returned by GET /api/v1/products.
 interface Ad {
@@ -613,63 +612,63 @@ export default function MyAdsPage() {
   };
 
   return (
-    <main className={styles.main}>
+    <main className="min-h-screen bg-[#f0f0f0]">
       <Header/>
 
-      <div className={styles.container}>
+      <div className="max-w-[1180px] mx-auto pt-7 px-8 pb-16">
         <button
-          className={styles.backBtn}
+          className="bg-white border border-[#ddd] rounded-[20px] text-[#444] text-[13px] font-semibold cursor-pointer px-4 py-[7px] mb-3.5 inline-flex items-center gap-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 hover:border-[#888] hover:text-[#111] hover:-translate-x-0.5"
           onClick={() => router.push('/profile')}
         >
           {t('myShop.back')}
         </button>
 
-        <h1 className={styles.heading}>{t('myShop.heading')}</h1>
-        <p className={styles.subheading}>
+        <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">{t('myShop.heading')}</h1>
+        <p className="text-[#898781] text-sm mt-[-8px] mx-0 mb-[18px]">
           {t('myShop.subheading', {
             count: publishedAds.length + soldAds.length + archivedAds.length,
           })}
         </p>
 
-        <div className={styles.card}>
+        <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] overflow-hidden">
           {/* Tabs */}
-          <div className={styles.tabBar}>
-            <Link href="/sell" className={styles.postAdBtn}>
+          <div className="flex gap-2.5 px-5 py-4 border-b border-[#eee]">
+            <Link href="/sell" className="inline-flex items-center px-[18px] py-2 rounded-[20px] bg-[#111] text-white text-sm font-semibold no-underline transition-colors duration-150 hover:bg-[#333]">
               {t('myShop.postAd')}
             </Link>
-            <Link href="/profile/my-ads/import" className={styles.docsBtn}>
+            <Link href="/profile/my-ads/import" className="inline-flex items-center px-[18px] py-2 rounded-[20px] bg-[#eef2ff] text-[#3730a3] text-sm font-bold no-underline transition-colors duration-150 hover:bg-[#e0e7ff]">
               {t('myShop.importCsv')}
             </Link>
-            <Link href="/profile/developer-api" className={styles.docsBtn}>
+            <Link href="/profile/developer-api" className="inline-flex items-center px-[18px] py-2 rounded-[20px] bg-[#eef2ff] text-[#3730a3] text-sm font-bold no-underline transition-colors duration-150 hover:bg-[#e0e7ff]">
               {t('myShop.developerApi')}
             </Link>
-            <span className={styles.tabDivider} />
+            <span className="w-px self-stretch bg-[#e5e5e2] my-0 mx-1" />
             <button
-              className={`${styles.tab} ${activeTab === 'active' ? styles.tabActive : ''}`}
+              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'active' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
               onClick={() => { setActiveTab('active'); setPage(1); }}
             >
               {t('myShop.tabPublished', { count: publishedAds.length })}
             </button>
             <button
-              className={`${styles.tab} ${activeTab === 'pending' ? styles.tabActive : ''}`}
+              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'pending' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
               onClick={() => { setActiveTab('pending'); setPage(1); fetchPendingOrders(); }}
             >
               {t('myShop.tabPending', { count: pendingOrders.length })}
             </button>
             <button
-              className={`${styles.tab} ${activeTab === 'sold' ? styles.tabActive : ''}`}
+              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'sold' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
               onClick={() => { setActiveTab('sold'); setPage(1); }}
             >
               {t('myShop.tabSold', { count: soldAds.length })}
             </button>
             <button
-              className={`${styles.tab} ${activeTab === 'archived' ? styles.tabActive : ''}`}
+              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'archived' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
               onClick={() => { setActiveTab('archived'); setPage(1); }}
             >
               {t('myShop.tabArchived', { count: archivedAds.length })}
             </button>
             <button
-              className={`${styles.tab} ${activeTab === 'analytics' ? styles.tabActive : ''}`}
+              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'analytics' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
               onClick={() => setActiveTab('analytics')}
             >
               {t('myShop.tabAnalytics')}
@@ -678,42 +677,42 @@ export default function MyAdsPage() {
 
           {/* Analytics */}
           {activeTab === 'analytics' ? (
-            <div className={styles.analyticsSection}>
+            <div className="p-5">
               {analyticsLoading ? (
-                <p className={styles.emptyText}>{t('analytics.loading')}</p>
+                <p className="text-[#888] text-[15px] mt-0 mx-0 mb-3 p-5">{t('analytics.loading')}</p>
               ) : (
                 <>
                   {/* Overview stat tiles */}
-                  <div className={styles.sectionCard}>
-                  <h2 className={styles.sectionTitle}>{t('analytics.overview')}</h2>
-                  <div className={styles.statGrid}>
-                    <div className={styles.statTile}>
-                      <p className={styles.statLabel}>{t('analytics.sellThroughRate')}</p>
-                      <p className={styles.statValue}>{(summary?.sellThroughRate ?? 0).toFixed(0)}%</p>
+                  <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
+                  <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">{t('analytics.overview')}</h2>
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3 mb-6">
+                    <div className="bg-[#fafafa] border border-[#eee] rounded-lg px-4 py-3.5">
+                      <p className="text-xs text-[#888] mt-0 mx-0 mb-1.5 uppercase tracking-[0.3px]">{t('analytics.sellThroughRate')}</p>
+                      <p className="text-xl font-bold text-[#111] m-0">{(summary?.sellThroughRate ?? 0).toFixed(0)}%</p>
                     </div>
-                    <div className={styles.statTile}>
-                      <p className={styles.statLabel}>{t('analytics.totalRevenue')}</p>
-                      <p className={styles.statValue}>RM {(summary?.totalRevenue ?? 0).toFixed(2)}</p>
+                    <div className="bg-[#fafafa] border border-[#eee] rounded-lg px-4 py-3.5">
+                      <p className="text-xs text-[#888] mt-0 mx-0 mb-1.5 uppercase tracking-[0.3px]">{t('analytics.totalRevenue')}</p>
+                      <p className="text-xl font-bold text-[#111] m-0">RM {(summary?.totalRevenue ?? 0).toFixed(2)}</p>
                     </div>
-                    <div className={styles.statTile}>
-                      <p className={styles.statLabel}>{t('analytics.activeListings')}</p>
-                      <p className={styles.statValue}>{summary?.itemsActive ?? 0}</p>
+                    <div className="bg-[#fafafa] border border-[#eee] rounded-lg px-4 py-3.5">
+                      <p className="text-xs text-[#888] mt-0 mx-0 mb-1.5 uppercase tracking-[0.3px]">{t('analytics.activeListings')}</p>
+                      <p className="text-xl font-bold text-[#111] m-0">{summary?.itemsActive ?? 0}</p>
                     </div>
-                    <div className={styles.statTile}>
-                      <p className={styles.statLabel}>{t('analytics.pendingOrders')}</p>
-                      <p className={styles.statValue}>{summary?.pendingOrders ?? 0}</p>
+                    <div className="bg-[#fafafa] border border-[#eee] rounded-lg px-4 py-3.5">
+                      <p className="text-xs text-[#888] mt-0 mx-0 mb-1.5 uppercase tracking-[0.3px]">{t('analytics.pendingOrders')}</p>
+                      <p className="text-xl font-bold text-[#111] m-0">{summary?.pendingOrders ?? 0}</p>
                     </div>
-                    <div className={styles.statTile}>
-                      <p className={styles.statLabel}>{t('analytics.itemsSold')}</p>
-                      <p className={styles.statValue}>{summary?.itemsSold ?? 0}</p>
+                    <div className="bg-[#fafafa] border border-[#eee] rounded-lg px-4 py-3.5">
+                      <p className="text-xs text-[#888] mt-0 mx-0 mb-1.5 uppercase tracking-[0.3px]">{t('analytics.itemsSold')}</p>
+                      <p className="text-xl font-bold text-[#111] m-0">{summary?.itemsSold ?? 0}</p>
                     </div>
-                    <div className={styles.statTile}>
-                      <p className={styles.statLabel}>{t('analytics.archived')}</p>
-                      <p className={styles.statValue}>{summary?.itemsArchived ?? 0}</p>
+                    <div className="bg-[#fafafa] border border-[#eee] rounded-lg px-4 py-3.5">
+                      <p className="text-xs text-[#888] mt-0 mx-0 mb-1.5 uppercase tracking-[0.3px]">{t('analytics.archived')}</p>
+                      <p className="text-xl font-bold text-[#111] m-0">{summary?.itemsArchived ?? 0}</p>
                     </div>
-                    <div className={styles.statTile}>
-                      <p className={styles.statLabel}>{t('analytics.avgDaysToSell')}</p>
-                      <p className={styles.statValue}>
+                    <div className="bg-[#fafafa] border border-[#eee] rounded-lg px-4 py-3.5">
+                      <p className="text-xs text-[#888] mt-0 mx-0 mb-1.5 uppercase tracking-[0.3px]">{t('analytics.avgDaysToSell')}</p>
+                      <p className="text-xl font-bold text-[#111] m-0">
                         {(summary?.avgDaysToSell ?? 0) > 0 ? (summary!.avgDaysToSell).toFixed(1) : '—'}
                       </p>
                     </div>
@@ -723,33 +722,33 @@ export default function MyAdsPage() {
 
                   {/* Sales trends: stacked monthly bar chart with a metric toggle
                       and year / month / category filter chips */}
-                  <div className={styles.sectionCard}>
-                  <h2 className={styles.sectionTitle}>{t('analytics.salesTrends')}</h2>
-                  <div className={styles.chartPanel}>
-                    <div className={styles.chartToolbar}>
-                      <div className={styles.segmented}>
+                  <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
+                  <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">{t('analytics.salesTrends')}</h2>
+                  <div className="border border-[#ececec] rounded-[10px] pt-4 px-3.5 pb-2 mb-7 bg-[#fdfdfc]">
+                    <div className="flex justify-between items-center gap-3 flex-wrap mt-0 mx-0 mb-3.5">
+                      <div className="inline-flex bg-[#f1f1ef] border border-[#e3e2dd] rounded-[10px] p-[3px] gap-0.5">
                         <button
-                          className={`${styles.segmentBtn} ${chartMetric === 'revenue' ? styles.segmentBtnActive : ''}`}
+                          className={`border-none px-4 py-[7px] rounded-lg text-[13.5px] font-semibold cursor-pointer transition-all duration-150 ${chartMetric === 'revenue' ? 'bg-white text-[#111] shadow-[0_1px_2px_rgba(0,0,0,0.12)]' : 'bg-transparent text-[#666] hover:text-[#222]'}`}
                           onClick={() => setChartMetric('revenue')}
                         >
                           {t('analytics.monthlyRevenue')}
                         </button>
                         <button
-                          className={`${styles.segmentBtn} ${chartMetric === 'orderCount' ? styles.segmentBtnActive : ''}`}
+                          className={`border-none px-4 py-[7px] rounded-lg text-[13.5px] font-semibold cursor-pointer transition-all duration-150 ${chartMetric === 'orderCount' ? 'bg-white text-[#111] shadow-[0_1px_2px_rgba(0,0,0,0.12)]' : 'bg-transparent text-[#666] hover:text-[#222]'}`}
                           onClick={() => setChartMetric('orderCount')}
                         >
                           {t('analytics.itemsSold')}
                         </button>
                       </div>
-                      <button className={styles.exportBtn} onClick={exportChartCsv}>
+                      <button className="border rounded-lg px-3.5 py-[7px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-white border-[#ccc] text-[#333] hover:border-[#888]" onClick={exportChartCsv}>
                         {t('analytics.exportCsv')}
                       </button>
                     </div>
 
-                    <div className={styles.filterRow}>
-                      <span className={styles.filterLabel}>{t('analytics.year')}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0 mx-0 mb-4">
+                      <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mr-0.5 [&:not(:first-child)]:ml-3">{t('analytics.year')}</span>
                       <button
-                        className={`${styles.filterChip} ${allYearsOn ? styles.filterChipActive : ''}`}
+                        className={`inline-flex items-center gap-1.5 border rounded-2xl px-3 py-1 text-[13px] cursor-pointer transition-all duration-150 ${allYearsOn ? 'bg-[#111] border-[#111] text-white font-semibold' : 'bg-white border-[#ddd] text-[#444] hover:border-[#999]'}`}
                         onClick={() => setSelectedYears(allYearsOn ? [] : null)}
                         title={allYearsOn ? t('analytics.deselectAll') : t('analytics.selectAll')}
                       >
@@ -760,20 +759,20 @@ export default function MyAdsPage() {
                         return (
                           <button
                             key={y}
-                            className={`${styles.filterChip} ${on ? styles.filterChipOn : styles.filterChipOff}`}
+                            className={`inline-flex items-center gap-1.5 border rounded-2xl px-3 py-1 text-[13px] cursor-pointer transition-all duration-150 ${on ? 'bg-[#f5f5f3] border-[#999] text-[#111] font-semibold' : 'bg-white border-[#ddd] text-[#444] opacity-45 hover:opacity-80 hover:border-[#999]'}`}
                             onClick={() => toggleInList(setSelectedYears, y, chartYears)}
                           >
                             {y}
-                            <span className={styles.chipState}>{on ? '✓' : ''}</span>
+                            <span className="text-[11px] w-3 text-center text-[#0a7a0a]">{on ? '✓' : ''}</span>
                           </button>
                         );
                       })}
                     </div>
 
-                    <div className={styles.filterRow}>
-                      <span className={styles.filterLabel}>{t('analytics.month')}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0 mx-0 mb-4">
+                      <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mr-0.5 [&:not(:first-child)]:ml-3">{t('analytics.month')}</span>
                       <button
-                        className={`${styles.filterChip} ${allMonthsOn ? styles.filterChipActive : ''}`}
+                        className={`inline-flex items-center gap-1.5 border rounded-2xl px-3 py-1 text-[13px] cursor-pointer transition-all duration-150 ${allMonthsOn ? 'bg-[#111] border-[#111] text-white font-semibold' : 'bg-white border-[#ddd] text-[#444] hover:border-[#999]'}`}
                         onClick={() => setSelectedMonths(allMonthsOn ? [] : null)}
                         title={allMonthsOn ? t('analytics.deselectAll') : t('analytics.selectAll')}
                       >
@@ -784,20 +783,20 @@ export default function MyAdsPage() {
                         return (
                           <button
                             key={m}
-                            className={`${styles.filterChip} ${on ? styles.filterChipOn : styles.filterChipOff}`}
+                            className={`inline-flex items-center gap-1.5 border rounded-2xl px-3 py-1 text-[13px] cursor-pointer transition-all duration-150 ${on ? 'bg-[#f5f5f3] border-[#999] text-[#111] font-semibold' : 'bg-white border-[#ddd] text-[#444] opacity-45 hover:opacity-80 hover:border-[#999]'}`}
                             onClick={() => toggleInList(setSelectedMonths, m, chartMonthParts)}
                           >
                             {t(`months.${m}`)}
-                            <span className={styles.chipState}>{on ? '✓' : ''}</span>
+                            <span className="text-[11px] w-3 text-center text-[#0a7a0a]">{on ? '✓' : ''}</span>
                           </button>
                         );
                       })}
                     </div>
 
-                    <div className={styles.filterRow}>
-                      <span className={styles.filterLabel}>{t('analytics.categories')}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0 mx-0 mb-4">
+                      <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mr-0.5 [&:not(:first-child)]:ml-3">{t('analytics.categories')}</span>
                       <button
-                        className={`${styles.filterChip} ${allCatsOn ? styles.filterChipActive : ''}`}
+                        className={`inline-flex items-center gap-1.5 border rounded-2xl px-3 py-1 text-[13px] cursor-pointer transition-all duration-150 ${allCatsOn ? 'bg-[#111] border-[#111] text-white font-semibold' : 'bg-white border-[#ddd] text-[#444] hover:border-[#999]'}`}
                         onClick={() => setSelectedCats(allCatsOn ? [] : null)}
                         title={allCatsOn ? t('analytics.deselectAll') : t('analytics.selectAll')}
                       >
@@ -808,20 +807,20 @@ export default function MyAdsPage() {
                         return (
                           <button
                             key={cat}
-                            className={`${styles.filterChip} ${on ? styles.filterChipOn : styles.filterChipOff}`}
+                            className={`inline-flex items-center gap-1.5 border rounded-2xl px-3 py-1 text-[13px] cursor-pointer transition-all duration-150 ${on ? 'bg-[#f5f5f3] border-[#999] text-[#111] font-semibold' : 'bg-white border-[#ddd] text-[#444] opacity-45 hover:opacity-80 hover:border-[#999]'}`}
                             onClick={() => toggleCat(cat)}
                             title={on ? t('analytics.hideCat', { name: cat }) : t('analytics.showCat', { name: cat })}
                           >
-                            <span className={styles.chipDot} style={{ background: catColor(cat) }} />
+                            <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: catColor(cat) }} />
                             {cat}
-                            <span className={styles.chipState}>{on ? '✓' : ''}</span>
+                            <span className="text-[11px] w-3 text-center text-[#0a7a0a]">{on ? '✓' : ''}</span>
                           </button>
                         );
                       })}
                     </div>
 
                     {chartData.length > 0 ? (
-                      <div className={styles.chartWrap}>
+                      <div className="w-full h-[280px] mb-8">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e1e0d9" vertical={false} />
@@ -862,34 +861,34 @@ export default function MyAdsPage() {
                         </ResponsiveContainer>
                       </div>
                     ) : (
-                      <p className={styles.emptyText}>{t('analytics.noChartData')}</p>
+                      <p className="text-[#888] text-[15px] mt-0 mx-0 mb-3 p-5">{t('analytics.noChartData')}</p>
                     )}
                   </div>
                   </div>
 
                   {/* Sales by category — click a row to expand the sold items behind it */}
                   {sortedCategories.length > 0 && (
-                    <div className={styles.sectionCard}>
-                      <div className={styles.sectionHeader}>
-                        <h2 className={styles.sectionTitle}>{t('analytics.salesByCategory')}</h2>
-                        <button className={styles.exportBtn} onClick={exportCategoryCsv}>
+                    <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
+                      <div className="flex justify-between items-center gap-3 mt-0 mx-0 mb-3">
+                        <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-0">{t('analytics.salesByCategory')}</h2>
+                        <button className="border rounded-lg px-3.5 py-[7px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-white border-[#ccc] text-[#333] hover:border-[#888]" onClick={exportCategoryCsv}>
                           {t('analytics.exportCsv')}
                         </button>
                       </div>
-                      <div className={styles.tableWrap}>
-                        <table className={styles.statsTable}>
+                      <div className="w-full overflow-x-auto">
+                        <table className="w-full border-collapse text-sm [&_th]:text-left [&_th]:px-3 [&_th]:py-2.5 [&_th]:border-b-2 [&_th]:border-b-[#eee] [&_th]:text-[#666] [&_th]:font-semibold [&_th]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2.5 [&_td]:border-b [&_td]:border-b-[#f0f0f0] [&_td]:whitespace-nowrap [&_tr:last-child_td]:border-b-0">
                           <thead>
                             <tr>
-                              <th className={styles.sortableTh} onClick={() => toggleCatSort('category')}>
+                              <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleCatSort('category')}>
                                 {t('analytics.category')}{sortArrow(catSort?.key === 'category', catSort?.dir ?? 1)}
                               </th>
-                              <th className={styles.sortableTh} onClick={() => toggleCatSort('itemsSold')}>
+                              <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleCatSort('itemsSold')}>
                                 {t('analytics.itemsSold')}{sortArrow(catSort?.key === 'itemsSold', catSort?.dir ?? 1)}
                               </th>
-                              <th className={styles.sortableTh} onClick={() => toggleCatSort('avgDays')}>
+                              <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleCatSort('avgDays')}>
                                 {t('analytics.avgDaysToSell')}{sortArrow(catSort?.key === 'avgDays', catSort?.dir ?? 1)}
                               </th>
-                              <th className={styles.sortableTh} onClick={() => toggleCatSort('revenue')}>
+                              <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleCatSort('revenue')}>
                                 {t('analytics.totalRevenue')}{sortArrow(catSort?.key === 'revenue', catSort?.dir ?? 1)}
                               </th>
                             </tr>
@@ -903,13 +902,13 @@ export default function MyAdsPage() {
                               return (
                                 <Fragment key={cs.category}>
                                   <tr
-                                    className={styles.expandableRow}
+                                    className="cursor-pointer [&:hover_td]:bg-[#fafaf8]"
                                     onClick={() => toggleExpandCat(cs.category)}
                                   >
                                     <td>
-                                      <span className={styles.chevron}>{expanded ? '▾' : '▸'}</span>
+                                      <span className="inline-block w-4 text-[#898781] text-xs">{expanded ? '▾' : '▸'}</span>
                                       <span
-                                        className={styles.chipDot}
+                                        className="inline-block w-2 h-2 rounded-full shrink-0"
                                         style={{ background: catColor(cs.category), marginRight: 6 }}
                                       />
                                       {cs.category}
@@ -919,17 +918,17 @@ export default function MyAdsPage() {
                                     <td>RM {cs.revenue.toFixed(2)}</td>
                                   </tr>
                                   {expanded && (
-                                    <tr className={styles.detailRow}>
+                                    <tr className="[&>td]:bg-[#fbfbf9] [&>td]:pt-2 [&>td]:pr-3 [&>td]:pb-3.5 [&>td]:pl-7">
                                       <td colSpan={4}>
                                         {soldInCat.length === 0 ? (
-                                          <p className={styles.subEmpty}>
+                                          <p className="text-[#898781] text-[13px] my-1 mx-0">
                                             {t('analytics.noSoldInCategory')}
                                           </p>
                                         ) : (
-                                          <table className={styles.subTable}>
+                                          <table className="w-full border-collapse text-[13px] [&_th]:text-left [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-[#898781] [&_th]:font-semibold [&_th]:text-xs [&_th]:border-b [&_th]:border-b-[#ececea] [&_th]:whitespace-nowrap [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:border-b [&_td]:border-b-[#f2f2f0] [&_td]:whitespace-nowrap [&_tr:last-child_td]:border-b-0">
                                             <thead>
                                               <tr>
-                                                <th className={styles.indexCol}>#</th>
+                                                <th className="w-9 text-[#898781] text-xs text-right">#</th>
                                                 <th>{t('analytics.item')}</th>
                                                 <th>{t('analytics.soldDate')}</th>
                                                 <th>{t('analytics.daysToSell')}</th>
@@ -939,11 +938,11 @@ export default function MyAdsPage() {
                                             <tbody>
                                               {soldInCat.map((it, idx) => (
                                                 <tr key={it.listingId}>
-                                                  <td className={styles.indexCol}>{idx + 1}</td>
+                                                  <td className="w-9 text-[#898781] text-xs text-right">{idx + 1}</td>
                                                   <td>
                                                     <Link
                                                       href={`/products/${it.listingId}`}
-                                                      className={styles.actionLink}
+                                                      className="text-sm text-[#2563eb] no-underline font-medium hover:underline"
                                                     >
                                                       {it.title}
                                                     </Link>
@@ -969,26 +968,26 @@ export default function MyAdsPage() {
                   )}
 
                   {/* My Items — filterable, sortable, paginated table of every listing */}
-                  <div className={styles.sectionCard}>
+                  <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
                   {itemStats.some((it) => it.stale) && (
-                    <p className={styles.staleBanner}>
+                    <p className="bg-[#fff8e1] border border-[#ffe082] rounded-md text-[#8d6e00] text-sm px-3.5 py-2.5 mt-0 mx-0 mb-5">
                       {t('analytics.staleBanner', {
                         count: itemStats.filter((it) => it.stale).length,
                       })}
                     </p>
                   )}
 
-                  <div className={styles.sectionHeader}>
-                    <h2 className={styles.sectionTitle}>{t('analytics.myItems')}</h2>
+                  <div className="flex justify-between items-center gap-3 mt-0 mx-0 mb-3">
+                    <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-0">{t('analytics.myItems')}</h2>
                     {itemStats.length > 0 && (
-                      <div className={styles.sectionActions}>
+                      <div className="flex gap-2 items-center">
                         <button
-                          className={`${styles.exportBtn} ${activeFilterCount > 0 ? styles.filterBtnActive : ''}`}
+                          className={`border rounded-lg px-3.5 py-[7px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 ${activeFilterCount > 0 ? 'bg-[#111] border-[#111] text-white' : 'bg-white border-[#ccc] text-[#333] hover:border-[#888]'}`}
                           onClick={() => setShowItemFilters((s) => !s)}
                         >
                           {t('analytics.filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                         </button>
-                        <button className={styles.exportBtn} onClick={exportItemsCsv}>
+                        <button className="border rounded-lg px-3.5 py-[7px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-white border-[#ccc] text-[#333] hover:border-[#888]" onClick={exportItemsCsv}>
                           {t('analytics.exportCsv')}
                         </button>
                       </div>
@@ -996,13 +995,13 @@ export default function MyAdsPage() {
                   </div>
 
                   {showItemFilters && itemStats.length > 0 && (
-                    <div className={styles.filterPanel}>
-                      <div className={styles.filterGrid}>
-                        <label className={styles.filterField}>
-                          <span className={styles.filterFieldLabel}>{t('analytics.itemName')}</span>
+                    <div className="border border-[#ececec] rounded-[10px] bg-[#fdfdfc] p-3.5 mt-0 mx-0 mb-4">
+                      <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3 mb-3">
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold">{t('analytics.itemName')}</span>
                           <input
                             type="text"
-                            className={styles.filterInput}
+                            className="border border-[#ddd] rounded-lg px-2.5 py-1.5 text-[13px] text-[#333] w-full min-w-0 bg-white focus:outline-none focus:border-[#888]"
                             placeholder={t('analytics.searchTitle')}
                             value={itemFilters.search}
                             onChange={(e) =>
@@ -1010,24 +1009,24 @@ export default function MyAdsPage() {
                             }
                           />
                         </label>
-                        <label className={styles.filterField}>
-                          <span className={styles.filterFieldLabel}>{t('analytics.priceRm')}</span>
-                          <span className={styles.rangePair}>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold">{t('analytics.priceRm')}</span>
+                          <span className="flex items-center gap-1.5">
                             <input
                               type="number"
                               min="0"
-                              className={styles.filterInput}
+                              className="border border-[#ddd] rounded-lg px-2.5 py-1.5 text-[13px] text-[#333] w-full min-w-0 bg-white focus:outline-none focus:border-[#888]"
                               placeholder={t('analytics.min')}
                               value={itemFilters.priceMin}
                               onChange={(e) =>
                                 setItemFilters((f) => ({ ...f, priceMin: e.target.value.replace(/-/g, '') }))
                               }
                             />
-                            <span className={styles.rangeDash}>–</span>
+                            <span className="text-[#aaa]">–</span>
                             <input
                               type="number"
                               min="0"
-                              className={styles.filterInput}
+                              className="border border-[#ddd] rounded-lg px-2.5 py-1.5 text-[13px] text-[#333] w-full min-w-0 bg-white focus:outline-none focus:border-[#888]"
                               placeholder={t('analytics.max')}
                               value={itemFilters.priceMax}
                               onChange={(e) =>
@@ -1036,24 +1035,24 @@ export default function MyAdsPage() {
                             />
                           </span>
                         </label>
-                        <label className={styles.filterField}>
-                          <span className={styles.filterFieldLabel}>{t('analytics.daysListed')}</span>
-                          <span className={styles.rangePair}>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold">{t('analytics.daysListed')}</span>
+                          <span className="flex items-center gap-1.5">
                             <input
                               type="number"
                               min="0"
-                              className={styles.filterInput}
+                              className="border border-[#ddd] rounded-lg px-2.5 py-1.5 text-[13px] text-[#333] w-full min-w-0 bg-white focus:outline-none focus:border-[#888]"
                               placeholder={t('analytics.min')}
                               value={itemFilters.daysMin}
                               onChange={(e) =>
                                 setItemFilters((f) => ({ ...f, daysMin: e.target.value.replace(/-/g, '') }))
                               }
                             />
-                            <span className={styles.rangeDash}>–</span>
+                            <span className="text-[#aaa]">–</span>
                             <input
                               type="number"
                               min="0"
-                              className={styles.filterInput}
+                              className="border border-[#ddd] rounded-lg px-2.5 py-1.5 text-[13px] text-[#333] w-full min-w-0 bg-white focus:outline-none focus:border-[#888]"
                               placeholder={t('analytics.max')}
                               value={itemFilters.daysMax}
                               onChange={(e) =>
@@ -1062,24 +1061,24 @@ export default function MyAdsPage() {
                             />
                           </span>
                         </label>
-                        <label className={styles.filterField}>
-                          <span className={styles.filterFieldLabel}>{t('analytics.views30d')}</span>
-                          <span className={styles.rangePair}>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold">{t('analytics.views30d')}</span>
+                          <span className="flex items-center gap-1.5">
                             <input
                               type="number"
                               min="0"
-                              className={styles.filterInput}
+                              className="border border-[#ddd] rounded-lg px-2.5 py-1.5 text-[13px] text-[#333] w-full min-w-0 bg-white focus:outline-none focus:border-[#888]"
                               placeholder={t('analytics.min')}
                               value={itemFilters.viewsMin}
                               onChange={(e) =>
                                 setItemFilters((f) => ({ ...f, viewsMin: e.target.value.replace(/-/g, '') }))
                               }
                             />
-                            <span className={styles.rangeDash}>–</span>
+                            <span className="text-[#aaa]">–</span>
                             <input
                               type="number"
                               min="0"
-                              className={styles.filterInput}
+                              className="border border-[#ddd] rounded-lg px-2.5 py-1.5 text-[13px] text-[#333] w-full min-w-0 bg-white focus:outline-none focus:border-[#888]"
                               placeholder={t('analytics.max')}
                               value={itemFilters.viewsMax}
                               onChange={(e) =>
@@ -1089,10 +1088,10 @@ export default function MyAdsPage() {
                           </span>
                         </label>
                       </div>
-                      <div className={styles.filterRow}>
-                        <span className={styles.filterLabel}>{t('analytics.category')}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0 mx-0 mb-4">
+                        <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mr-0.5 [&:not(:first-child)]:ml-3">{t('analytics.category')}</span>
                         <button
-                          className={`${styles.filterChip} ${itemFilters.cats === null || itemFilters.cats.length === itemCategories.length ? styles.filterChipActive : ''}`}
+                          className={`inline-flex items-center gap-1.5 border rounded-2xl px-3 py-1 text-[13px] cursor-pointer transition-all duration-150 ${itemFilters.cats === null || itemFilters.cats.length === itemCategories.length ? 'bg-[#111] border-[#111] text-white font-semibold' : 'bg-white border-[#ddd] text-[#444] hover:border-[#999]'}`}
                           onClick={() =>
                             setItemFilters((f) => ({
                               ...f,
@@ -1110,19 +1109,19 @@ export default function MyAdsPage() {
                           return (
                             <button
                               key={cat}
-                              className={`${styles.filterChip} ${on ? styles.filterChipOn : styles.filterChipOff}`}
+                              className={`inline-flex items-center gap-1.5 border rounded-2xl px-3 py-1 text-[13px] cursor-pointer transition-all duration-150 ${on ? 'bg-[#f5f5f3] border-[#999] text-[#111] font-semibold' : 'bg-white border-[#ddd] text-[#444] opacity-45 hover:opacity-80 hover:border-[#999]'}`}
                               onClick={() => toggleFilterList('cats', cat, itemCategories)}
                             >
                               {cat}
-                              <span className={styles.chipState}>{on ? '✓' : ''}</span>
+                              <span className="text-[11px] w-3 text-center text-[#0a7a0a]">{on ? '✓' : ''}</span>
                             </button>
                           );
                         })}
                       </div>
-                      <div className={styles.filterRow}>
-                        <span className={styles.filterLabel}>{t('analytics.statusLabel')}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0 mx-0 mb-4">
+                        <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mr-0.5 [&:not(:first-child)]:ml-3">{t('analytics.statusLabel')}</span>
                         <button
-                          className={`${styles.filterChip} ${itemFilters.statuses === null || itemFilters.statuses.length === ITEM_STATUSES.length ? styles.filterChipActive : ''}`}
+                          className={`inline-flex items-center gap-1.5 border rounded-2xl px-3 py-1 text-[13px] cursor-pointer transition-all duration-150 ${itemFilters.statuses === null || itemFilters.statuses.length === ITEM_STATUSES.length ? 'bg-[#111] border-[#111] text-white font-semibold' : 'bg-white border-[#ddd] text-[#444] hover:border-[#999]'}`}
                           onClick={() =>
                             setItemFilters((f) => ({
                               ...f,
@@ -1140,19 +1139,19 @@ export default function MyAdsPage() {
                           return (
                             <button
                               key={st}
-                              className={`${styles.filterChip} ${on ? styles.filterChipOn : styles.filterChipOff}`}
+                              className={`inline-flex items-center gap-1.5 border rounded-2xl px-3 py-1 text-[13px] cursor-pointer transition-all duration-150 ${on ? 'bg-[#f5f5f3] border-[#999] text-[#111] font-semibold' : 'bg-white border-[#ddd] text-[#444] opacity-45 hover:opacity-80 hover:border-[#999]'}`}
                               onClick={() => toggleFilterList('statuses', st, ITEM_STATUSES)}
                             >
                               {t(`status.${st}`)}
-                              <span className={styles.chipState}>{on ? '✓' : ''}</span>
+                              <span className="text-[11px] w-3 text-center text-[#0a7a0a]">{on ? '✓' : ''}</span>
                             </button>
                           );
                         })}
-                        <span className={styles.filterLabel}>{t('analytics.sold')}</span>
+                        <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mr-0.5 [&:not(:first-child)]:ml-3">{t('analytics.sold')}</span>
                         {(['all', 'sold', 'unsold'] as const).map((s) => (
                           <button
                             key={s}
-                            className={`${styles.filterChip} ${itemFilters.sold === s ? styles.filterChipActive : ''}`}
+                            className={`inline-flex items-center gap-1.5 border rounded-2xl px-3 py-1 text-[13px] cursor-pointer transition-all duration-150 ${itemFilters.sold === s ? 'bg-[#111] border-[#111] text-white font-semibold' : 'bg-white border-[#ddd] text-[#444] hover:border-[#999]'}`}
                             onClick={() => setItemFilters((f) => ({ ...f, sold: s }))}
                           >
                             {s === 'all'
@@ -1162,11 +1161,11 @@ export default function MyAdsPage() {
                                 : t('analytics.notSold')}
                           </button>
                         ))}
-                        <button className={styles.clearFiltersBtn} onClick={clearItemFilters}>
+                        <button className="border-none bg-none text-[#c2185b] text-[13px] font-semibold cursor-pointer ml-auto px-2 py-1 hover:underline" onClick={clearItemFilters}>
                           {t('analytics.clearAll')}
                         </button>
                       </div>
-                      <p className={styles.filterResultCount}>
+                      <p className="text-xs text-[#898781] mt-2 mx-0 mb-0">
                         {t('analytics.showingCount', {
                           shown: sortedItems.length,
                           total: itemStats.length,
@@ -1176,49 +1175,49 @@ export default function MyAdsPage() {
                   )}
 
                   {itemStats.length === 0 ? (
-                    <p className={styles.emptyText}>{t('analytics.noListings')}</p>
+                    <p className="text-[#888] text-[15px] mt-0 mx-0 mb-3 p-5">{t('analytics.noListings')}</p>
                   ) : sortedItems.length === 0 ? (
-                    <p className={styles.emptyText}>{t('analytics.noMatches')}</p>
+                    <p className="text-[#888] text-[15px] mt-0 mx-0 mb-3 p-5">{t('analytics.noMatches')}</p>
                   ) : (
-                    <div className={styles.tableWrap}>
-                      <table className={styles.statsTable}>
+                    <div className="w-full overflow-x-auto">
+                      <table className="w-full border-collapse text-sm [&_th]:text-left [&_th]:px-3 [&_th]:py-2.5 [&_th]:border-b-2 [&_th]:border-b-[#eee] [&_th]:text-[#666] [&_th]:font-semibold [&_th]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2.5 [&_td]:border-b [&_td]:border-b-[#f0f0f0] [&_td]:whitespace-nowrap [&_tr:last-child_td]:border-b-0">
                         <thead>
                           <tr>
-                            <th className={styles.indexCol}>#</th>
-                            <th className={styles.sortableTh} onClick={() => toggleItemSort('title')}>
+                            <th className="w-9 text-[#898781] text-xs text-right">#</th>
+                            <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('title')}>
                               {t('analytics.item')}{sortArrow(itemSort?.key === 'title', itemSort?.dir ?? 1)}
                             </th>
-                            <th className={styles.sortableTh} onClick={() => toggleItemSort('price')}>
+                            <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('price')}>
                               {t('analytics.price')}{sortArrow(itemSort?.key === 'price', itemSort?.dir ?? 1)}
                             </th>
-                            <th className={styles.sortableTh} onClick={() => toggleItemSort('category')}>
+                            <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('category')}>
                               {t('analytics.category')}{sortArrow(itemSort?.key === 'category', itemSort?.dir ?? 1)}
                             </th>
-                            <th className={styles.sortableTh} onClick={() => toggleItemSort('status')}>
+                            <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('status')}>
                               {t('analytics.statusLabel')}{sortArrow(itemSort?.key === 'status', itemSort?.dir ?? 1)}
                             </th>
-                            <th className={styles.sortableTh} onClick={() => toggleItemSort('daysListed')}>
+                            <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('daysListed')}>
                               {t('analytics.daysListedCol')}{sortArrow(itemSort?.key === 'daysListed', itemSort?.dir ?? 1)}
                             </th>
-                            <th className={styles.sortableTh} onClick={() => toggleItemSort('viewsLast30Days')}>
+                            <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('viewsLast30Days')}>
                               {t('analytics.views30d')}{sortArrow(itemSort?.key === 'viewsLast30Days', itemSort?.dir ?? 1)}
                             </th>
-                            <th className={styles.sortableTh} onClick={() => toggleItemSort('soldAt')}>
+                            <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('soldAt')}>
                               {t('analytics.sold')}{sortArrow(itemSort?.key === 'soldAt', itemSort?.dir ?? 1)}
                             </th>
                           </tr>
                         </thead>
                         <tbody>
                           {pagedItems.map((it, idx) => (
-                            <tr key={it.listingId} className={it.stale ? styles.staleRow : ''}>
-                              <td className={styles.indexCol}>
+                            <tr key={it.listingId} className={it.stale ? '[&>td]:bg-[#fffdf5]' : ''}>
+                              <td className="w-9 text-[#898781] text-xs text-right">
                                 {(clampedItemPage - 1) * ITEMS_PER_PAGE + idx + 1}
                               </td>
                               <td>
-                                <Link href={`/products/${it.listingId}`} className={styles.actionLink}>
+                                <Link href={`/products/${it.listingId}`} className="text-sm text-[#2563eb] no-underline font-medium hover:underline">
                                   {it.title}
                                 </Link>
-                                {it.stale && <span className={styles.staleTag}> {t('analytics.stale')}</span>}
+                                {it.stale && <span className="inline-block ml-1.5 px-2 py-px rounded-[10px] bg-[#fff3cd] text-[#8d6e00] text-[11px] font-semibold uppercase tracking-[0.3px]"> {t('analytics.stale')}</span>}
                               </td>
                               <td>RM {it.price.toFixed(2)}</td>
                               <td>{it.category}</td>
@@ -1238,9 +1237,9 @@ export default function MyAdsPage() {
                   )}
 
                   {itemTotalPages > 1 && (
-                    <div className={styles.pagination}>
+                    <div className="flex justify-center items-center gap-1.5 p-4 border-t border-[#eee]">
                       <button
-                        className={styles.pageBtn}
+                        className="w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]"
                         disabled={clampedItemPage === 1}
                         onClick={() => setItemPage((p) => Math.max(1, p - 1))}
                       >
@@ -1249,14 +1248,14 @@ export default function MyAdsPage() {
                       {Array.from({ length: itemTotalPages }, (_, i) => (
                         <button
                           key={i + 1}
-                          className={`${styles.pageBtn} ${clampedItemPage === i + 1 ? styles.pageBtnActive : ''}`}
+                          className={`w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${clampedItemPage === i + 1 ? 'bg-[#2563eb] text-white border-[#2563eb]' : 'bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]'}`}
                           onClick={() => setItemPage(i + 1)}
                         >
                           {i + 1}
                         </button>
                       ))}
                       <button
-                        className={styles.pageBtn}
+                        className="w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]"
                         disabled={clampedItemPage === itemTotalPages}
                         onClick={() => setItemPage((p) => Math.min(itemTotalPages, p + 1))}
                       >
@@ -1271,18 +1270,19 @@ export default function MyAdsPage() {
           ) : activeTab === 'pending' ? (
             /* Pending orders awaiting the seller's delivery confirmation */
             pendingLoading ? (
-              <p className={styles.emptyText}>Loading pending orders…</p>
+              <p className="text-[#888] text-[15px] mt-0 mx-0 mb-3 p-5">Loading pending orders…</p>
             ) : pendingOrders.length === 0 ? (
-              <div className={styles.emptyState}>
-                <p className={styles.emptyText}>No pending orders to deliver.</p>
+              <div className="px-5 py-12 text-center">
+                <p className="text-[#888] text-[15px] mt-0 mx-0 mb-3 p-5">No pending orders to deliver.</p>
               </div>
             ) : (
-              <div className={styles.pendingList}>
+              <div className="flex flex-col gap-3">
                 {pendingOrders.map((order, i) => (
-                  <div key={order.id} className={styles.pendingOrderItem}>
-                    <span className={styles.adIndex}>{i + 1}</span>
-                    <div className={styles.adImageWrap}>
+                  <div key={order.id} className="flex items-center gap-3.5 p-4 border-b border-[#f0f0ed] last:border-b-0">
+                    <span className="w-7 shrink-0 text-[#898781] text-[13px] font-semibold pt-1 text-right">{i + 1}</span>
+                    <div className="w-[110px] h-[90px] shrink-0 rounded-md overflow-hidden bg-[#f0f0f0] max-[600px]:w-full max-[600px]:h-[200px]">
                       <img
+                        className="w-full h-full object-cover"
                         src={orderImgSrc(order)}
                         alt={order.listingTitle}
                         onError={(e) => {
@@ -1290,24 +1290,24 @@ export default function MyAdsPage() {
                         }}
                       />
                     </div>
-                    <div className={styles.adInfo}>
-                      <p className={styles.adPrice}>RM {order.totalPrice.toFixed(2)}</p>
-                      <Link href={`/products/${order.listingId}`} className={styles.adTitle}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[17px] font-bold text-[#111] mt-0 mx-0 mb-1">RM {order.totalPrice.toFixed(2)}</p>
+                      <Link href={`/products/${order.listingId}`} className="block text-[15px] font-medium text-[#333] no-underline mb-1 whitespace-nowrap overflow-hidden text-ellipsis hover:text-[#2563eb] hover:underline">
                         {order.listingTitle}
                       </Link>
-                      <p className={styles.adMeta}>
+                      <p className="text-[13px] text-[#888] mt-0 mx-0 mb-[3px]">
                         Buyer: {order.buyerUsername || order.buyerEmail || 'Buyer'}
                       </p>
-                      <p className={styles.adViews}>
+                      <p className="text-[13px] text-[#888] mt-0 mx-0 mb-2.5">
                         Ordered {formatDate(order.createdAt)} · Qty {order.quantity} · {order.paymentMethod || 'meetup'}
                       </p>
                     </div>
-                    <div className={styles.adSide}>
-                      <span className={`${styles.statusChip} ${styles.statusPending}`}>
+                    <div className="ml-auto flex flex-col items-end gap-1.5 shrink-0 min-w-[130px]">
+                      <span className="inline-block px-3 py-[3px] rounded-xl text-xs font-bold capitalize bg-[#fff8e1] text-[#8d6e00]">
                         Pending
                       </span>
                       <button
-                        className={styles.completeOrderBtn}
+                        className="border-none rounded-md bg-[#111] text-white cursor-pointer text-[13px] font-bold px-3.5 py-[9px] whitespace-nowrap hover:bg-[#333] disabled:bg-[#a3a3a3] disabled:cursor-not-allowed"
                         onClick={() => handleCompleteOrder(order.id)}
                         disabled={completingOrderId === order.id}
                       >
@@ -1319,10 +1319,10 @@ export default function MyAdsPage() {
               </div>
             )
           ) : loading ? (
-            <p className={styles.emptyText}>{t('myShop.loadingAds')}</p>
+            <p className="text-[#888] text-[15px] mt-0 mx-0 mb-3 p-5">{t('myShop.loadingAds')}</p>
           ) : paginatedAds.length === 0 ? (
-            <div className={styles.emptyState}>
-              <p className={styles.emptyText}>
+            <div className="px-5 py-12 text-center">
+              <p className="text-[#888] text-[15px] mt-0 mx-0 mb-3 p-5">
                 {activeTab === 'active'
                   ? t('myShop.emptyPublished')
                   : activeTab === 'sold'
@@ -1330,7 +1330,7 @@ export default function MyAdsPage() {
                     : t('myShop.emptyArchived')}
               </p>
               {activeTab === 'active' && (
-                <Link href="/sell" className={styles.postAdLink}>
+                <Link href="/sell" className="inline-block text-[#2563eb] font-semibold no-underline text-[15px] hover:underline">
                   {t('myShop.postFirstAd')}
                 </Link>
               )}
@@ -1338,12 +1338,13 @@ export default function MyAdsPage() {
           ) : (
             /* Active / Sold / Archived listings of the open tab */
             paginatedAds.map((ad, i) => (
-              <div key={ad.id} className={styles.adItem}>
-                <span className={styles.adIndex}>
+              <div key={ad.id} className="flex gap-4 px-5 py-4 border-b border-[#eee] items-start transition-colors duration-100 last:border-b-0 hover:bg-[#fafafa] max-[600px]:flex-col">
+                <span className="w-7 shrink-0 text-[#898781] text-[13px] font-semibold pt-1 text-right">
                   {(page - 1) * ADS_PER_PAGE + i + 1}
                 </span>
-                <div className={styles.adImageWrap}>
+                <div className="w-[110px] h-[90px] shrink-0 rounded-md overflow-hidden bg-[#f0f0f0] max-[600px]:w-full max-[600px]:h-[200px]">
                   <img
+                    className="w-full h-full object-cover"
                     src={imgSrc(ad)}
                     alt={ad.title}
                     onError={(e) => {
@@ -1351,43 +1352,43 @@ export default function MyAdsPage() {
                     }}
                   />
                 </div>
-                <div className={styles.adInfo}>
-                  <p className={styles.adPrice}>RM {ad.price.toFixed(2)}</p>
-                  <Link href={`/products/${ad.id}`} className={styles.adTitle}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[17px] font-bold text-[#111] mt-0 mx-0 mb-1">RM {ad.price.toFixed(2)}</p>
+                  <Link href={`/products/${ad.id}`} className="block text-[15px] font-medium text-[#333] no-underline mb-1 whitespace-nowrap overflow-hidden text-ellipsis hover:text-[#2563eb] hover:underline">
                     {ad.title}
                   </Link>
-                  <p className={styles.adMeta}>
+                  <p className="text-[13px] text-[#888] mt-0 mx-0 mb-[3px]">
                     Posted {formatDate(ad.createdAt)} · {ad.location}
                   </p>
-                  <p className={styles.adViews}>
+                  <p className="text-[13px] text-[#888] mt-0 mx-0 mb-2.5">
                     👁 {ad.viewsCount} views in the last 30 days
                   </p>
                 </div>
-                <div className={styles.adSide}>
+                <div className="ml-auto flex flex-col items-end gap-1.5 shrink-0 min-w-[130px]">
                   <span
-                    className={`${styles.statusChip} ${
+                    className={`inline-block px-3 py-[3px] rounded-xl text-xs font-bold capitalize ${
                       ad.status === 'active'
-                        ? styles.statusActive
+                        ? 'bg-[#e6f4ea] text-[#1a7f37]'
                         : ad.status === 'sold'
-                          ? styles.statusSold
-                          : styles.statusArchived
+                          ? 'bg-[#e3edfb] text-[#1c5cab]'
+                          : 'bg-[#efefec] text-[#6e6d68]'
                     }`}
                   >
                     {ad.status === 'active' ? 'Published' : ad.status}
                   </span>
-                  <span className={styles.adDays}>
+                  <span className="text-xs text-[#898781]">
                     {daysSince(ad.createdAt)} days listed
                   </span>
-                  <div className={styles.adActions}>
+                  <div className="flex items-center gap-2">
                     <Link
                       href={`/sell?editId=${ad.id}`}
-                      className={styles.actionLink}
+                      className="text-sm text-[#2563eb] no-underline font-medium hover:underline"
                     >
                       Edit
                     </Link>
-                    <span className={styles.actionDivider}>|</span>
+                    <span className="text-[#ccc] text-sm">|</span>
                     <button
-                      className={styles.actionDeleteBtn}
+                      className="bg-none border-none text-sm text-[#2563eb] cursor-pointer font-medium p-0 hover:underline"
                       onClick={() => handleDelete(ad.id)}
                     >
                       Delete
@@ -1400,9 +1401,9 @@ export default function MyAdsPage() {
 
           {/* Pagination */}
           {activeTab !== 'analytics' && !loading && totalPages > 1 && (
-            <div className={styles.pagination}>
+            <div className="flex justify-center items-center gap-1.5 p-4 border-t border-[#eee]">
               <button
-                className={styles.pageBtn}
+                className="w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]"
                 disabled={page === 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
@@ -1411,14 +1412,14 @@ export default function MyAdsPage() {
               {Array.from({ length: totalPages }, (_, i) => (
                 <button
                   key={i + 1}
-                  className={`${styles.pageBtn} ${page === i + 1 ? styles.pageBtnActive : ''}`}
+                  className={`w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${page === i + 1 ? 'bg-[#2563eb] text-white border-[#2563eb]' : 'bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]'}`}
                   onClick={() => setPage(i + 1)}
                 >
                   {i + 1}
                 </button>
               ))}
               <button
-                className={styles.pageBtn}
+                className="w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]"
                 disabled={page === totalPages}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               >

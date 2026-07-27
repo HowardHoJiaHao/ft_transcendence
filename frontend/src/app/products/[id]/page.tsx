@@ -8,7 +8,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast/ToastContext';
 import OnlineStatus from '@/components/OnlineStatus';
 import ChatModal from '@/app/(user)/chat/ChatModal'
-import styles from './product.module.css';
 import Header from '@/components/Header/Header'
 
 interface Product {
@@ -192,12 +191,13 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	};
 
 	return (
-		<main className={styles.main}>
+		<main className="flex flex-col min-h-screen px-5 w-full">
 		  <Header/>
-		    <div className={styles.productCard}>
-		  	  <div className={styles.productImage}>
-					<div className={styles.imageFrame}>
+		    <div className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex w-[90%] max-w-[1138px] h-auto min-h-[450px] my-6 mx-auto gap-[30px] max-[600px]:flex-col max-[600px]:m-5">
+		  	  <div className="flex-[0_0_50%] overflow-hidden rounded-lg aspect-[4/5] max-h-[520px]">
+					<div className="relative w-full h-full">
 						<img
+							className="w-full h-full object-cover block"
 							src={resolveImageUrl(activeImage)}
 							alt={product.title || 'Product image'}
 							onError={(event) => {
@@ -205,20 +205,20 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 							}}
 						/>
 						{canNavigate && (
-							<div className={styles.carouselControls}>
+							<div className="absolute inset-0 flex items-center justify-between p-3 pointer-events-none">
 								<button
-									className={styles.carouselButton}
+									className="pointer-events-auto w-9 h-9 rounded-full border-none bg-black/60 text-white text-xl font-semibold cursor-pointer flex items-center justify-center hover:bg-black/75"
 									onClick={handlePrevImage}
 									aria-label="Previous image"
 									type="button"
 								>
 									‹
 								</button>
-								<span className={styles.carouselCounter}>
+								<span className="pointer-events-auto bg-black/55 text-white text-xs px-2.5 py-1.5 rounded-full tracking-[0.4px]">
 									{imageIndex + 1} / {galleryImages.length}
 								</span>
 								<button
-									className={styles.carouselButton}
+									className="pointer-events-auto w-9 h-9 rounded-full border-none bg-black/60 text-white text-xl font-semibold cursor-pointer flex items-center justify-center hover:bg-black/75"
 									onClick={handleNextImage}
 									aria-label="Next image"
 									type="button"
@@ -230,34 +230,35 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 					</div>
 		  	  </div>
 
-		  	  <div className={styles.productInfo}>
-			    <div className={styles.productName}>{product.title}</div>
-		  	    <div className={styles.category}> Weight: {product.weightCategory}</div>
-				<div className={styles.category}> Flexibility: {product.flexibilityCategory}</div>
-				<div className={styles.category}> Balance: {product.balanceCategory}</div>
+		  	  <div className="flex-[0_0_50%]">
+			    <div className="text-[40px] font-bold text-[var(--dark)] mb-2.5">{product.title}</div>
+		  	    <div className="uppercase text-[var(--secondary)] tracking-[1px] text-xs mb-2.5"> Weight: {product.weightCategory}</div>
+				<div className="uppercase text-[var(--secondary)] tracking-[1px] text-xs mb-2.5"> Flexibility: {product.flexibilityCategory}</div>
+				<div className="uppercase text-[var(--secondary)] tracking-[1px] text-xs mb-2.5"> Balance: {product.balanceCategory}</div>
 		  	    <p className="text-muted">{product.reviews} sold</p>
 				<p className="text-muted">
 				  {isAvailable ? `${availableStock} in stock` : 'Unavailable'}
 				  {cartQuantity > 0 && isAvailable ? ` (${cartQuantity} in cart)` : ''}
 				</p>
-		  	    <p className={styles.price}>${product.price.toFixed(2)} 
+		  	    <p className="text-2xl font-bold text-[var(--primary)] mb-5">${product.price.toFixed(2)} 
 				  {product.originalPrice && (
-                    <span className={styles.originalPrice}> ${product.originalPrice.toFixed(2)} </span> )}
+                    <span className="line-through text-[var(--secondary)] ml-2"> ${product.originalPrice.toFixed(2)} </span> )}
 				</p>
                 <div className="quantitySelector">
                   <button className="quantityBtn" onClick={() => setQuantity(prev => Math.max(1, prev - 1))} disabled={quantity <= 1}>-</button>
                   <span className="quantityDisplay">{quantity}</span>
                   <button className="quantityBtn" onClick={() => setQuantity(prev => Math.min(remainingStock, prev + 1))} disabled={!canAddToCart || quantity >= remainingStock}> + </button>
                 </div>
-                <button className={styles.button} onClick={handleAddToCart} disabled={!canAddToCart}>
+                <button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed" onClick={handleAddToCart} disabled={!canAddToCart}>
                   {isOwnListing ? 'Your Listing' : remainingStock <= 0 && isAvailable ? 'All Stock In Cart' : isAvailable ? '🛒 Add to Cart' : 'Unavailable'}
                 </button>
               </div>
 		    </div>
 
-			<div className={styles.shopCard}>
-			  <div className={styles.shopImage}>
+			<div className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex w-[90%] max-w-[1138px] h-auto min-h-[150px] my-6 mx-auto gap-[30px]">
+			  <div className="flex-[0_0_30%] overflow-hidden rounded-lg aspect-square max-h-[160px]">
 					<img
+						className="w-full h-full object-cover block"
 						src={resolveAvatarUrl(product.sellerAvatar)}
 						alt={product.sellerName ? `${product.sellerName} shop` : 'Shop picture'}
 						onError={(event) => {
@@ -266,45 +267,45 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 					/>
 			  </div>
 
-			  <div className={styles.shopInfo}>
-				<div className={styles.shopName}>{product.sellerName}</div>
-				<div className={styles.onlineStatus}>{product.sellerId !== undefined && <OnlineStatus userId={product.sellerId} />}</div>
-				<div className={styles.shopButtonGroup}>
-					<button className={styles.button} onClick={openChat} disabled={chatLoading || !currentUser?.id}>
+			  <div className="flex-[0_0_30%]">
+				<div className="mb-2 text-[var(--dark)] font-semibold">{product.sellerName}</div>
+				<div className="mb-2 text-[var(--secondary)] text-sm">{product.sellerId !== undefined && <OnlineStatus userId={product.sellerId} />}</div>
+				<div className="flex gap-2.5 mt-2">
+					<button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed" onClick={openChat} disabled={chatLoading || !currentUser?.id}>
 						{chatLoading ? 'Loading...' : 'Chat Seller'}
 					</button>
-				  	<Link href={`/user/${product.sellerId}`} className={styles.button}>View Shop</Link>
+				  	<Link href={`/user/${product.sellerId}`} className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed">View Shop</Link>
 				</div>
 			  </div>
 
-			  <div className={styles.shopAnalytics}>
+			  <div className="flex-[0_0_40%]">
 				<p>-Shop Analytics by Howard/Fadhlul-</p>
 			  </div>
 			</div>
 
-			<div className={styles.productDescriptionCard}>
+			<div className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex flex-col w-[90%] max-w-[1138px] h-auto min-h-[450px] my-6 mx-auto gap-[30px] break-words leading-[1.6]">
 				<h3>About this item</h3>
-				<p className={styles.description}>{product.description || 'No description provided.'}</p>
-				<div className={styles.detailGrid}>
-					<div className={styles.detailItem}>
-						<span className={styles.detailLabel}>Category</span>
-						<span className={styles.detailValue}>{product.category || 'N/A'}</span>
+				<p className="text-[var(--secondary)] leading-[1.6] mb-[25px]">{product.description || 'No description provided.'}</p>
+				<div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-x-6 gap-y-4">
+					<div className="flex flex-col gap-1.5">
+						<span className="text-xs tracking-[1px] uppercase text-[var(--secondary)]">Category</span>
+						<span className="text-sm text-[var(--dark)] font-semibold">{product.category || 'N/A'}</span>
 					</div>
-					<div className={styles.detailItem}>
-						<span className={styles.detailLabel}>Condition</span>
-						<span className={styles.detailValue}>{product.condition || 'N/A'}</span>
+					<div className="flex flex-col gap-1.5">
+						<span className="text-xs tracking-[1px] uppercase text-[var(--secondary)]">Condition</span>
+						<span className="text-sm text-[var(--dark)] font-semibold">{product.condition || 'N/A'}</span>
 					</div>
-					<div className={styles.detailItem}>
-						<span className={styles.detailLabel}>Dealing method</span>
-						<span className={styles.detailValue}>{product.dealingMethod || 'N/A'}</span>
+					<div className="flex flex-col gap-1.5">
+						<span className="text-xs tracking-[1px] uppercase text-[var(--secondary)]">Dealing method</span>
+						<span className="text-sm text-[var(--dark)] font-semibold">{product.dealingMethod || 'N/A'}</span>
 					</div>
-					<div className={styles.detailItem}>
-						<span className={styles.detailLabel}>Location</span>
-						<span className={styles.detailValue}>{product.location || 'N/A'}</span>
+					<div className="flex flex-col gap-1.5">
+						<span className="text-xs tracking-[1px] uppercase text-[var(--secondary)]">Location</span>
+						<span className="text-sm text-[var(--dark)] font-semibold">{product.location || 'N/A'}</span>
 					</div>
-					<div className={styles.detailItem}>
-						<span className={styles.detailLabel}>Contact</span>
-						<span className={styles.detailValue}>{product.phoneNumber || 'N/A'}</span>
+					<div className="flex flex-col gap-1.5">
+						<span className="text-xs tracking-[1px] uppercase text-[var(--secondary)]">Contact</span>
+						<span className="text-sm text-[var(--dark)] font-semibold">{product.phoneNumber || 'N/A'}</span>
 					</div>
 				</div>
 			</div>
@@ -325,14 +326,14 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 // 	const isOnline = onlineUsers.has(userId);
 
 // 	return (
-// 		<span className={isOnline ? styles.statusOnlineText : styles.statusOfflineText}>
+// 		<span className={isOnline ? 'text-[#22c55e]' : 'text-[var(--secondary)]'}>
 // 		  {showDot && (isOnline ? '●' : '○')}
 // 		  {isOnline ? 'Online' : 'Offline'}
 // 		</span>
 // 	)
 // }
 
-//<Link href={`/chat?partner=${product.sellerId}`} className={styles.button}>Chat Seller</Link>
+//<Link href={`/chat?partner=${product.sellerId}`} className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed">Chat Seller</Link>
 
 // import { useWebSocketContext } from '@/context/WebSocketContext';
 // const { onlineUsers } = useWebSocketContext();
