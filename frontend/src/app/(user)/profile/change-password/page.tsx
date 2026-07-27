@@ -4,7 +4,10 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/Toast/ToastContext";
-import styles from "./change-password.module.css";
+
+const inputClass = "p-3 border border-[#ccc] rounded-md text-base";
+const buttonClass =
+  "p-3 border-0 rounded-md text-white bg-[#e53935] cursor-pointer font-semibold disabled:opacity-[0.65] disabled:cursor-not-allowed";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -68,24 +71,33 @@ export default function ChangePasswordPage() {
   };
 
   return (
-    <main className={styles.main}>
-      <form className={styles.card} onSubmit={tempToken ? confirmChange : requestOtp}>
+    <main className="min-h-screen grid place-items-center bg-[#fafafa] p-6">
+      <form
+        className="w-full max-w-[430px] p-8 bg-white rounded-[10px] shadow-[var(--shadow)] flex flex-col gap-4"
+        onSubmit={tempToken ? confirmChange : requestOtp}
+      >
         <h1>Change password</h1>
         {!tempToken ? (
           <>
-            <input type="password" placeholder="Current password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
-            <input type="password" placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
-            <input type="password" placeholder="Confirm new password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
-            <button disabled={loading}>{loading ? "Sending..." : "Send OTP"}</button>
+            <input type="password" placeholder="Current password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className={inputClass} />
+            <input type="password" placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required className={inputClass} />
+            <input type="password" placeholder="Confirm new password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className={inputClass} />
+            <button disabled={loading} className={buttonClass}>{loading ? "Sending..." : "Send OTP"}</button>
           </>
         ) : (
           <>
             <p>Enter the OTP sent to your registered email.</p>
-            <input inputMode="numeric" placeholder="6-digit OTP" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} required />
-            <button disabled={loading}>{loading ? "Changing..." : "Change password"}</button>
+            <input inputMode="numeric" placeholder="6-digit OTP" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} required className={inputClass} />
+            <button disabled={loading} className={buttonClass}>{loading ? "Changing..." : "Change password"}</button>
           </>
         )}
-        <button type="button" className={styles.secondary} onClick={() => router.push("/profile")}>Cancel</button>
+        <button
+          type="button"
+          className="p-3 border-0 rounded-md text-white bg-[#666] cursor-pointer font-semibold"
+          onClick={() => router.push("/profile")}
+        >
+          Cancel
+        </button>
       </form>
     </main>
   );

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import styles from "../admin.module.css";
 
 type ManagedUser = {
   id: number;
@@ -19,6 +18,12 @@ type AdminSummary = {
   completedOrders: number;
   completedRevenue: number;
 };
+
+const cellClass = "px-4 py-[14px] text-left border-b border-[#eee]";
+const actionButtonClass = "px-4 py-[10px] border-0 rounded-md bg-[#d32f2f] text-white cursor-pointer";
+const summaryCardClass = "p-[18px] bg-white rounded-[10px] shadow-[var(--shadow)] flex flex-col gap-1.5";
+const summaryLabelClass = "text-[#666] text-[.9rem]";
+const summaryValueClass = "text-[1.45rem]";
 
 export default function AdminUsersPage() {
   const router = useRouter();
@@ -97,47 +102,53 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <main className={styles.dashboard}>
-      <div className={styles.heading}>
+    <main className="min-h-screen bg-[#f4f5f7] p-10 max-[700px]:px-3 max-[700px]:py-5">
+      <div className="max-w-[1100px] mx-auto mb-6 flex items-center justify-between gap-5 max-[700px]:items-start">
         <div><h1>User management</h1><p>Suspend or restore marketplace members.</p></div>
-        <button onClick={logout}>Log out</button>
+        <button onClick={logout} className={actionButtonClass}>Log out</button>
       </div>
-      {error && <p className={styles.error}>{error}</p>}
+      {error && <p className="text-[#b42318] max-w-[1100px] mx-auto mb-4">{error}</p>}
       {summary && (
-        <section className={styles.summaryGrid} aria-label="Marketplace summary">
-          <div className={styles.summaryCard}><span>Total users</span><strong>{summary.totalUsers}</strong></div>
-          <div className={styles.summaryCard}><span>Active users</span><strong>{summary.activeUsers}</strong></div>
-          <div className={styles.summaryCard}><span>Suspended users</span><strong>{summary.suspendedUsers}</strong></div>
-          <div className={styles.summaryCard}><span>Active listings</span><strong>{summary.activeListings}</strong></div>
-          <div className={styles.summaryCard}><span>Completed orders</span><strong>{summary.completedOrders}</strong></div>
-          <div className={styles.summaryCard}><span>Completed sales</span><strong>RM {summary.completedRevenue.toFixed(2)}</strong></div>
+        <section className="max-w-[1100px] mx-auto mb-5 grid grid-cols-3 gap-[14px] max-[700px]:grid-cols-2" aria-label="Marketplace summary">
+          <div className={summaryCardClass}><span className={summaryLabelClass}>Total users</span><strong className={summaryValueClass}>{summary.totalUsers}</strong></div>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>Active users</span><strong className={summaryValueClass}>{summary.activeUsers}</strong></div>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>Suspended users</span><strong className={summaryValueClass}>{summary.suspendedUsers}</strong></div>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>Active listings</span><strong className={summaryValueClass}>{summary.activeListings}</strong></div>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>Completed orders</span><strong className={summaryValueClass}>{summary.completedOrders}</strong></div>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>Completed sales</span><strong className={summaryValueClass}>RM {summary.completedRevenue.toFixed(2)}</strong></div>
         </section>
       )}
-      <section className={styles.filters}>
+      <section className="max-w-[1100px] mx-auto mb-4 flex gap-3 max-[700px]:flex-col">
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search username or email"
           aria-label="Search users"
+          className="flex-1 px-3 py-[10px] border border-[#ccc] rounded-md text-base"
         />
-        <select value={status} onChange={(event) => setStatus(event.target.value as "" | "active" | "suspended")} aria-label="Filter users by status">
+        <select
+          value={status}
+          onChange={(event) => setStatus(event.target.value as "" | "active" | "suspended")}
+          aria-label="Filter users by status"
+          className="px-3 py-[10px] border border-[#ccc] rounded-md text-base"
+        >
           <option value="">All statuses</option>
           <option value="active">Active</option>
           <option value="suspended">Suspended</option>
         </select>
       </section>
-      <div className={styles.tableWrap}>
-        <table>
-          <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Status</th><th>Action</th></tr></thead>
+      <div className="max-w-[1100px] mx-auto bg-white rounded-[10px] overflow-x-auto shadow-[var(--shadow)]">
+        <table className="w-full border-collapse">
+          <thead><tr><th className={cellClass}>ID</th><th className={cellClass}>Username</th><th className={cellClass}>Email</th><th className={cellClass}>Status</th><th className={cellClass}>Action</th></tr></thead>
           <tbody>
             {users.map((user) => (
               <tr key={user.id}>
-                <td>{user.id}</td><td>{user.username}</td><td>{user.email}</td>
-                <td><span className={user.accountStatus === "active" ? styles.active : styles.suspended}>{user.accountStatus}</span></td>
-                <td><button onClick={() => changeStatus(user)}>{user.accountStatus === "active" ? "Suspend" : "Restore"}</button></td>
+                <td className={cellClass}>{user.id}</td><td className={cellClass}>{user.username}</td><td className={cellClass}>{user.email}</td>
+                <td className={cellClass}><span className={user.accountStatus === "active" ? "inline-block px-[9px] py-[5px] rounded-full font-semibold text-[#176b36] bg-[#dff5e7]" : "inline-block px-[9px] py-[5px] rounded-full font-semibold text-[#962d22] bg-[#fde2df]"}>{user.accountStatus}</span></td>
+                <td className={cellClass}><button onClick={() => changeStatus(user)} className={actionButtonClass}>{user.accountStatus === "active" ? "Suspend" : "Restore"}</button></td>
               </tr>
             ))}
-			{users.length === 0 && <tr><td colSpan={5} className={styles.empty}>No users match this filter.</td></tr>}
+			{users.length === 0 && <tr><td colSpan={5} className="px-4 py-[14px] border-b border-[#eee] text-center text-[#666]">No users match this filter.</td></tr>}
           </tbody>
         </table>
       </div>

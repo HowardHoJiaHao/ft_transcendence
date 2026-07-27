@@ -6,7 +6,6 @@ import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header/Header';
 import ChatModal from './ChatModal';
 import type { PrivateMessage, Conversation } from '@/types/websocket';
-import styles from './chat.module.css';
 
 export default function ChatPage() {
 	const { user } = useAuth();
@@ -63,7 +62,7 @@ export default function ChatPage() {
 		}
 	};
 
-	const openChat = async (partnerId: number) => 
+	const openChat = async (partnerId: number) =>
 	{
 		//setSelectedPartner(partnerId);
 		try
@@ -104,23 +103,23 @@ export default function ChatPage() {
 	return (
         <main>
 		  <Header />
-            <div className={styles.container}>
-              <h1 className={styles.title}>Your Conversations</h1>
+            <div className="p-5 max-w-[800px] mx-auto">
+              <h1 className="text-2xl mb-5">Your Conversations</h1>
               {conversations.length === 0 ? (
-            	<div className={styles.emptyState}>No conversations yet.</div>
+            	<div className="text-center text-[#666] text-lg mt-[50px]">No conversations yet.</div>
               ) : (
-                <ul className={styles.conversationList}>
+                <ul className="list-none p-0">
                   {conversations.map((conv) =>
-                    <li key={conv.partner_id} onClick={() => openChat(conv.partner_id)} className={styles.conversationItem}>
-                      <div className={styles.avatar}>
-                    	{conv.partner_avatar_url ? 
-                    	  (<img src={conv.partner_avatar_url} alt="" />) : (<span className={styles.avatarPlaceholder}>{conv.partner_username[0]}</span>)}
+                    <li key={conv.partner_id} onClick={() => openChat(conv.partner_id)} className="flex items-center p-[10px] border-b border-[#eee] cursor-pointer hover:bg-[#f5f5f5]">
+                      <div className="w-10 h-10 rounded-full mr-[10px]">
+                    	{conv.partner_avatar_url ?
+                    	  (<img src={conv.partner_avatar_url} alt="" className="w-full h-full rounded-full object-cover" />) : (<span className="w-full h-full rounded-full bg-[#ccc] flex items-center justify-center text-white font-bold">{conv.partner_username[0]}</span>)}
                       </div>
-                      <div className={styles.conversationInfo}>
-                    	<div className={styles.conversationName}>{conv.partner_username}</div>
+                      <div className="flex-1">
+                    	<div className="font-bold m-0">{conv.partner_username}</div>
                       </div>
-                      <div className={styles.conversationActions}>
-                        <button className={styles.delete} onClick={(e) => deleteConversation(conv.partner_id, e)} title="Delete conversation">x</button>
+                      <div className="flex items-center gap-2">
+                        <button className="bg-transparent border-none text-[#ff6b6b] cursor-pointer text-base" onClick={(e) => deleteConversation(conv.partner_id, e)} title="Delete conversation">x</button>
                         {/*<div>{new Date(conv.last_message_at).toLocaleDateString()}</div>*/}
                       </div>
                     </li>
