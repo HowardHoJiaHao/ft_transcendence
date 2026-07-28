@@ -30,7 +30,7 @@ export default function Header({
   const router = useRouter();
   const { user, logout } = useAuth();
   const { itemCount } = useCart();
-  const { t, lang, setLang } = useI18n();
+  const { t, lang, setLang } = useI18n(); // connection to the useI18n and pull these functions
   const { searchQuery, setSearchQuery, handleSearch } = useSearch();
   const activeSearchValue = searchValue ?? searchQuery;
   const handleSearchChange = onSearchChange ?? setSearchQuery;
