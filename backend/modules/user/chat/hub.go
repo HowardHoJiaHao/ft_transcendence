@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -28,6 +29,7 @@ type Hub struct {
 	Broadcast  chan []byte
 	Register   chan *Client
 	Unregister chan int
+	Snapshots  chan chan []int
 	Repo       *Repository
 }
 
@@ -38,6 +40,7 @@ func NewHub(repo *Repository) *Hub {
 		Broadcast:  make(chan []byte, 256),
 		Register:   make(chan *Client, 256),
 		Unregister: make(chan int, 256),
+		Snapshots:  make(chan chan []int),
 		Repo:       repo,
 	}
 }
@@ -98,6 +101,13 @@ func (h *Hub) Run() {
 				}
 			}
 
+		case reply := <-h.Snapshots:
+			userIDs := make([]int, 0, len(h.Clients))
+			for userID := range h.Clients {
+				userIDs = append(userIDs, userID)
+			}
+			reply <- userIDs
+
 		case msg := <-h.Send:
 			if client, ok := h.Clients[msg.ToUserId]; ok {
 				select {
@@ -117,6 +127,24 @@ func (h *Hub) Run() {
 				}
 			}
 		}
+	}
+}
+
+// OnlineUserIDs returns a consistent snapshot without accessing the hub map
+// outside the hub's event loop.
+func (h *Hub) OnlineUserIDs(ctx context.Context) ([]int, error) {
+	reply := make(chan []int, 1)
+	select {
+	case h.Snapshots <- reply:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	select {
+	case userIDs := <-reply:
+		return userIDs, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 

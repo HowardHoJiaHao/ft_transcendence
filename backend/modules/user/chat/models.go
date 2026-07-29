@@ -43,3 +43,10 @@ type OnlineUsersMessage struct {
 	Type    string `json:"type"`
 	UserIds []int  `json:"user_ids"`
 }
+
+// OnlineUser is the minimal profile information needed to start a chat.
+type OnlineUser struct {
+	ID        int     `json:"id"`
+	Username  string  `json:"username"`
+	AvatarURL *string `json:"avatar_url,omitempty"`
+}

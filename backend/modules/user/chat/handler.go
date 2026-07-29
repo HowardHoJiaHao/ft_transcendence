@@ -28,6 +28,7 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.GET("/ws", h.WebSocketHandler)
 	protected.POST("/messages", h.SendMessage)
 	protected.GET("/conversations", h.GetConversations)
+	protected.GET("/online-users", h.GetOnlineUsers)
 	protected.DELETE("/conversations/:userId", h.DeleteConversation)
 	protected.GET("/messages/:userId", h.GetMessages)
 }
@@ -105,6 +106,32 @@ func (h *Handler) GetConversations(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{"conversations": conversations})
+}
+
+func (h *Handler) GetOnlineUsers(c echo.Context) error {
+	currentUserID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
+
+	onlineIDs, err := h.Hub.OnlineUserIDs(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "online users unavailable"})
+	}
+
+	users := make([]OnlineUser, 0, len(onlineIDs))
+	for _, userID := range onlineIDs {
+		if userID == currentUserID {
+			continue
+		}
+		user, err := h.Repo.GetUserByID(userID)
+		if err != nil || user.AccountStatus != "active" {
+			continue
+		}
+		users = append(users, OnlineUser{ID: user.ID, Username: user.Username, AvatarURL: user.AvatarURL})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"users": users})
 }
 
 func (h *Handler) GetMessages(c echo.Context) error {

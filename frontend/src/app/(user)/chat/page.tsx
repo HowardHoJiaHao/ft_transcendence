@@ -3,14 +3,19 @@
 import React, { useState, useEffect } from 'react';
 
 import { useAuth } from '@/context/AuthContext';
+import { useWebSocketContext } from '@/context/WebSocketContext';
+import { useI18n } from '@/context/LanguageContext';
 import Header from '@/components/Header/Header';
 import ChatModal from './ChatModal';
-import type { PrivateMessage, Conversation } from '@/types/websocket';
+import type { PrivateMessage, Conversation, OnlineUser } from '@/types/websocket';
 import styles from './chat.module.css';
 
 export default function ChatPage() {
 	const { user } = useAuth();
+	const { onlineUsers } = useWebSocketContext();
+	const { t } = useI18n();
 	const [conversations, setConversations] = useState<Conversation[]>([]);
+	const [onlineChatUsers, setOnlineChatUsers] = useState<OnlineUser[]>([]);
 	const [selectedPartner, setSelectedPartner] = useState<number | null>(null);
 	const [messages, setMessages] = useState<PrivateMessage[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -19,6 +24,11 @@ export default function ChatPage() {
 		if (user)
 			fetchConversations();
 	}, [user]);
+
+	useEffect(() => {
+		if (user)
+			fetchOnlineUsers();
+	}, [user, onlineUsers]);
 
 	const deleteConversation = async (partnerId: number, e: React.MouseEvent) => {
 		e.stopPropagation();
@@ -60,6 +70,22 @@ export default function ChatPage() {
 		finally
 		{
 			setLoading(false);
+		}
+	};
+
+	const fetchOnlineUsers = async () => {
+		try {
+			const token = localStorage.getItem('token') || `token_${user?.id}`;
+			const res = await fetch('/api/v1/online-users', {
+				headers: { Authorization: `Bearer ${token}` },
+			});
+			if (res.ok) {
+				const data = await res.json();
+				setOnlineChatUsers(data.users || []);
+			}
+		}
+		catch (err) {
+			console.error('Failed to fetch online users: ', err);
 		}
 	};
 
@@ -105,9 +131,33 @@ export default function ChatPage() {
         <main>
 		  <Header />
             <div className={styles.container}>
-              <h1 className={styles.title}>Your Conversations</h1>
+              <h1 className={styles.title}>{t('chat.title')}</h1>
+              <section className={styles.onlineSection} aria-labelledby="online-users-heading">
+                <h2 id="online-users-heading" className={styles.sectionTitle}>{t('chat.onlineNow')}</h2>
+                {onlineChatUsers.length === 0 ? (
+                  <p className={styles.onlineEmpty}>{t('chat.noOnlineUsers')}</p>
+                ) : (
+                  <ul className={styles.onlineUserList}>
+                    {onlineChatUsers.map((onlineUser) => (
+                      <li key={onlineUser.id}>
+                        <button className={styles.onlineUser} onClick={() => openChat(onlineUser.id)}>
+                          <span className={styles.avatar}>
+                            {onlineUser.avatar_url ? (
+                              <img src={onlineUser.avatar_url} alt="" />
+                            ) : (
+                              <span className={styles.avatarPlaceholder}>{onlineUser.username[0]}</span>
+                            )}
+                          </span>
+                          <span className={styles.onlineUserName}>{onlineUser.username}</span>
+                          <span className={styles.onlineDot} aria-label={t('chat.online')} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
               {conversations.length === 0 ? (
-            	<div className={styles.emptyState}>No conversations yet.</div>
+                <div className={styles.emptyState}>{t('chat.noConversations')}</div>
               ) : (
                 <ul className={styles.conversationList}>
                   {conversations.map((conv) =>

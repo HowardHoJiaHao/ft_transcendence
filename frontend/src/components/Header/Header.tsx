@@ -44,7 +44,6 @@ export default function Header({
 			<Link href="/" className={styles.logo}><h1>🏸 RacketDiction 💉 </h1></Link>
             <SearchBar value={activeSearchValue} onChange={handleSearchChange} onSubmit={submitSearch} />
             <div className={styles.headerActions}>
-			  <Link href="/admin/login" className="btn btn-secondary btn-sm">Admin</Link>
               {user ? (
                 <>
                   <Link href="/profile" className="btn btn-secondary btn-sm">{user.username}</Link>

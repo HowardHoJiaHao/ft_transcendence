@@ -12,6 +12,16 @@
     "ms": "Bahasa Melayu",
     "zh": "中文"
   },
+  "chat": {
+    "title": "您的对话",
+    "onlineNow": "当前在线",
+    "online": "在线",
+    "noOnlineUsers": "目前没有其他用户在线。",
+    "noConversations": "暂无对话。"
+  },
+  "auth": {
+    "adminLogin": "管理员登录"
+  },
   "myShop": {
     "back": "← 返回",
     "heading": "🏪 我的店铺",

@@ -12,6 +12,16 @@
     "ms": "Bahasa Melayu",
     "zh": "中文"
   },
+  "chat": {
+    "title": "Your Conversations",
+    "onlineNow": "Online now",
+    "online": "Online",
+    "noOnlineUsers": "No other users are online right now.",
+    "noConversations": "No conversations yet."
+  },
+  "auth": {
+    "adminLogin": "Admin login"
+  },
   "myShop": {
     "back": "← Back",
     "heading": "🏪 My Shop",

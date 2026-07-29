@@ -12,6 +12,16 @@
     "ms": "Bahasa Melayu",
     "zh": "中文"
   },
+  "chat": {
+    "title": "Perbualan Anda",
+    "onlineNow": "Dalam talian sekarang",
+    "online": "Dalam talian",
+    "noOnlineUsers": "Tiada pengguna lain dalam talian sekarang.",
+    "noConversations": "Belum ada perbualan."
+  },
+  "auth": {
+    "adminLogin": "Log masuk pentadbir"
+  },
   "myShop": {
     "back": "← Kembali",
     "heading": "🏪 Kedai Saya",

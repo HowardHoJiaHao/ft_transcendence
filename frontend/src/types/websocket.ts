@@ -13,6 +13,12 @@ export interface Conversation {
 	last_message_at: string;
 }
 
+export interface OnlineUser {
+	id: number;
+	username: string;
+	avatar_url?: string;
+}
+
 export interface WSPrivateMessage {
 	type: 'private_message';
 	sender_id: number;

@@ -1,7 +1,9 @@
 'use client';
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';;
 import { useToast } from '@/components/Toast/ToastContext';
+import { useI18n } from '@/context/LanguageContext';
 import { useRouter } from 'next/navigation';
 import styles from './login.module.css';
 
@@ -17,6 +19,7 @@ export default function LoginPage ()
 	const [resendCd, setResendCd] = useState(0)
 	const { login } = useAuth(); //only take login from useauth()
 	const { showToast } = useToast();
+	const { t } = useI18n();
 	const router = useRouter(); //so when instead of calling userRouter() call router only
 
 	//useEffect accepts 2 parameter. 1. anonymous fx 2. dependency array - makes useEffect keeps watching it, everytime it changes it redo 
@@ -201,6 +204,11 @@ export default function LoginPage ()
 					<img src="/google-icon.svg" alt="" className={styles.googleIcon}/>
 					Sign in with Google
 				</button>
+				{!isRegister && (
+					<Link href="/admin/login" className={styles.adminLoginButton}>
+						{t('auth.adminLogin')}
+					</Link>
+				)}
 				<p className={styles.toggle} onClick={() => setIsRegister(!isRegister)}>
 					{isRegister ? 'Already have an account? Login' : `Dont't have an account? Register`}
 				</p>
