@@ -22,6 +22,8 @@ function notificationTarget(item: AppNotification) {
       return '/profile/my-ads?tab=pending';
     case 'order_completed':
       return '/cart';
+    case 'review_added':
+      return item.data.listingId ? `/products/${item.data.listingId}` : '/';
   }
 }
 
@@ -31,6 +33,7 @@ function notificationIcon(type: AppNotification['type']) {
     case 'friend_added': return '👥';
     case 'order_new': return '🛍️';
     case 'order_completed': return '✓';
+    case 'review_added': return '★';
   }
 }
 
@@ -92,6 +95,8 @@ export default function NotificationBell({ onBeforeOpen }: NotificationBellProps
         });
       case 'order_completed':
         return t('notifications.orderCompleted', { name: actor, title });
+      case 'review_added':
+        return t('notifications.reviewAdded', { name: actor, title, rating: item.data.rating || 0 });
     }
   };
 

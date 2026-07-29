@@ -60,6 +60,7 @@ func main() {
 	v1.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
 	v1.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
 	v1.GET("/products/:id/images", func(c echo.Context) error { return getListingImages(c, gormDB) })
+	v1.GET("/products/:id/reviews", func(c echo.Context) error { return getListingReviews(c, gormDB) })
 
 	// protected product routes
 	protected := e.Group("/api/v1")
@@ -92,6 +93,10 @@ func main() {
 	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
 	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	protected.POST("/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
+	protected.GET("/products/:id/review-eligibility", func(c echo.Context) error { return getListingReviewEligibility(c, gormDB) })
+	protected.POST("/products/:id/reviews", func(c echo.Context) error {
+		return createListingReview(c, gormDB, notificationService)
+	})
 
 	protected.POST("/orders", func(c echo.Context) error {
 		return createOrdersWithNotifications(c, gormDB, notificationService)

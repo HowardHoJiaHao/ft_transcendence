@@ -135,6 +135,23 @@ CREATE TABLE IF NOT EXISTS orders (
     FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
 );
 
+-- Product-specific reviews are intentionally separate from the older
+-- seller-review table above. A completed buyer can review a listing once.
+CREATE TABLE IF NOT EXISTS listing_reviews (
+    id BIGSERIAL PRIMARY KEY,
+    listing_id INT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+    reviewer_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    order_id INT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
+    rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment TEXT NOT NULL CHECK (char_length(btrim(comment)) BETWEEN 1 AND 1000),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT listing_reviews_listing_reviewer_unique UNIQUE (listing_id, reviewer_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_listing_reviews_listing_newest
+ON listing_reviews(listing_id, created_at DESC, id DESC);
+
 -- Create API keys table for authentication
 CREATE TABLE IF NOT EXISTS api_keys (
     id SERIAL PRIMARY KEY,
@@ -209,7 +226,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     user_id INT NOT NULL,
     actor_id INT,
     notification_type VARCHAR(40) NOT NULL CONSTRAINT notifications_type_check CHECK (
-        notification_type IN ('message', 'friend_added', 'order_new', 'order_completed')
+        notification_type IN ('message', 'friend_added', 'order_new', 'order_completed', 'review_added')
     ),
     resource_id INT,
     data JSONB NOT NULL DEFAULT '{}'::jsonb,

@@ -193,6 +193,7 @@ jobs:
                'messages',
                'notifications',
                'reviews',
+               'listing_reviews',
                'api_keys',
                'api_request_logs',
                'analytics_events',
@@ -201,7 +202,7 @@ jobs:
 
           assert_sql_true \
             "required cross-feature columns" \
-            "SELECT count(*) = 21
+            "SELECT count(*) = 25
              FROM (VALUES
                ('users', 'account_status'),
                ('users', 'oauth_id'),
@@ -217,6 +218,10 @@ jobs:
                ('notifications', 'notification_type'),
                ('notifications', 'data'),
                ('notifications', 'read_at'),
+               ('listing_reviews', 'listing_id'),
+               ('listing_reviews', 'reviewer_id'),
+               ('listing_reviews', 'order_id'),
+               ('listing_reviews', 'rating'),
                ('api_keys', 'key_hash'),
                ('api_keys', 'rate_limit'),
                ('analytics_events', 'listing_id'),
@@ -240,6 +245,7 @@ jobs:
                'idx_notifications_user_order',
                'idx_notifications_user_unread',
                'idx_notifications_unread_message_group',
+               'idx_listing_reviews_listing_newest',
                'idx_knowledge_chunks_active',
                'idx_knowledge_chunks_search'
              ]) AS required(index_name);"

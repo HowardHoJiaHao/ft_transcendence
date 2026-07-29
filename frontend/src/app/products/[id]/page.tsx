@@ -1,11 +1,12 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 
 import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast/ToastContext';
+import { useI18n } from '@/context/LanguageContext';
 import OnlineStatus from '@/components/OnlineStatus';
 import ChatModal from '@/app/(user)/chat/ChatModal'
 import Header from '@/components/Header/Header'
@@ -36,11 +37,37 @@ interface Product {
 	description: string;
 }
 
+interface ListingReview {
+	id: number;
+	listingId: number;
+	reviewer: {
+		id: number;
+		username: string;
+		avatarUrl?: string;
+	};
+	rating: number;
+	comment: string;
+	createdAt: string;
+}
+
+interface ListingReviewsResponse {
+	reviews: ListingReview[];
+	total: number;
+	averageRating: number;
+	nextOffset: number | null;
+}
+
+interface ReviewEligibility {
+	canReview: boolean;
+	reason?: 'own_listing' | 'already_reviewed' | 'completed_order_required';
+}
+
 export default function ProductPage({ params }: { params: Promise<{ id: string}> })
 {
 	const { user: currentUser } = useAuth();
 	const { addToCart, items } = useCart();
 	const { showToast } = useToast();
+	const { t, lang } = useI18n();
 	const [chatOpen, setChatOpen] = useState(false);
 	const [chatMessages, setChatMessages] = useState<any[]>([]);
 	const [chatLoading, setChatLoading] = useState(false);
@@ -57,6 +84,18 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const [imageIndex, setImageIndex] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [listingReviews, setListingReviews] = useState<ListingReview[]>([]);
+	const [reviewTotal, setReviewTotal] = useState(0);
+	const [averageReviewRating, setAverageReviewRating] = useState(0);
+	const [nextReviewOffset, setNextReviewOffset] = useState<number | null>(null);
+	const [reviewsLoading, setReviewsLoading] = useState(true);
+	const [reviewsLoadingMore, setReviewsLoadingMore] = useState(false);
+	const [reviewsError, setReviewsError] = useState(false);
+	const [reviewEligibility, setReviewEligibility] = useState<ReviewEligibility | null>(null);
+	const [eligibilityLoading, setEligibilityLoading] = useState(false);
+	const [selectedRating, setSelectedRating] = useState(0);
+	const [reviewComment, setReviewComment] = useState('');
+	const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
 	const resolveImageUrl = (url?: string) => {
 		if (!url)
@@ -72,6 +111,45 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 			return defaultAvatarUrl;
 		return resolveImageUrl(url);
 	}
+	const loadReviews = useCallback(async (offset = 0) => {
+		if (offset === 0) setReviewsLoading(true);
+		else setReviewsLoadingMore(true);
+		setReviewsError(false);
+		try {
+			const response = await fetch(`${apiBaseUrl}/api/v1/products/${productId}/reviews?limit=10&offset=${offset}`);
+			if (!response.ok) throw new Error('failed to fetch reviews');
+			const data = await response.json() as ListingReviewsResponse;
+			setListingReviews(previous => offset === 0 ? data.reviews : [...previous, ...data.reviews]);
+			setReviewTotal(data.total);
+			setAverageReviewRating(data.averageRating);
+			setNextReviewOffset(data.nextOffset);
+		} catch {
+			setReviewsError(true);
+		} finally {
+			if (offset === 0) setReviewsLoading(false);
+			else setReviewsLoadingMore(false);
+		}
+	}, [apiBaseUrl, productId]);
+
+	const loadReviewEligibility = useCallback(async () => {
+		if (!currentUser?.id) {
+			setReviewEligibility(null);
+			return;
+		}
+		setEligibilityLoading(true);
+		try {
+			const token = localStorage.getItem('token');
+			const response = await fetch(`${apiBaseUrl}/api/v1/products/${productId}/review-eligibility`, {
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
+			});
+			if (!response.ok) throw new Error('failed to check review eligibility');
+			setReviewEligibility(await response.json() as ReviewEligibility);
+		} catch {
+			setReviewEligibility({ canReview: false, reason: 'completed_order_required' });
+		} finally {
+			setEligibilityLoading(false);
+		}
+	}, [apiBaseUrl, currentUser?.id, productId]);
 
 	//fetch the product
 	const fetchChatHistory = async (partnerId: number) => {
@@ -155,6 +233,14 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		}
 	}, [productId, apiBaseUrl]);
 
+	useEffect(() => {
+		if (!isNaN(productId)) void loadReviews();
+	}, [loadReviews, productId]);
+
+	useEffect(() => {
+		if (!isNaN(productId)) void loadReviewEligibility();
+	}, [loadReviewEligibility, productId]);
+
 	if (loading) return <div>Loading...</div>;
 	if (error) return <div>{error}</div>;
 	if (!product) return null;
@@ -191,6 +277,44 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		}
 		addToCart({id: product.id, title: product.title, price: product.price, image: product.image}, Math.min(quantity, remainingStock));
 		showToast('Added to cart', 'success');
+	};
+	const reviewEligibilityMessage = () => {
+		if (!currentUser?.id) return t('productReviews.signInRequired');
+		switch (reviewEligibility?.reason) {
+			case 'own_listing': return t('productReviews.ownListing');
+			case 'already_reviewed': return t('productReviews.alreadyReviewed');
+			default: return t('productReviews.completedOrderRequired');
+		}
+	};
+	const handleReviewSubmit = async (event: React.FormEvent) => {
+		event.preventDefault();
+		if (selectedRating < 1 || !reviewComment.trim()) {
+			showToast(t('productReviews.validationRequired'), 'error');
+			return;
+		}
+		setReviewSubmitting(true);
+		try {
+			const token = localStorage.getItem('token');
+			const response = await fetch(`${apiBaseUrl}/api/v1/products/${productId}/reviews`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+				body: JSON.stringify({ rating: selectedRating, comment: reviewComment.trim() }),
+			});
+			const result = await response.json().catch(() => ({}));
+			if (!response.ok) throw new Error(result.error || t('productReviews.submitFailed'));
+			setSelectedRating(0);
+			setReviewComment('');
+			setReviewEligibility({ canReview: false, reason: 'already_reviewed' });
+			showToast(t('productReviews.submitSuccess'), 'success');
+			await loadReviews();
+		} catch (submitError) {
+			showToast(submitError instanceof Error ? submitError.message : t('productReviews.submitFailed'), 'error');
+		} finally {
+			setReviewSubmitting(false);
+		}
 	};
 
 	return (
@@ -312,6 +436,114 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 					</div>
 				</div>
 			</div>
+
+			<section className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex flex-col w-[90%] max-w-[1138px] h-auto my-6 mx-auto gap-5 break-words" aria-labelledby="product-reviews-heading">
+				<div className="flex items-start justify-between gap-4 max-[600px]:flex-col">
+					<div>
+						<h2 id="product-reviews-heading" className="m-0 text-xl text-[var(--dark)]">{t('productReviews.title')}</h2>
+						<p className="m-0 mt-1 text-sm text-[var(--secondary)]">
+							{reviewTotal > 0
+								? t('productReviews.summary', { rating: averageReviewRating.toFixed(1), count: reviewTotal })
+								: t('productReviews.noRatings')}
+						</p>
+					</div>
+					{reviewTotal > 0 && (
+						<span className="text-lg tracking-wide text-[#f59e0b]" aria-label={t('productReviews.averageAria', { rating: averageReviewRating.toFixed(1) })}>
+							{'★'.repeat(Math.round(averageReviewRating))}{'☆'.repeat(5 - Math.round(averageReviewRating))}
+						</span>
+					)}
+				</div>
+
+				{currentUser?.id && eligibilityLoading && (
+					<p className="m-0 text-sm text-[var(--secondary)]">{t('productReviews.checkingEligibility')}</p>
+				)}
+				{currentUser?.id && !eligibilityLoading && reviewEligibility?.canReview && (
+					<form onSubmit={handleReviewSubmit} className="border border-[#e5e7eb] rounded-lg p-4 bg-[#fafafa] flex flex-col gap-3">
+						<h3 className="m-0 text-base text-[var(--dark)]">{t('productReviews.writeReview')}</h3>
+						<div role="radiogroup" aria-label={t('productReviews.ratingLabel')} className="flex gap-1">
+							{[1, 2, 3, 4, 5].map(star => (
+								<button
+									key={star}
+									type="button"
+									role="radio"
+									aria-checked={selectedRating === star}
+									aria-label={t('productReviews.starOption', { count: star })}
+									onClick={() => setSelectedRating(star)}
+									className={`border-0 bg-transparent p-0 text-2xl cursor-pointer ${star <= selectedRating ? 'text-[#f59e0b]' : 'text-[#d1d5db]'}`}
+								>
+									★
+								</button>
+							))}
+						</div>
+						<label className="flex flex-col gap-1.5 text-sm font-semibold text-[var(--dark)]">
+							{t('productReviews.commentLabel')}
+							<textarea
+								value={reviewComment}
+								onChange={event => setReviewComment(event.target.value.slice(0, 1000))}
+								maxLength={1000}
+								required
+								rows={4}
+								placeholder={t('productReviews.commentPlaceholder')}
+								className="resize-y border border-[#d1d5db] rounded-md p-2.5 text-sm font-normal focus:outline-none focus:border-[var(--primary)]"
+							/>
+						</label>
+						<div className="flex items-center justify-between gap-3 max-[480px]:flex-col max-[480px]:items-start">
+							<span className="text-xs text-[var(--secondary)]">{t('productReviews.characterCount', { count: reviewComment.length, max: 1000 })}</span>
+							<button type="submit" disabled={reviewSubmitting} className="bg-[var(--primary)] text-white border-none px-4 py-2 rounded-md cursor-pointer text-sm disabled:bg-[#9ca3af] disabled:cursor-not-allowed">
+								{reviewSubmitting ? t('productReviews.submitting') : t('productReviews.submit')}
+							</button>
+						</div>
+					</form>
+				)}
+				{!currentUser?.id ? (
+					<p className="m-0 text-sm text-[var(--secondary)]">
+						{t('productReviews.signInRequired')} <Link href="/login" className="text-[var(--primary)] font-semibold">{t('productReviews.signIn')}</Link>
+					</p>
+				) : !eligibilityLoading && !reviewEligibility?.canReview && (
+					<p className="m-0 text-sm text-[var(--secondary)]">{reviewEligibilityMessage()}</p>
+				)}
+
+				{reviewsLoading ? (
+					<p className="m-0 py-6 text-center text-sm text-[var(--secondary)]">{t('productReviews.loading')}</p>
+				) : reviewsError ? (
+					<div className="py-6 text-center">
+						<p className="m-0 mb-3 text-sm text-red-700">{t('productReviews.loadFailed')}</p>
+						<button type="button" onClick={() => void loadReviews()} className="btn btn-secondary btn-sm">{t('productReviews.retry')}</button>
+					</div>
+				) : listingReviews.length === 0 ? (
+					<p className="m-0 py-6 text-center text-sm text-[var(--secondary)]">{t('productReviews.empty')}</p>
+				) : (
+					<div className="flex flex-col divide-y divide-[#eeeeec]">
+						{listingReviews.map(review => (
+							<article key={review.id} className="py-4 first:pt-0 last:pb-0 flex gap-3">
+								<img
+									src={resolveAvatarUrl(review.reviewer.avatarUrl)}
+									alt=""
+									className="w-10 h-10 shrink-0 rounded-full object-cover bg-[#f3f4f6]"
+									onError={event => { event.currentTarget.src = defaultAvatarUrl; }}
+								/>
+								<div className="min-w-0 flex-1">
+									<div className="flex gap-2 items-center flex-wrap">
+										<Link href={`/user/${review.reviewer.id}`} className="font-semibold text-sm text-[var(--dark)] no-underline hover:underline">{review.reviewer.username}</Link>
+										<span className="text-sm tracking-wide text-[#f59e0b]" aria-label={t('productReviews.reviewRatingAria', { rating: review.rating })}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+										<time dateTime={review.createdAt} className="text-xs text-[var(--secondary)]">{new Intl.DateTimeFormat(lang, { dateStyle: 'medium' }).format(new Date(review.createdAt))}</time>
+									</div>
+									<p className="m-0 mt-1.5 whitespace-pre-wrap text-sm text-[var(--secondary)]">{review.comment}</p>
+								</div>
+							</article>
+						))}
+					</div>
+				)}
+				{!reviewsLoading && !reviewsError && listingReviews.length > 0 && (
+					<div className="text-center pt-1">
+						{nextReviewOffset !== null ? (
+							<button type="button" disabled={reviewsLoadingMore} onClick={() => void loadReviews(nextReviewOffset)} className="bg-transparent border-0 text-[var(--primary)] font-semibold text-sm cursor-pointer disabled:opacity-50">
+								{reviewsLoadingMore ? t('productReviews.loadingMore') : t('productReviews.loadMore')}
+							</button>
+						) : <span className="text-xs text-[var(--secondary)]">{t('productReviews.end')}</span>}
+					</div>
+				)}
+			</section>
 
 		{chatOpen && product && (
 			<ChatModal

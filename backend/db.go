@@ -44,6 +44,11 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 		return nil, nil, nil, fmt.Errorf("notifications migration failed: %w", err)
 	}
 
+	if err := runListingReviewsMigration(rawDB); err != nil {
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("listing reviews migration failed: %w", err)
+	}
+
 	log.Println("Database connected successfully")
 
 	cleanup := func() {
@@ -156,17 +161,9 @@ func runNotificationsMigration(db *sql.DB) error {
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`DO $$
-		BEGIN
-			IF NOT EXISTS (
-				SELECT 1 FROM pg_constraint
-				WHERE conname = 'notifications_type_check'
-			) THEN
-				ALTER TABLE notifications
-				ADD CONSTRAINT notifications_type_check
-				CHECK (notification_type IN ('message', 'friend_added', 'order_new', 'order_completed'));
-			END IF;
-		END $$`,
+		`ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check`,
+		`ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
+			CHECK (notification_type IN ('message', 'friend_added', 'order_new', 'order_completed', 'review_added'))`,
 		`CREATE INDEX IF NOT EXISTS idx_notifications_user_order
 		 ON notifications(user_id, updated_at DESC, id DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
@@ -182,6 +179,31 @@ func runNotificationsMigration(db *sql.DB) error {
 		}
 	}
 	log.Println("Notifications migration completed")
+	return nil
+}
+
+func runListingReviewsMigration(db *sql.DB) error {
+	migrations := []string{
+		`CREATE TABLE IF NOT EXISTS listing_reviews (
+			id BIGSERIAL PRIMARY KEY,
+			listing_id INT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+			reviewer_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			order_id INT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
+			rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+			comment TEXT NOT NULL CHECK (char_length(btrim(comment)) BETWEEN 1 AND 1000),
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT listing_reviews_listing_reviewer_unique UNIQUE (listing_id, reviewer_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_listing_reviews_listing_newest
+			ON listing_reviews(listing_id, created_at DESC, id DESC)`,
+	}
+	for _, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("Listing reviews migration completed")
 	return nil
 }
 

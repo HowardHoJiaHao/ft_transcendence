@@ -2,7 +2,8 @@ export type NotificationType =
   | 'message'
   | 'friend_added'
   | 'order_new'
-  | 'order_completed';
+  | 'order_completed'
+  | 'review_added';
 
 export type NotificationActor = {
   id: number;
@@ -18,6 +19,7 @@ export type NotificationData = {
   listingId?: number;
   listingTitle?: string;
   quantity?: number;
+  rating?: number;
 };
 
 export type AppNotification = {

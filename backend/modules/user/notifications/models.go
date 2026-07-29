@@ -10,6 +10,7 @@ const (
 	TypeFriendAdded    = "friend_added"
 	TypeOrderNew       = "order_new"
 	TypeOrderCompleted = "order_completed"
+	TypeReviewAdded    = "review_added"
 )
 
 type Actor struct {
