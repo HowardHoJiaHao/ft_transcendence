@@ -16,8 +16,34 @@
     "title": "Perbualan Anda",
     "onlineNow": "Dalam talian sekarang",
     "online": "Dalam talian",
+    "offline": "Luar talian",
     "noOnlineUsers": "Tiada pengguna lain dalam talian sekarang.",
-    "noConversations": "Belum ada perbualan."
+    "noConversations": "Belum ada perbualan.",
+    "people": "Pengguna",
+    "searchPeople": "Cari pengguna",
+    "searchPeoplePlaceholder": "Cari ahli, pembeli atau penjual…",
+    "peopleFilters": "Penapis pengguna",
+    "allPeople": "Semua",
+    "sellers": "Penjual",
+    "buyers": "Pembeli",
+    "noPeople": "Tiada pengguna sepadan dengan carian anda.",
+    "scrollForMore": "Tatal untuk memuatkan lagi",
+    "personActions": "Tindakan pengguna",
+    "addFriend": "Tambah rakan",
+    "viewProfile": "Lihat profil",
+    "friendAdded": "Rakan ditambah.",
+    "friendAddError": "Tidak dapat menambah rakan.",
+    "peopleLoadError": "Tidak dapat memuatkan pengguna.",
+    "deleteConversation": "Padam perbualan"
+  },
+  "common": {
+    "loading": "Memuatkan…"
+  },
+  "profile": {
+    "phoneNo": "Nombor telefon",
+    "gender": "Jantina",
+    "dateOfBirth": "Tarikh lahir",
+    "notProvided": "Tidak diberikan"
   },
   "auth": {
     "adminLogin": "Log masuk pentadbir"

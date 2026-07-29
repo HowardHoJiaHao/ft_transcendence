@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Header from '@/components/Header/Header';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useAuth } from '@/context/AuthContext';;
+import { useI18n } from '@/context/LanguageContext';
 import ChatModal from '@/app/(user)/chat/ChatModal';
 import { useWebSocketContext } from '@/context/WebSocketContext';
 
@@ -68,6 +69,7 @@ export default function UserPage()
 	const [chatLoading, setChatLoading] = useState(false);
 
 	const { showToast } = useToast();
+	const { t } = useI18n();
 	const { onlineUsers } = useWebSocketContext();
 	const resolveAvatarUrl = (url?: string) => {
 		if (!url)
@@ -86,6 +88,11 @@ export default function UserPage()
 		if (url.startsWith('/'))
 			return `${apiBaseUrl}${url}`;
 		return `${apiBaseUrl}/${url}`;
+	}
+	const formatDateOfBirth = (dateOfBirth?: string) => {
+		if (!dateOfBirth) return t('profile.notProvided');
+		const date = new Date(dateOfBirth);
+		return Number.isNaN(date.getTime()) ? t('profile.notProvided') : date.toLocaleDateString();
 	}
 
 	const fetchChatHistory = async (partnerId: number) => {
@@ -223,21 +230,37 @@ export default function UserPage()
 	return (
 	  <main>
 	    <Header/>
-		<div className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex w-[90%] max-w-[1138px] h-auto min-h-[150px] my-6 mx-auto gap-[30px]">
-		  <div className="flex-[0_0_30%] overflow-hidden rounded-lg">
+		<div className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex flex-col sm:flex-row w-[90%] max-w-[1138px] h-auto min-h-[150px] my-6 mx-auto gap-[30px]">
+		  <div className="w-40 h-40 sm:w-52 sm:h-52 shrink-0 overflow-hidden rounded-lg bg-[#f5f5f5]">
 			<img
 				src={resolveAvatarUrl(seller?.avatarUrl)}
 				alt="-Shop Picture-"
+				className="w-full h-full object-cover"
 				onError={(event) => {
 					(event.currentTarget as HTMLImageElement).src = placeholderAvatarUrl;
 				}}
 			/>
 		  </div>
-		  <div className="flex-[0_0_30%]">
+		  <div className="flex-1 min-w-0">
 			<div className="mb-2 text-[var(--dark)] font-semibold">{seller?.firstName} {seller?.lastName}</div>
+			<div className="mb-2 text-[var(--secondary)] text-sm">@{seller?.username}</div>
 			<div className="mb-2 text-[var(--secondary)] text-sm">
 			  {seller?.id !== undefined && <OnlineStatus userId={seller.id} />}
 			</div>
+			<dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-4 text-sm">
+			  <div>
+				<dt className="text-[var(--secondary)]">{t('profile.phoneNo')}</dt>
+				<dd className="m-0 text-[var(--dark)] break-words">{seller?.phoneNo || t('profile.notProvided')}</dd>
+			  </div>
+			  <div>
+				<dt className="text-[var(--secondary)]">{t('profile.gender')}</dt>
+				<dd className="m-0 text-[var(--dark)]">{seller?.gender || t('profile.notProvided')}</dd>
+			  </div>
+			  <div>
+				<dt className="text-[var(--secondary)]">{t('profile.dateOfBirth')}</dt>
+				<dd className="m-0 text-[var(--dark)]">{formatDateOfBirth(seller?.dateOfBirth)}</dd>
+			  </div>
+			</dl>
 			<div className="flex gap-2.5 mt-2">
 			  <button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 hover:bg-[var(--primary-dark)]" onClick={openChat} disabled={chatLoading || !currentUser?.id}>
 			    {chatLoading ? 'Loading...' : 'Chat Seller'}

@@ -3,6 +3,7 @@ package profile
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"database/sql"
 	"github.com/labstack/echo/v4"
@@ -13,6 +14,20 @@ import (
 type Handler struct {
 	repo    *user.Repository
 	service *Service
+}
+
+// publicProfile is the member-facing profile shown from listings and the chat
+// directory. The People directory itself remains limited to summary fields.
+type publicProfile struct {
+	ID          int        `json:"id"`
+	Username    string     `json:"username"`
+	FirstName   string     `json:"firstName"`
+	LastName    string     `json:"lastName"`
+	PhoneNo     *string    `json:"phoneNo,omitempty"`
+	Gender      *string    `json:"gender,omitempty"`
+	DateOfBirth *time.Time `json:"dateOfBirth,omitempty"`
+	AvatarURL   *string    `json:"avatarUrl,omitempty"`
+	Bio         string     `json:"bio"`
 }
 
 func NewHandler(repo *user.Repository, service *Service) *Handler {
@@ -55,7 +70,17 @@ func (h *Handler) GetProfile(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
 	}
-	return c.JSON(http.StatusOK, user)
+	return c.JSON(http.StatusOK, publicProfile{
+		ID:          user.ID,
+		Username:    user.Username,
+		FirstName:   user.FirstName,
+		LastName:    user.LastName,
+		PhoneNo:     user.PhoneNo,
+		Gender:      user.Gender,
+		DateOfBirth: user.DateOfBirth,
+		AvatarURL:   user.AvatarURL,
+		Bio:         user.Bio,
+	})
 }
 
 func (h *Handler) UpdateProfile(c echo.Context) error {

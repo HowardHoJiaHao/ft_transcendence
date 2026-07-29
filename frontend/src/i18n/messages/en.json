@@ -16,8 +16,34 @@
     "title": "Your Conversations",
     "onlineNow": "Online now",
     "online": "Online",
+    "offline": "Offline",
     "noOnlineUsers": "No other users are online right now.",
-    "noConversations": "No conversations yet."
+    "noConversations": "No conversations yet.",
+    "people": "People",
+    "searchPeople": "Search people",
+    "searchPeoplePlaceholder": "Search members, buyers, or sellers…",
+    "peopleFilters": "People filters",
+    "allPeople": "All",
+    "sellers": "Sellers",
+    "buyers": "Buyers",
+    "noPeople": "No people match your search.",
+    "scrollForMore": "Scroll to load more",
+    "personActions": "Person actions",
+    "addFriend": "Add friend",
+    "viewProfile": "View profile",
+    "friendAdded": "Friend added.",
+    "friendAddError": "Unable to add friend.",
+    "peopleLoadError": "Unable to load people.",
+    "deleteConversation": "Delete conversation"
+  },
+  "common": {
+    "loading": "Loading…"
+  },
+  "profile": {
+    "phoneNo": "Phone number",
+    "gender": "Gender",
+    "dateOfBirth": "Date of birth",
+    "notProvided": "Not provided"
   },
   "auth": {
     "adminLogin": "Admin login"
