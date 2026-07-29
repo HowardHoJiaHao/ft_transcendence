@@ -88,3 +88,36 @@ func TestWebSocketRejectsMissingAndInvalidTokensBeforeUpgrade(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPeopleRejectsUnauthorizedAndInvalidPagination(t *testing.T) {
+	tests := []struct {
+		name       string
+		target     string
+		userID     any
+		wantStatus int
+	}{
+		{name: "unauthenticated", target: "/people", wantStatus: http.StatusUnauthorized},
+		{name: "invalid role", target: "/people?role=admin", userID: 42, wantStatus: http.StatusBadRequest},
+		{name: "limit too large", target: "/people?limit=101", userID: 42, wantStatus: http.StatusBadRequest},
+		{name: "negative offset", target: "/people?offset=-1", userID: 42, wantStatus: http.StatusBadRequest},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			e := echo.New()
+			request := httptest.NewRequest(http.MethodGet, test.target, nil)
+			recorder := httptest.NewRecorder()
+			context := e.NewContext(request, recorder)
+			if test.userID != nil {
+				context.Set("userId", test.userID)
+			}
+
+			if err := (&Handler{}).GetPeople(context); err != nil {
+				t.Fatalf("GetPeople() error = %v", err)
+			}
+			if recorder.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", recorder.Code, test.wantStatus)
+			}
+		})
+	}
+}

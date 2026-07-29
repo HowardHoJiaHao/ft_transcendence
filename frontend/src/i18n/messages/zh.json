@@ -22,8 +22,34 @@
     "title": "您的对话",
     "onlineNow": "当前在线",
     "online": "在线",
+    "offline": "离线",
     "noOnlineUsers": "目前没有其他用户在线。",
-    "noConversations": "暂无对话。"
+    "noConversations": "暂无对话。",
+    "people": "用户",
+    "searchPeople": "搜索用户",
+    "searchPeoplePlaceholder": "搜索会员、买家或卖家…",
+    "peopleFilters": "用户筛选",
+    "allPeople": "全部",
+    "sellers": "卖家",
+    "buyers": "买家",
+    "noPeople": "没有匹配搜索条件的用户。",
+    "scrollForMore": "继续滚动以加载更多",
+    "personActions": "用户操作",
+    "addFriend": "添加好友",
+    "viewProfile": "查看资料",
+    "friendAdded": "已添加好友。",
+    "friendAddError": "无法添加好友。",
+    "peopleLoadError": "无法加载用户。",
+    "deleteConversation": "删除对话"
+  },
+  "common": {
+    "loading": "加载中…"
+  },
+  "profile": {
+    "phoneNo": "电话号码",
+    "gender": "性别",
+    "dateOfBirth": "出生日期",
+    "notProvided": "未提供"
   },
   "auth": {
     "adminLogin": "管理员登录"

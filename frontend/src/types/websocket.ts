@@ -19,6 +19,14 @@ export interface OnlineUser {
 	avatar_url?: string;
 }
 
+export interface DirectoryUser {
+	id: number;
+	username: string;
+	avatar_url?: string;
+	is_seller: boolean;
+	is_buyer: boolean;
+}
+
 export interface WSPrivateMessage {
 	type: 'private_message';
 	sender_id: number;
