@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useToast } from "@/components/Toast/ToastContext";
 import Header from "@/components/Header/Header";
+import { resolveAvatarUrl, PLACEHOLDER_AVATAR } from "@/lib/avatar";
 
 interface UserProfile {
   id: number;
@@ -18,6 +19,32 @@ interface UserProfile {
   avatarUrl?: string;
 }
 
+// Shared with My Shop / Developer API / Bulk Import so the whole seller area
+// reads as one design: grey page, white bordered cards, blue-bar section
+// headings, pill primary buttons and outlined secondary ones.
+const PAGE = 'min-h-screen bg-[#f0f0f0]';
+const CONTAINER =
+  'max-w-[980px] mx-auto pt-7 px-8 pb-16 max-[640px]:pt-5 max-[640px]:px-4 max-[640px]:pb-12';
+const CARD =
+  'bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]';
+const SECTION_H2 =
+  "flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 mb-4 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0";
+const ROW =
+  'flex gap-4 items-center py-3 border-b border-[#f2f2f0] last:border-b-0 max-[640px]:flex-col max-[640px]:items-start max-[640px]:gap-2';
+const LABEL = 'w-[150px] shrink-0 text-[13.5px] font-semibold text-[#444]';
+const VALUE = 'flex-1 min-w-0 text-sm text-[#222] break-words';
+const MUTED = 'flex-1 min-w-0 text-sm text-[#898781] break-words';
+const INPUT =
+  'flex-1 min-w-0 border border-[#ddd] rounded-lg px-3 py-2 text-sm text-[#222] bg-white transition-colors duration-150 focus:border-[#2a78d6] focus:outline-none max-[640px]:w-full';
+const BTN_SECONDARY =
+  'shrink-0 border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]';
+const BTN_PRIMARY =
+  'inline-flex items-center px-[22px] py-[9px] rounded-[20px] bg-[#111] text-white border-none text-sm font-semibold cursor-pointer transition-colors duration-150 hover:bg-[#333] disabled:bg-[#bbb] disabled:cursor-not-allowed';
+
+// <input type="date"> only accepts YYYY-MM-DD, but the API sends a full ISO
+// timestamp — trim it so the field shows the stored birthday.
+const toDateInput = (value?: string) => (value ? value.slice(0, 10) : '');
+
 export default function ProfilePage() {
   const router = useRouter();
   const { user: ctxUser, loading: authLoading, updateUser } = useRequireAuth('/');
@@ -29,7 +56,7 @@ export default function ProfilePage() {
     firstName: ctxUser?.firstName ?? "",
     lastName: ctxUser?.lastName ?? "",
     gender: ctxUser?.gender ?? "",
-    dateOfBirth: ctxUser?.dateOfBirth ?? "",
+    dateOfBirth: toDateInput(ctxUser?.dateOfBirth),
   });
 
   useEffect(() => 
@@ -192,7 +219,7 @@ export default function ProfilePage() {
         firstName: user.firstName ?? "",
         lastName: user.lastName ?? "",
         gender: user.gender ?? "",
-        dateOfBirth: user.dateOfBirth ?? "",
+        dateOfBirth: toDateInput(user.dateOfBirth),
       });
     }
   }, [user]);
@@ -282,242 +309,297 @@ export default function ProfilePage() {
       showToast("Connection error. is the server running?", "error");
     }
   };
-  if (authLoading || loading) return <div style={{ padding: 24 }}>Loading profile...</div>;
+  if (authLoading || loading)
+    return (
+      <main className={PAGE}>
+        <Header />
+        <div className={CONTAINER}>
+          <p className="text-[#898781] text-[15px]">Loading profile…</p>
+        </div>
+      </main>
+    );
+
   if (error)
     return (
-      <div style={{ padding: 24 }}>
-        <p>Error: {error}</p>
-        <button
-          className="btn btn-secondary"
-          onClick={() => router.push("/login")}
-        >
-          Login
-        </button>
-      </div>
+      <main className={PAGE}>
+        <Header />
+        <div className={CONTAINER}>
+          <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">👤 My Profile</h1>
+          <div className={CARD}>
+            <p className="bg-[#fdecea] border border-[#f5c6c0] rounded-md text-[#b71c1c] text-sm px-3.5 py-2.5 mt-0 mx-0 mb-4">
+              {error}
+            </p>
+            <button className={BTN_PRIMARY} onClick={() => router.push("/login")}>
+              Go to login
+            </button>
+          </div>
+        </div>
+      </main>
     );
 
   if (!user) return null;
 
   const today = new Date().toISOString().split("T")[0];
 
-  // backend base URL for serving avatars
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-  const defaultAvatarUrl = "/default-avatar.png";
-  const placeholderAvatarUrl = "https://via.placeholder.com/120";
-  const resolveAvatarUrl = (url?: string) => {
-    if (!url)
-      return defaultAvatarUrl;
-    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
-      return url;
-    if (url.startsWith("/"))
-      return `${API_BASE}${url}`;
-    return `${API_BASE}/${url}`;
-  };
 
   if (showOtp) {
     return (
-      <div className="flex justify-center items-center min-h-[calc(100vh-80px)] px-4 py-6 bg-[#fafafa]">
-        <form onSubmit={handleOtpSubmit} className="bg-white p-10 rounded-lg shadow-[0_4px_6px_rgba(0,0,0,0.1)] w-full max-w-[400px] flex flex-col gap-4">
-          <h2 className="text-center mb-2 text-[#333]">Enter OTP Code</h2>
-          <p className="text-center m-0 text-[#666]">
-            Verifying Purpose:{" "}
-            {changeTarget === "email" ? "Change Email" : "Change Phone Number"}
+      <main className={PAGE}>
+        <Header />
+
+        <div className="max-w-[480px] mx-auto pt-10 px-4 pb-16">
+          <button
+            className="bg-white border border-[#ddd] rounded-[20px] text-[#444] text-[13px] font-semibold cursor-pointer px-4 py-[7px] mb-3.5 inline-flex items-center gap-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 hover:border-[#888] hover:text-[#111] hover:-translate-x-0.5"
+            onClick={() => setShowOtp(false)}
+            type="button"
+          >
+            ← Back
+          </button>
+
+          <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">🔐 Verify it&apos;s you</h1>
+          <p className="text-[#898781] text-sm mt-[-8px] mx-0 mb-[18px]">
+            We sent a 6-digit code to {user.email}.
           </p>
-          <input
-            type="text"
-            placeholder="6-digit OTP"
-            value={otpCode}
-            onChange={(e) => setOtpCode(e.target.value)}
-            required
-            className="flex-1 p-2 border border-[#ddd] rounded bg-white text-base"
-          />
-          <div className="flex gap-2">
-            <button type="submit" className="flex-1 p-3 bg-[#e53935] text-white border-none rounded text-base font-bold cursor-pointer hover:bg-[#d32f2f] disabled:opacity-70 disabled:cursor-not-allowed">
-              Verify Code
-            </button>
-            <button
-              type="button"
-              className="flex-1 p-3 bg-[#e53935] text-white border-none rounded text-base font-bold cursor-pointer hover:bg-[#d32f2f] disabled:opacity-70 disabled:cursor-not-allowed"
-              onClick={sendOtp}
-              disabled={resendCd > 0}
-            >
-              {resendCd > 0 ? `Resend OTP (${resendCd}s)` : "Resend OTP"}
-            </button>
-          </div>
-        </form>
-      </div>
+
+          <form onSubmit={handleOtpSubmit} className={CARD}>
+            <div className="bg-[#eff6ff] border border-[#bfdbfe] rounded-[10px] px-4 py-3 mb-4">
+              <p className="text-[13px] text-[#1c5cab] m-0">
+                Verifying in order to change your{" "}
+                <strong>{changeTarget === "email" ? "email address" : "phone number"}</strong>.
+              </p>
+            </div>
+
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="6-digit code"
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value)}
+              required
+              className="w-full border border-[#ddd] rounded-lg px-3.5 py-2.5 text-lg tracking-[0.35em] text-center text-[#222] bg-white transition-colors duration-150 focus:border-[#2a78d6] focus:outline-none"
+            />
+
+            <div className="flex gap-2.5 items-center mt-4 flex-wrap">
+              <button type="submit" className={BTN_PRIMARY}>
+                Verify code
+              </button>
+              <button
+                type="button"
+                className={`${BTN_SECONDARY} disabled:text-[#aaa] disabled:cursor-not-allowed disabled:hover:border-[#ccc]`}
+                onClick={sendOtp}
+                disabled={resendCd > 0}
+              >
+                {resendCd > 0 ? `Resend in ${resendCd}s` : "Resend code"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </main>
     );
   }
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ");
+
   return (
-    <main className="flex flex-col min-h-screen">
-      <Header/>
+    <main className={PAGE}>
+      <Header />
 
-      <div className="flex-1">
-        <div className="container">
-          <div className="bg-white rounded-lg shadow-[var(--shadow)] p-6 max-w-[760px] my-6 mx-auto">
-            <h1>My profile</h1>
-            <p>Manage and protect your account</p>
+      <div className={CONTAINER}>
+        <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">👤 My Profile</h1>
+        <p className="text-[#898781] text-sm mt-[-8px] mx-0 mb-[18px]">
+          Manage and protect your account
+        </p>
 
-            <hr className="my-5 border-0 border-t border-[#eee]" />
-            <div className="flex flex-col items-center gap-6 mb-6">
-              <img
-                src={resolveAvatarUrl(user.avatarUrl)}
-                alt="Profile Avatar"
-                className="w-24 h-24 rounded-full object-cover border-2 border-[#eee] bg-[#f5f5f5]"
-                onError={(event) => {
-                  (event.currentTarget as HTMLImageElement).src = placeholderAvatarUrl;
-                }}
+        {/* ── Identity: avatar + who you are at a glance ── */}
+        <div className={CARD}>
+          <div className="flex gap-5 items-center max-[640px]:flex-col max-[640px]:text-center">
+            <img
+              src={resolveAvatarUrl(user.avatarUrl)}
+              alt="Profile avatar"
+              className="w-[88px] h-[88px] shrink-0 rounded-full object-cover border border-[#e8e8e6] bg-[#f5f5f3] shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+              onError={(event) => {
+                (event.currentTarget as HTMLImageElement).src = PLACEHOLDER_AVATAR;
+              }}
+            />
+
+            <div className="min-w-0 flex-1">
+              <p className="text-[19px] font-bold text-[#222] m-0 truncate">
+                {fullName || user.username}
+              </p>
+              <p className="text-[#898781] text-sm mt-1 mx-0 mb-0 truncate">{user.email}</p>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleChangeAvatar}
               />
-              <div>
+              <button type="button" className={`${BTN_SECONDARY} mt-3`} onClick={triggerFileSelect}>
+                📷 Change avatar
+              </button>
+              <span className="block text-xs text-[#898781] mt-2">JPG or PNG, up to 2 MB.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Account & security: read-only values with their own change flows ── */}
+        <div className={CARD}>
+          <h2 className={SECTION_H2}>🔐 Account &amp; security</h2>
+
+          <div className={ROW}>
+            <div className={LABEL}>Username</div>
+            <div className={VALUE}>{user.username}</div>
+          </div>
+
+          <div className={ROW}>
+            <div className={LABEL}>Email</div>
+            <div className={VALUE}>{user.email}</div>
+            <button className={BTN_SECONDARY} onClick={() => startOtpFlow("email")}>
+              Change
+            </button>
+          </div>
+
+          <div className={ROW}>
+            <div className={LABEL}>Phone number</div>
+            <div className={user.phoneNo ? VALUE : MUTED}>{user.phoneNo || "Not set"}</div>
+            <button className={BTN_SECONDARY} onClick={() => startOtpFlow("phoneNo")}>
+              Change
+            </button>
+          </div>
+
+          <div className={ROW}>
+            <div className={LABEL}>Password</div>
+            <div className={`${VALUE} tracking-[0.2em]`}>••••••••</div>
+            <button
+              className={BTN_SECONDARY}
+              onClick={() => router.push("/profile/change-password")}
+            >
+              Change
+            </button>
+          </div>
+
+          <p className="text-xs text-[#898781] mt-3.5 mb-0">
+            Changing your email or phone number sends a one-time code first.
+          </p>
+        </div>
+
+        {/* ── Personal details: the only editable-in-place fields ── */}
+        <div className={CARD}>
+          <h2 className={SECTION_H2}>📝 Personal details</h2>
+
+          <div className={ROW}>
+            <label className={LABEL} htmlFor="firstName">
+              First name
+            </label>
+            <input
+              id="firstName"
+              name="firstName"
+              value={inputData.firstName}
+              onChange={handleChange}
+              placeholder="Your first name"
+              className={INPUT}
+            />
+          </div>
+
+          <div className={ROW}>
+            <label className={LABEL} htmlFor="lastName">
+              Last name
+            </label>
+            <input
+              id="lastName"
+              name="lastName"
+              value={inputData.lastName}
+              onChange={handleChange}
+              placeholder="Your last name"
+              className={INPUT}
+            />
+          </div>
+
+          <div className={ROW}>
+            <div className={LABEL}>Gender</div>
+            <div className="flex-1 min-w-0 flex gap-2 items-center flex-wrap">
+              <label
+                className={`inline-flex items-center gap-2 px-3.5 py-[7px] rounded-[20px] border text-[13px] cursor-pointer transition-all duration-150 ${inputData.gender === "Male" ? "bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold" : "bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]"}`}
+              >
                 <input
-                  type="file"
-                  ref={fileInputRef}
-                  style={{ display: "none" }}
-                  accept="image/*"
-                  onChange={handleChangeAvatar}
+                  type="radio"
+                  name="gender"
+                  value="Male"
+                  checked={inputData.gender === "Male"}
+                  onChange={handleChange}
+                  className="accent-[#c2185b]"
                 />
+                Male
+              </label>
+              <label
+                className={`inline-flex items-center gap-2 px-3.5 py-[7px] rounded-[20px] border text-[13px] cursor-pointer transition-all duration-150 ${inputData.gender === "Female" ? "bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold" : "bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]"}`}
+              >
+                <input
+                  type="radio"
+                  name="gender"
+                  value="Female"
+                  checked={inputData.gender === "Female"}
+                  onChange={handleChange}
+                  className="accent-[#c2185b]"
+                />
+                Female
+              </label>
+              <label className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-[20px] border border-[#ccc] bg-white text-[13px] font-medium text-[#444] cursor-pointer transition-all duration-150 hover:border-[#888]">
+                <input
+                  type="radio"
+                  name="gender"
+                  value="PreferNotToTell"
+                  checked={false}
+                  onChange={() => {
+                    showToast("Please choose your gender! 🏳️‍🌈", "success");
+                  }}
+                  className="accent-[#c2185b]"
+                />
+                Prefer not to tell
+              </label>
+              {inputData.gender && (
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={triggerFileSelect}
-                >
-                  Change Avatar
-                </button>
-              </div>
-            </div>
-
-            <div className="flex gap-3 items-center my-2.5">
-              <div className="w-[140px] font-semibold">Username</div>
-              <div className="flex-1 p-2 text-[#666]">{user.username}</div>
-            </div>
-
-            <div className="flex gap-3 items-center my-2.5">
-              <div className="w-[140px] font-semibold">Email</div>
-              <div className="flex-1 p-2 text-[#666]">{user.email}</div>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => startOtpFlow("email")}
-              >
-                change
-              </button>
-            </div>
-
-            <div className="flex gap-3 items-center my-2.5">
-              <div className="w-[140px] font-semibold">Phone Number</div>
-              <div className="flex-1 p-2 text-[#666]">{user.phoneNo}</div>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => startOtpFlow("phoneNo")}
-              >
-                change
-              </button>
-            </div>
-
-            <hr className="my-5 border-0 border-t border-[#eee]" />
-
-			<div className="flex gap-3 items-center my-2.5">
-			  <div className="w-[140px] font-semibold">Password</div>
-			  <div className="flex-1 p-2 text-[#666]">••••••••</div>
-			  <button
-				className="btn btn-secondary btn-sm"
-				onClick={() => router.push("/profile/change-password")}
-			  >
-				change
-			  </button>
-			</div>
-
-			<hr className="my-5 border-0 border-t border-[#eee]" />
-
-            <div className="flex gap-3 items-center my-2.5">
-              <div className="w-[140px] font-semibold">First Name</div>
-              <input
-                name="firstName"
-                value={inputData.firstName}
-                onChange={handleChange}
-                className="flex-1 p-2 border border-[#ddd] rounded bg-white text-base"
-              />
-            </div>
-
-            <div className="flex gap-3 items-center my-2.5">
-              <div className="w-[140px] font-semibold">Last Name</div>
-              <input
-                name="lastName"
-                value={inputData.lastName}
-                onChange={handleChange}
-                className="flex-1 p-2 border border-[#ddd] rounded bg-white text-base"
-              />
-            </div>
-
-            <div className="flex gap-3 items-center my-2.5">
-              <div className="w-[140px] font-semibold">Gender</div>
-              <div className="flex gap-4 items-center">
-                <div className="flex-1 p-2 text-[#666]">{user.gender}</div>
-                <label className="flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="gender"
-                    value="Male"
-                    checked={inputData.gender === "Male"}
-                    onChange={handleChange}
-                  />
-                  Male
-                </label>
-                <label className="flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="gender"
-                    value="Female"
-                    checked={inputData.gender === "Female"}
-                    onChange={handleChange}
-                  />
-                  Female
-                </label>
-                <label className="flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="gender"
-                    value="PreferNotToTell"
-                    checked={false}
-                    onChange={() => {
-                      showToast("Please choose your gender! 🏳️‍🌈", "success");
-                    }}
-                  />
-                  Prefer not to tell
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() =>
-                    setInputData((prev) => ({ ...prev, gender: "" }))
-                  }
+                  className="text-[13px] font-semibold text-[#2563eb] bg-transparent border-none cursor-pointer px-1.5 py-1 hover:underline"
+                  onClick={() => setInputData((prev) => ({ ...prev, gender: "" }))}
                 >
                   Clear
                 </button>
-              </div>
+              )}
             </div>
+          </div>
 
-            <div className="flex gap-3 items-center my-2.5">
-              <div className="w-[140px] font-semibold">Date of birth</div>
-              <div className="flex-1 p-2 text-[#666]">
-                {user.dateOfBirth
-                  ? new Date(user.dateOfBirth).toLocaleDateString()
-                  : ""}
-              </div>
+          <div className={ROW}>
+            <label className={LABEL} htmlFor="dateOfBirth">
+              Date of birth
+            </label>
+            <div className="flex-1 min-w-0 flex gap-3 items-center flex-wrap">
               <input
+                id="dateOfBirth"
                 type="date"
                 name="dateOfBirth"
                 value={inputData.dateOfBirth}
                 onChange={handleChange}
                 max={today}
                 min="1950-01-01"
+                className="border border-[#ddd] rounded-lg px-3 py-2 text-sm text-[#222] bg-white transition-colors duration-150 focus:border-[#2a78d6] focus:outline-none"
               />
+              {user.dateOfBirth && (
+                <span className="text-[13px] text-[#898781]">
+                  currently {new Date(user.dateOfBirth).toLocaleDateString()}
+                </span>
+              )}
             </div>
+          </div>
 
-            <div className="mt-6 border-t border-[#eee] pt-5">
-              <button className="btn btn-primary" onClick={handleSave}>
-                Save Profile Changes
-              </button>
-            </div>
+          <div className="mt-5 pt-4 border-t border-[#eee] flex items-center gap-3 flex-wrap">
+            <button className={BTN_PRIMARY} onClick={handleSave}>
+              Save changes
+            </button>
+            <span className="text-xs text-[#898781]">
+              Only the fields in this section are saved by this button.
+            </span>
           </div>
         </div>
       </div>

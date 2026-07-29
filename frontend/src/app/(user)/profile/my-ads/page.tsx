@@ -6,8 +6,8 @@
 // Every label goes through t() (src/i18n) so the whole page — charts included —
 // re-renders in the language picked in the header.
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Fragment, Suspense, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Bar,
@@ -23,6 +23,8 @@ import { useAuth } from '@/context/AuthContext';;
 import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
 import Header from '@/components/Header/Header';
+import ShopTabs, { type ShopListTab } from '@/components/ShopTabs/ShopTabs';
+import ShopHeader from '@/components/ShopTabs/ShopHeader';
 import { downloadCsv } from '@/lib/csv';
 
 // A seller listing as returned by GET /api/v1/products.
@@ -121,8 +123,11 @@ const ADS_PER_PAGE = 15;
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/350x450';
 
-export default function MyAdsPage() {
+const LIST_TABS: ShopListTab[] = ['active', 'pending', 'sold', 'archived', 'analytics'];
+
+function MyAdsPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const { showToast } = useToast();
   const { t } = useI18n();
@@ -132,7 +137,12 @@ export default function MyAdsPage() {
     `${t(`months.${month.slice(5, 7)}`)} ${month.slice(0, 4)}`;
 
   // Open tab; each listing status keeps its own list so switching tabs is instant.
-  const [activeTab, setActiveTab] = useState<'active' | 'pending' | 'sold' | 'archived' | 'analytics'>('active');
+  // ShopTabs on Post an Ad / Developer API links here as ?tab=<id>, so honour
+  // that on mount — an unknown or missing value falls back to Published.
+  const requestedTab = searchParams.get('tab') as ShopListTab | null;
+  const [activeTab, setActiveTab] = useState<ShopListTab>(
+    requestedTab && LIST_TABS.includes(requestedTab) ? requestedTab : 'active',
+  );
   const [publishedAds, setPublishedAds] = useState<Ad[]>([]);
   const [pendingOrders, setPendingOrders] = useState<SellerOrder[]>([]);
   const [soldAds, setSoldAds] = useState<Ad[]>([]);
@@ -481,6 +491,15 @@ export default function MyAdsPage() {
       .finally(() => setAnalyticsLoading(false));
   }, [authLoading, activeTab, analyticsLoaded, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Tallies for the shared header and tab row. This page already holds the
+  // real lists, so it never needs useShopCounts.
+  const shopCounts = {
+    active: publishedAds.length,
+    pending: pendingOrders.length,
+    sold: soldAds.length,
+    archived: archivedAds.length,
+  };
+
   // List + pagination for the currently open listings tab.
   const currentAds =
     activeTab === 'active' ? publishedAds : activeTab === 'sold' ? soldAds : archivedAds;
@@ -616,64 +635,20 @@ export default function MyAdsPage() {
       <Header/>
 
       <div className="max-w-[1180px] mx-auto pt-7 px-8 pb-16">
-        <button
-          className="bg-white border border-[#ddd] rounded-[20px] text-[#444] text-[13px] font-semibold cursor-pointer px-4 py-[7px] mb-3.5 inline-flex items-center gap-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 hover:border-[#888] hover:text-[#111] hover:-translate-x-0.5"
-          onClick={() => router.push('/profile')}
-        >
-          {t('myShop.back')}
-        </button>
-
-        <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">{t('myShop.heading')}</h1>
-        <p className="text-[#898781] text-sm mt-[-8px] mx-0 mb-[18px]">
-          {t('myShop.subheading', {
-            count: publishedAds.length + soldAds.length + archivedAds.length,
-          })}
-        </p>
+        <ShopHeader counts={shopCounts} />
 
         <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] overflow-hidden">
-          {/* Tabs */}
-          <div className="flex gap-2.5 px-5 py-4 border-b border-[#eee]">
-            <Link href="/sell" className="inline-flex items-center px-[18px] py-2 rounded-[20px] bg-[#111] text-white text-sm font-semibold no-underline transition-colors duration-150 hover:bg-[#333]">
-              {t('myShop.postAd')}
-            </Link>
-            <Link href="/profile/my-ads/import" className="inline-flex items-center px-[18px] py-2 rounded-[20px] bg-[#eef2ff] text-[#3730a3] text-sm font-bold no-underline transition-colors duration-150 hover:bg-[#e0e7ff]">
-              {t('myShop.importCsv')}
-            </Link>
-            <Link href="/profile/developer-api" className="inline-flex items-center px-[18px] py-2 rounded-[20px] bg-[#eef2ff] text-[#3730a3] text-sm font-bold no-underline transition-colors duration-150 hover:bg-[#e0e7ff]">
-              {t('myShop.developerApi')}
-            </Link>
-            <span className="w-px self-stretch bg-[#e5e5e2] my-0 mx-1" />
-            <button
-              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'active' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
-              onClick={() => { setActiveTab('active'); setPage(1); }}
-            >
-              {t('myShop.tabPublished', { count: publishedAds.length })}
-            </button>
-            <button
-              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'pending' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
-              onClick={() => { setActiveTab('pending'); setPage(1); fetchPendingOrders(); }}
-            >
-              {t('myShop.tabPending', { count: pendingOrders.length })}
-            </button>
-            <button
-              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'sold' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
-              onClick={() => { setActiveTab('sold'); setPage(1); }}
-            >
-              {t('myShop.tabSold', { count: soldAds.length })}
-            </button>
-            <button
-              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'archived' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
-              onClick={() => { setActiveTab('archived'); setPage(1); }}
-            >
-              {t('myShop.tabArchived', { count: archivedAds.length })}
-            </button>
-            <button
-              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'analytics' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
-              onClick={() => setActiveTab('analytics')}
-            >
-              {t('myShop.tabAnalytics')}
-            </button>
-          </div>
+          {/* Tabs — shared with Post an Ad and Developer API so the row never
+              disappears; here the listing tabs switch in place. */}
+          <ShopTabs
+            current={activeTab}
+            counts={shopCounts}
+            onSelect={(tab) => {
+              setActiveTab(tab);
+              if (tab !== 'analytics') setPage(1);
+              if (tab === 'pending') fetchPendingOrders();
+            }}
+          />
 
           {/* Analytics */}
           {activeTab === 'analytics' ? (
@@ -1430,5 +1405,15 @@ export default function MyAdsPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+/* Page export — wraps the inner component in Suspense, which Next.js requires
+   for useSearchParams (we read ?tab= to open the right tab on arrival). */
+export default function MyAdsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-[#666]">Loading…</div>}>
+      <MyAdsPageInner />
+    </Suspense>
   );
 }

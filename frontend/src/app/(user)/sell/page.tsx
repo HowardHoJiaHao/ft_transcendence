@@ -2,25 +2,17 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import Header from "@/components/Header/Header";
+import ShopTabs from "@/components/ShopTabs/ShopTabs";
+import ShopHeader from "@/components/ShopTabs/ShopHeader";
+import BulkImport from "@/components/BulkImport/BulkImport";
+import { useShopCounts } from "@/components/ShopTabs/useShopCounts";
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from "@/components/Toast/ToastContext";
 import { useI18n } from '@/context/LanguageContext';
 
-const CATEGORIES = [
-  "Rackets",
-  "Grips",
-  "Shuttlecocks",
-  "Racket Bags & Covers",
-  "Strings",
-  "Shoes",
-  "Apparel",
-  "Accessories",
-  "Others",
-];
-const CONDITIONS = ["Second-hand (Used)", "New", "Refurbished"] as const;
-const DEALING_METHODS = ["Meet Up", "Mailing or Delivery"];
+// Shared with the bulk importer so its "accepted values" help stays in sync.
+import { CATEGORIES, CONDITIONS, DEALING_METHODS } from "@/lib/productOptions";
 const WEIGHT_CATEGORIES = ["1U", "2U", "3U", "4U", "5U", "6U", "7U", "8U"];
 const FLEXIBILITY_CATEGORIES = [
   "Stiff Shaft",
@@ -52,6 +44,12 @@ function SellPageInner() {
   const { user } = useAuth(); // check is current user logged in?
   const { showToast } = useToast(); // display small message to user, a notification function, eg: listing created success, please login first
   const { t } = useI18n(); // for language translation
+  const shopCounts = useShopCounts(); // tallies for the shared My Shop header/tabs
+  // Which way of posting is open: the one-at-a-time form, or the CSV importer.
+  const [mode, setMode] = useState<"single" | "bulk">("single");
+  // Editing always targets one existing ad, so it pins the form regardless of
+  // whatever mode was last picked.
+  const activeMode = isEditMode ? "single" : mode;
   const fileInputRef = useRef<HTMLInputElement>(null); // create an invisible input box
 
 	/* this block is temporary page state */
@@ -347,12 +345,67 @@ function SellPageInner() {
     <main className="min-h-screen bg-[#f0f0f0]">
       <Header/>
 
+      {/* Shared My Shop header + row, so the top of this page matches My Shop. */}
+      <div className="max-w-[1140px] mx-auto pt-7 px-4">
+        <ShopHeader counts={shopCounts} />
+        <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] overflow-hidden">
+          <ShopTabs current="sell" counts={shopCounts ?? undefined} />
+        </div>
+      </div>
+
       <div className="flex max-w-[1140px] mx-auto pt-6 px-4 pb-14 gap-6 items-start max-[860px]:flex-col">
         {/* ── SIDEBAR ── */}
         <aside className="w-[260px] shrink-0 max-[860px]:w-full">
           <div className="bg-white rounded-lg p-5 shadow-[0_1px_3px_rgba(0,0,0,0.1)] sticky top-6 max-[860px]:static">
             <h2 className="text-lg font-bold m-0 text-[#222]">Post An Ad</h2>
             <p className="text-xs text-[#888] mt-1 mx-0 mb-3">Sell Your Stuff</p>
+
+            {/* Mode chooser. Hidden while editing — that always targets one ad. */}
+            {!isEditMode && (
+              <div className="flex flex-col gap-2 mb-5">
+                {(
+                  [
+                    { id: 'single', icon: '📝', label: t('sell.modeSingle'), hint: t('sell.modeSingleHint') },
+                    { id: 'bulk', icon: '📥', label: t('sell.modeBulk'), hint: t('sell.modeBulkHint') },
+                  ] as const
+                ).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setMode(m.id)}
+                    className={`w-full text-left flex gap-2.5 items-start px-3.5 py-3 rounded-lg border cursor-pointer transition-all duration-150 ${
+                      mode === m.id
+                        ? 'bg-[#fce4ec] border-[#f48fb1]'
+                        : 'bg-white border-[#e0e0e0] hover:border-[#888]'
+                    }`}
+                  >
+                    <span className="text-base leading-none mt-px shrink-0">{m.icon}</span>
+                    <span className="min-w-0">
+                      <span
+                        className={`block text-[13.5px] ${mode === m.id ? 'font-bold text-[#c2185b]' : 'font-semibold text-[#333]'}`}
+                      >
+                        {m.label}
+                      </span>
+                      <span className="block text-[11.5px] text-[#898781] mt-0.5">{m.hint}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {activeMode === 'bulk' ? (
+              <div className="border-t border-[#eee] pt-4">
+                <p className="text-[13px] font-semibold text-[#333] mt-0 mx-0 mb-2">
+                  {t('import.howToTitle')}
+                </p>
+                <ol className="list-decimal mt-0 mx-0 mb-0 pl-[18px] flex flex-col gap-1.5 text-[12.5px] text-[#555] leading-[1.5]">
+                  <li>{t('import.step1')}</li>
+                  <li>{t('import.step2')}</li>
+                  <li>{t('import.step3')}</li>
+                </ol>
+              </div>
+            ) : (
+            <>
             <div className="h-1 bg-[#e0e0e0] rounded-sm mb-5">
               <div
                 className="h-full bg-[#22c55e] rounded-sm transition-[width] duration-[400ms] ease-in-out"
@@ -389,19 +442,27 @@ function SellPageInner() {
                 <span>Ad Successfully Submitted</span>
               </li>
             </ul>
-
-            {/* Shortcut to bulk CSV import for sellers with many products */}
-            <div className="mt-5 px-3.5 py-3 border border-dashed border-[#ccc] rounded-lg bg-[#fafafa] text-center">
-              <p className="text-xs text-[#888] mt-0 mx-0 mb-2.5">{t('sell.bulkHint')}</p>
-              <Link href="/profile/my-ads/import" className="inline-flex items-center justify-center px-4 py-[7px] rounded-[20px] bg-[#111] text-white text-[13px] font-semibold no-underline transition-colors duration-150 hover:bg-[#333]">
-                {t('myShop.importCsv')}
-              </Link>
-            </div>
+            </>
+            )}
           </div>
         </aside>
 
         {/* ── CONTENT ── */}
         <div className="flex-1 flex flex-col gap-4 min-w-0">
+          {activeMode === 'bulk' ? (
+            <>
+              <div>
+                <h2 className="text-xl font-bold text-[#222] mt-0 mx-0 mb-1.5">
+                  {t('import.heading')}
+                </h2>
+                <p className="text-[#898781] text-sm m-0">
+                  {t('import.subheading', { max: 500 })}
+                </p>
+              </div>
+              <BulkImport />
+            </>
+          ) : (
+          <>
           <div className="flex justify-between items-center min-h-6">
             {step === 2 && !isEditMode && (
               <button className="bg-none border-none text-[#22c55e] font-bold cursor-pointer text-sm p-0 tracking-[0.3px] hover:underline" onClick={() => setStep(1)}>
@@ -799,6 +860,8 @@ function SellPageInner() {
                 </div>
               </div>
             </div>
+          )}
+          </>
           )}
         </div>
       </div>

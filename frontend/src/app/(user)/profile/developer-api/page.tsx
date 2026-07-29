@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header/Header';
+import ShopTabs from '@/components/ShopTabs/ShopTabs';
+import ShopHeader from '@/components/ShopTabs/ShopHeader';
+import { useShopCounts } from '@/components/ShopTabs/useShopCounts';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast/ToastContext';
 
@@ -38,6 +41,11 @@ type Endpoint = {
   response?: string;
 };
 
+/* Key-management endpoint docs — commented out: the Keys tab GUI on this page
+   already creates, lists and revokes keys, so documenting the same calls was
+   duplicate surface. The endpoints themselves are still live (backend/api_keys.go,
+   routes in main.go); only this documentation is hidden. Restore this array and
+   its JSX block below to bring the section back.
 const managementEndpoints: Endpoint[] = [
   {
     method: 'POST',
@@ -111,6 +119,7 @@ const managementEndpoints: Endpoint[] = [
 }`,
   },
 ];
+*/
 
 const publicEndpoints: Endpoint[] = [
   {
@@ -276,6 +285,7 @@ export default function DeveloperApiPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const shopCounts = useShopCounts(); // tallies for the shared My Shop header/tabs
 
   const [keys, setKeys] = useState<APIKeyInfo[]>([]);
   const [logs, setLogs] = useState<APIRequestLog[]>([]);
@@ -455,17 +465,20 @@ export default function DeveloperApiPage() {
       <Header />
 
       <div className="max-w-[1180px] mx-auto pt-7 px-8 pb-16 max-[640px]:pt-5 max-[640px]:px-4 max-[640px]:pb-12">
-        <button className="bg-white border border-[#ddd] rounded-[20px] text-[#444] text-[13px] font-semibold cursor-pointer px-4 py-[7px] mb-3.5 inline-flex items-center gap-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 hover:border-[#888] hover:text-[#111] hover:-translate-x-0.5" onClick={() => router.push('/profile/my-ads')}>
-          ← Back to My Shop
-        </button>
-
-        <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-1.5">🔑 Developer API</h1>
-        <p className="text-[#898781] text-sm mt-0 mx-0 mb-[18px]">
-          Generate secret keys, read the API documentation, and audit every request made
-          with your keys.
-        </p>
+        <ShopHeader counts={shopCounts} />
 
         <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] overflow-hidden">
+          {/* Shared My Shop row — keeps the seller's navigation visible here. */}
+          <ShopTabs current="developer-api" counts={shopCounts ?? undefined} />
+
+          <div className="px-5 pt-[18px]">
+            <h2 className="text-xl font-bold text-[#222] mt-0 mx-0 mb-1.5">🔑 Developer API</h2>
+            <p className="text-[#898781] text-sm mt-0 mx-0 mb-0">
+              Generate secret keys, read the API documentation, and audit every request
+              made with your keys.
+            </p>
+          </div>
+
           <div className="flex gap-2.5 px-5 py-4 border-b border-[#eee] flex-wrap">
             <button
               className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'keys' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
@@ -642,6 +655,9 @@ export default function DeveloperApiPage() {
                   {publicEndpoints.map(renderEndpoint)}
                 </div>
 
+                {/* Key management API docs — hidden: the Keys tab GUI above already
+                    creates / lists / revokes keys, so this section duplicated it.
+                    The endpoints remain live; see the comment on managementEndpoints.
                 <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
                   <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">🛠 Key management API</h2>
                   <p className="text-[#898781] text-[13.5px] leading-[1.55] mt-0 mx-0 mb-3.5">
@@ -678,6 +694,7 @@ export default function DeveloperApiPage() {
 
                   {managementEndpoints.map(renderEndpoint)}
                 </div>
+                */}
 
                 <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
                   <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">📟 Status codes</h2>
