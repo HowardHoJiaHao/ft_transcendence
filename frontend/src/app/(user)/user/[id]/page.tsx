@@ -250,20 +250,9 @@ export default function UserPage()
 			<div className="mb-2 text-[var(--secondary)] text-sm">
 			  {seller?.id !== undefined && <OnlineStatus userId={seller.id} />}
 			</div>
-			<dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-4 text-sm">
-			  <div>
-				<dt className="text-[var(--secondary)]">{t('profile.phoneNo')}</dt>
-				<dd className="m-0 text-[var(--dark)] break-words">{seller?.phoneNo || t('profile.notProvided')}</dd>
-			  </div>
-			  <div>
-				<dt className="text-[var(--secondary)]">{t('profile.gender')}</dt>
-				<dd className="m-0 text-[var(--dark)]">{seller?.gender || t('profile.notProvided')}</dd>
-			  </div>
-			  <div>
-				<dt className="text-[var(--secondary)]">{t('profile.dateOfBirth')}</dt>
-				<dd className="m-0 text-[var(--dark)]">{formatDateOfBirth(seller?.dateOfBirth)}</dd>
-			  </div>
-			</dl>
+			{seller?.phoneNo && (
+			  <div className="mb-2 text-[var(--dark)] text-sm">📞 {seller.phoneNo}</div>
+			)}
 			<div className="flex gap-2.5 mt-2">
 			  <button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 hover:bg-[var(--primary-dark)]" onClick={openChat} disabled={chatLoading || !currentUser?.id}>
 			    {chatLoading ? 'Loading...' : 'Chat Seller'}
