@@ -111,7 +111,10 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		const fetchProduct = async() => {
 			try
 			{
-				const res = await fetch(`${apiBaseUrl}/api/v1/products/${productId}`);
+				const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+				const res = await fetch(`${apiBaseUrl}/api/v1/products/${productId}`,
+					token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+				);
 				if (!res.ok)
 				{
 					if (res.status === 404)

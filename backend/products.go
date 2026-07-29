@@ -240,6 +240,15 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(500, map[string]string{"error": "Failed to scan products"})
 	}
 
+	// Seller phone numbers are contact PII. The list endpoint is public and
+	// bulk-paginated, so it must never expose them — otherwise a single
+	// unauthenticated scrape harvests every seller's phone number. Phone
+	// numbers are revealed only on the detail endpoint, and only to
+	// authenticated users.
+	for i := range products {
+		products[i].PhoneNumber = ""
+	}
+
 	return c.JSON(200, map[string]interface{}{
 		"products": products,
 		"total":    totalCount,
@@ -285,6 +294,14 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 	if err != nil {
 		log.Printf("Error querying product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to fetch product"})
+	}
+
+	// The seller's phone number is contact PII. Reveal it only to authenticated
+	// users so anonymous visitors cannot read (or scrape) seller contact
+	// details. A valid Bearer JWT is enough — the owner's edit form and any
+	// signed-in buyer both send one.
+	if uid, _, authErr := getOptionalJWTAuth(c); authErr != nil || uid <= 0 {
+		product.PhoneNumber = ""
 	}
 
 	recordListingView(sqlDB, product.ID, product.SellerId, c)

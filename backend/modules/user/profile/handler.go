@@ -3,10 +3,13 @@ package profile
 import (
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"database/sql"
 	"github.com/labstack/echo/v4"
 	"transcendence/modules/user"
+	"transcendence/modules/user/auth"
 	"transcendence/myMiddleware"
 )
 
@@ -17,6 +20,54 @@ type Handler struct {
 
 func NewHandler(repo *user.Repository, service *Service) *Handler {
 	return &Handler{repo: repo, service: service}
+}
+
+// PublicProfile is the non-owner view of a user. It omits sensitive PII (email,
+// date of birth, gender) and account-security fields (2FA requirement, account
+// status, OAuth provider). The seller's phone number is contact info and is
+// populated only for authenticated requests (see GetProfile), so anonymous
+// callers cannot scrape it — while signed-in buyers can still reach the seller.
+type PublicProfile struct {
+	ID        int     `json:"id"`
+	Username  string  `json:"username"`
+	FirstName string  `json:"firstName"`
+	LastName  string  `json:"lastName"`
+	Bio       string  `json:"bio"`
+	AvatarURL *string `json:"avatarUrl,omitempty"`
+	PhoneNo   *string `json:"phoneNo,omitempty"`
+	IsOnline  bool    `json:"onlineStatus"`
+	CreatedAt string  `json:"createdAt"`
+}
+
+func toPublicProfile(u *user.User) PublicProfile {
+	return PublicProfile{
+		ID:        u.ID,
+		Username:  u.Username,
+		FirstName: u.FirstName,
+		LastName:  u.LastName,
+		Bio:       u.Bio,
+		AvatarURL: u.AvatarURL,
+		IsOnline:  u.IsOnline,
+		CreatedAt: u.CreatedAt.Format(time.RFC3339),
+	}
+}
+
+// requesterIsAuthenticated reports whether the request carries a valid member
+// JWT, checking both the Authorization header and the OAuth cookie (mirroring
+// JWTAuth). Used to reveal contact details only to signed-in users.
+func requesterIsAuthenticated(c echo.Context) bool {
+	authHeader := c.Request().Header.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		if claims, err := auth.ValidateToken(strings.TrimPrefix(authHeader, "Bearer ")); err == nil && claims.UserId > 0 {
+			return true
+		}
+	}
+	if cookie, err := c.Cookie("oauth_token"); err == nil && cookie.Value != "" {
+		if claims, err := auth.ValidateToken(cookie.Value); err == nil && claims.UserId > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) RegisterRoutes(e *echo.Group) {
@@ -51,11 +102,19 @@ func (h *Handler) GetProfile(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid id format"})
 	}
 
-	user, err := h.repo.GetUserByID(id)
+	u, err := h.repo.GetUserByID(id)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
 	}
-	return c.JSON(http.StatusOK, user)
+	profile := toPublicProfile(u)
+	// Reveal the seller's phone number only to signed-in users so they can make
+	// contact, while anonymous callers still cannot scrape contact PII. Other
+	// sensitive fields (email, DOB, gender) are never exposed here — the owner
+	// reads their own full record through the authenticated /me route.
+	if requesterIsAuthenticated(c) {
+		profile.PhoneNo = u.PhoneNo
+	}
+	return c.JSON(http.StatusOK, profile)
 }
 
 func (h *Handler) UpdateProfile(c echo.Context) error {

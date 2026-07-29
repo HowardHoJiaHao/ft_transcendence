@@ -94,7 +94,10 @@ function SellPageInner() {
   useEffect(() => {
     if (!editId) return;
     setEditLoading(true);
-    fetch(`/api/v1/products/${editId}`)
+    const token = localStorage.getItem("token") || "";
+    fetch(`/api/v1/products/${editId}`,
+      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+    )
       .then((r) => r.json())	// take api response and fills the edit form, read response body and convert to javaScript object
       //Take the existing listing data returned by the backend, convert it into the formats expected by the frontend, and fill the edit form.
 	  .then((p) => {
