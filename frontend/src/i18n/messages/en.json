@@ -18,6 +18,42 @@
     "ms": "Bahasa Melayu",
     "zh": "中文"
   },
+  "notifications": {
+    "title": "Notifications",
+    "bell": "Notifications",
+    "bellUnread": "{count} unread notifications",
+    "unread": "{count} unread",
+    "new": "New",
+    "someone": "Someone",
+    "anItem": "an item",
+    "messageOne": "{name} sent you a message",
+    "messageMany": "{name} sent you {count} messages",
+    "friendAdded": "{name} added you as a friend",
+    "orderNew": "{name} placed an order for {count} × {title}",
+    "orderCompleted": "{name} marked your order for {title} as delivered",
+    "loading": "Loading notifications…",
+    "loadingMore": "Loading more…",
+    "empty": "You have no notifications yet.",
+    "error": "Notifications could not be loaded.",
+    "retry": "Try again",
+    "loadMore": "Load more",
+    "end": "You’re all caught up"
+  },
+  "toast": {
+    "listingCreated": "Listing created successfully",
+    "friendRemoved": "Friend removed",
+    "friendRemoveFailed": "Unable to remove friend",
+    "conversationDeleted": "Conversation deleted",
+    "conversationDeleteFailed": "Unable to delete conversation",
+    "emailUpdated": "Email updated successfully",
+    "emailUpdateFailed": "Unable to update email",
+    "phoneUpdated": "Phone number updated successfully",
+    "phoneUpdateFailed": "Unable to update phone number",
+    "networkError": "Network error. Please try again.",
+    "accountSuspended": "{name} has been suspended",
+    "accountRestored": "{name} has been restored",
+    "accountUpdateFailed": "Unable to update account status"
+  },
   "chat": {
     "title": "Your Conversations",
     "onlineNow": "Online now",
@@ -49,7 +85,10 @@
     "phoneNo": "Phone number",
     "gender": "Gender",
     "dateOfBirth": "Date of birth",
-    "notProvided": "Not provided"
+    "notProvided": "Not provided",
+    "googleManaged": "Managed by your Google account",
+    "googleSecurityHint": "Your email and password are managed through your Google account.",
+    "emailOtpHint": "Changing your email sends a one-time code first. Phone numbers can be changed directly."
   },
   "auth": {
     "adminLogin": "Admin login"

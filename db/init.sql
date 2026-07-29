@@ -202,6 +202,36 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver ON messages(sender_id, receiver_id);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_id, is_read);
 
+-- Durable in-app notifications. Dynamic display text is rendered by the
+-- frontend from notification_type + data so it can follow the selected locale.
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGSERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    actor_id INT,
+    notification_type VARCHAR(40) NOT NULL CONSTRAINT notifications_type_check CHECK (
+        notification_type IN ('message', 'friend_added', 'order_new', 'order_completed')
+    ),
+    resource_id INT,
+    data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    read_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_order
+ON notifications(user_id, updated_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+ON notifications(user_id, updated_at DESC, id DESC)
+WHERE read_at IS NULL;
+
+-- Repeated unread messages from one sender update a single notification row.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_unread_message_group
+ON notifications(user_id, actor_id, notification_type)
+WHERE read_at IS NULL AND notification_type = 'message';
+
 -- Seed sample users
 INSERT INTO users (username, email, password_hash, first_name, last_name, avatar_url, is_verified) VALUES
 ('ahmad_store', 'ahmad@example.com', 'hash1', 'Ahmad', 'Store', 'https://ui-avatars.com/api/?name=Ahmad+Store', TRUE),

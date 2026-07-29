@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from '@/components/Toast/ToastContext';
+import { useI18n } from '@/context/LanguageContext';
 
 type ManagedUser = {
   id: number;
@@ -27,6 +29,8 @@ const summaryValueClass = "text-[1.45rem]";
 
 export default function AdminUsersPage() {
   const router = useRouter();
+  const { showToast } = useToast();
+  const { t } = useI18n();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [error, setError] = useState("");
@@ -90,9 +94,17 @@ export default function AdminUsersPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Failed to update user");
       setUsers((current) => current.map((item) => item.id === user.id ? { ...item, accountStatus } : item));
+      showToast(
+        accountStatus === "suspended"
+          ? t('toast.accountSuspended', { name: user.username })
+          : t('toast.accountRestored', { name: user.username }),
+        'success',
+      );
       void loadSummary();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error");
+      const message = err instanceof Error ? err.message : t('toast.accountUpdateFailed');
+      setError(message);
+      showToast(message, 'error');
     }
   };
 

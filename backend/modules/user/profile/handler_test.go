@@ -43,10 +43,10 @@ func TestGetProfileReturnsMemberProfileFieldsWithoutEmail(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response["username"] != "alice" || response["firstName"] != "Alice" || response["phoneNo"] != "+60123456789" || response["gender"] != "Female" || response["dateOfBirth"] == nil {
+	if response["username"] != "alice" || response["firstName"] != "Alice" || response["lastName"] != "Tan" || response["bio"] != "Badminton fan" || response["createdAt"] != "2026-01-01T00:00:00Z" {
 		t.Fatalf("unexpected public profile: %#v", response)
 	}
-	for _, privateField := range []string{"email", "accountStatus"} {
+	for _, privateField := range []string{"email", "accountStatus", "phoneNo", "gender", "dateOfBirth"} {
 		if _, found := response[privateField]; found {
 			t.Fatalf("response unexpectedly contains private field %q", privateField)
 		}

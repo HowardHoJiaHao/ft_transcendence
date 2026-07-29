@@ -2,10 +2,14 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/components/Toast/ToastContext';
+import { useI18n } from '@/context/LanguageContext';
 
 export default function ChangeEmailPage()
 {
 	const router = useRouter();
+	const { showToast } = useToast();
+	const { t } = useI18n();
 	const [newEmail, setNewEmail] = useState('');
 	const [loading, setLoading] = useState(false);
 	const [msg, setMsg] = useState('');
@@ -37,15 +41,19 @@ export default function ChangeEmailPage()
 
 			if (!res.ok)
 			{
-				setMsg(data.error ?? 'Failed to update email');
+				const message = data.error ?? t('toast.emailUpdateFailed');
+				setMsg(message);
+				showToast(message, 'error');
 				return ;
 			}
-			setMsg('Email updated successfully')
+			setMsg(t('toast.emailUpdated'));
+			showToast(t('toast.emailUpdated'), 'success');
 			setTimeout(() => router.push('/profile'), 800);
 		}
 		catch
 		{
-			setMsg('Network error')
+			setMsg(t('toast.networkError'));
+			showToast(t('toast.networkError'), 'error');
 		}
 		finally
 		{

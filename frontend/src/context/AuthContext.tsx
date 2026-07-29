@@ -16,7 +16,8 @@ type User = {
   gender?: string;
   dateOfBirth?: string;
   avatarUrl?: string;
-  status: string;	
+  oauthProvider?: string;
+  status: string;
 };
 
 interface AuthContextType {

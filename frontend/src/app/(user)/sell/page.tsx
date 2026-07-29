@@ -318,6 +318,7 @@ function SellPageInner() {
         }
         const created = await res.json();
         await uploadPhotos(created.id, token);
+        showToast(t('toast.listingCreated'), 'success');
         setStep(3);
       }
     } catch (err) {

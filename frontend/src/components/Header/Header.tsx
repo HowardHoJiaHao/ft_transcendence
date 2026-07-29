@@ -9,6 +9,8 @@ import { useI18n, LOCALES, type Locale } from '@/context/LanguageContext';
 import { useSearch } from '@/hooks/useSearch';
 import SearchBar from '@/components/SearchBar/SearchBar';
 import { resolveAvatarUrl, PLACEHOLDER_AVATAR } from '@/lib/avatar';
+import NotificationBell from '@/components/NotificationBell/NotificationBell';
+import { useNotifications } from '@/context/NotificationContext';
 
 type HeaderProps = {
   searchValue?: string;
@@ -37,6 +39,7 @@ export default function Header({
   const { itemCount } = useCart();
   const { t, lang, setLang } = useI18n(); // connection to the useI18n and pull these functions
   const { searchQuery, setSearchQuery, handleSearch } = useSearch();
+  const { closePanel: closeNotifications } = useNotifications();
   const activeSearchValue = searchValue ?? searchQuery;
   const handleSearchChange = onSearchChange ?? setSearchQuery;
   const submitSearch = onSearchSubmit ?? handleSearch;
@@ -82,6 +85,12 @@ export default function Header({
 			<Link href="/" className="text-2xl font-bold text-[var(--primary)] m-0 no-underline inline-block"><h1>🏸 RacketDiction 💉 </h1></Link>
             <SearchBar value={activeSearchValue} onChange={handleSearchChange} onSubmit={submitSearch} />
             <div className="flex gap-2 flex-nowrap items-center justify-end max-[900px]:justify-start max-[900px]:flex-wrap *:shrink-0 *:whitespace-nowrap [&>.btn]:h-7 [&>.btn]:py-0 [&>.btn]:box-border [&>.btn]:inline-flex [&>.btn]:items-center">
+              {user && (
+                <NotificationBell onBeforeOpen={() => {
+                  setMenuOpen(false);
+                  setLangOpen(false);
+                }} />
+              )}
 			  <Link href="/admin/login" className="btn btn-secondary btn-sm">Admin</Link>
 
               <Link href="/cart" className="relative bg-[var(--light)] text-[var(--dark)] h-7 px-2.5 box-border border border-[var(--border)] rounded no-underline text-[15px] leading-none inline-flex items-center transition-colors duration-300 hover:bg-[#e9ecef]">🛒{itemCount > 0 && (<span className="absolute -top-1.5 -right-1.5 bg-[#ef4444] text-white rounded-full w-5 h-5 text-xs font-bold flex items-center justify-center">{itemCount}</span>)}</Link>
@@ -92,7 +101,11 @@ export default function Header({
                   <button
                     type="button"
                     className="relative block p-0 border-none bg-transparent cursor-pointer rounded-full leading-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
-                    onClick={() => setMenuOpen((open) => !open)}
+                    onClick={() => {
+                      closeNotifications();
+                      setLangOpen(false);
+                      setMenuOpen((open) => !open);
+                    }}
                     aria-haspopup="menu"
                     aria-expanded={menuOpen}
                     aria-label={user.username}
@@ -164,7 +177,11 @@ export default function Header({
                   className={`w-9 h-9 rounded-full border bg-[var(--light)] cursor-pointer inline-flex items-center justify-center text-base leading-none p-0 transition-colors duration-150 ${
                     langOpen ? 'border-[var(--primary)]' : 'border-[var(--border)] hover:bg-[#e9ecef]'
                   }`}
-                  onClick={() => setLangOpen((open) => !open)}
+                  onClick={() => {
+                    closeNotifications();
+                    setMenuOpen(false);
+                    setLangOpen((open) => !open);
+                  }}
                   aria-haspopup="menu"
                   aria-expanded={langOpen}
                   aria-label={t('language.label')}

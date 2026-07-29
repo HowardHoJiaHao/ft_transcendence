@@ -39,6 +39,11 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 		return nil, nil, nil, fmt.Errorf("users migration failed: %w", err)
 	}
 
+	if err := runNotificationsMigration(rawDB); err != nil {
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("notifications migration failed: %w", err)
+	}
+
 	log.Println("Database connected successfully")
 
 	cleanup := func() {
@@ -135,6 +140,48 @@ func runAnalyticsEventsMigration(db *sql.DB) error {
 		}
 	}
 	log.Println("analytics_events migration completed")
+	return nil
+}
+
+func runNotificationsMigration(db *sql.DB) error {
+	migrations := []string{
+		`CREATE TABLE IF NOT EXISTS notifications (
+			id BIGSERIAL PRIMARY KEY,
+			user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			actor_id INT REFERENCES users(id) ON DELETE SET NULL,
+			notification_type VARCHAR(40) NOT NULL,
+			resource_id INT,
+			data JSONB NOT NULL DEFAULT '{}'::jsonb,
+			read_at TIMESTAMP,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint
+				WHERE conname = 'notifications_type_check'
+			) THEN
+				ALTER TABLE notifications
+				ADD CONSTRAINT notifications_type_check
+				CHECK (notification_type IN ('message', 'friend_added', 'order_new', 'order_completed'));
+			END IF;
+		END $$`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user_order
+		 ON notifications(user_id, updated_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+		 ON notifications(user_id, updated_at DESC, id DESC)
+		 WHERE read_at IS NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_unread_message_group
+		 ON notifications(user_id, actor_id, notification_type)
+		 WHERE read_at IS NULL AND notification_type = 'message'`,
+	}
+	for _, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("Notifications migration completed")
 	return nil
 }
 

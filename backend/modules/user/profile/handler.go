@@ -141,6 +141,15 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
 	}
+	if req.Email != nil {
+		currentUser, err := h.repo.GetUserByID(userId)
+		if err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User not found"})
+		}
+		if currentUser.OAuthProvider == "google" {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "Google-authenticated accounts cannot change their email"})
+		}
+	}
 
 	if err := h.repo.UpdateUserProfile(userId, req); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update profile"})

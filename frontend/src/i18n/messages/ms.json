@@ -18,6 +18,42 @@
     "ms": "Bahasa Melayu",
     "zh": "中文"
   },
+  "notifications": {
+    "title": "Pemberitahuan",
+    "bell": "Pemberitahuan",
+    "bellUnread": "{count} pemberitahuan belum dibaca",
+    "unread": "{count} belum dibaca",
+    "new": "Baharu",
+    "someone": "Seseorang",
+    "anItem": "satu barangan",
+    "messageOne": "{name} menghantar mesej kepada anda",
+    "messageMany": "{name} menghantar {count} mesej kepada anda",
+    "friendAdded": "{name} menambah anda sebagai rakan",
+    "orderNew": "{name} membuat pesanan untuk {count} × {title}",
+    "orderCompleted": "{name} menandakan pesanan anda untuk {title} sebagai dihantar",
+    "loading": "Memuatkan pemberitahuan…",
+    "loadingMore": "Memuatkan lagi…",
+    "empty": "Anda belum mempunyai pemberitahuan.",
+    "error": "Pemberitahuan tidak dapat dimuatkan.",
+    "retry": "Cuba lagi",
+    "loadMore": "Muatkan lagi",
+    "end": "Anda sudah melihat semuanya"
+  },
+  "toast": {
+    "listingCreated": "Senarai berjaya dicipta",
+    "friendRemoved": "Rakan dibuang",
+    "friendRemoveFailed": "Tidak dapat membuang rakan",
+    "conversationDeleted": "Perbualan dipadam",
+    "conversationDeleteFailed": "Tidak dapat memadam perbualan",
+    "emailUpdated": "E-mel berjaya dikemas kini",
+    "emailUpdateFailed": "Tidak dapat mengemas kini e-mel",
+    "phoneUpdated": "Nombor telefon berjaya dikemas kini",
+    "phoneUpdateFailed": "Tidak dapat mengemas kini nombor telefon",
+    "networkError": "Ralat rangkaian. Sila cuba lagi.",
+    "accountSuspended": "{name} telah digantung",
+    "accountRestored": "{name} telah dipulihkan",
+    "accountUpdateFailed": "Tidak dapat mengemas kini status akaun"
+  },
   "chat": {
     "title": "Perbualan Anda",
     "onlineNow": "Dalam talian sekarang",
@@ -49,7 +85,10 @@
     "phoneNo": "Nombor telefon",
     "gender": "Jantina",
     "dateOfBirth": "Tarikh lahir",
-    "notProvided": "Tidak diberikan"
+    "notProvided": "Tidak diberikan",
+    "googleManaged": "Diuruskan oleh akaun Google anda",
+    "googleSecurityHint": "E-mel dan kata laluan anda diuruskan melalui akaun Google anda.",
+    "emailOtpHint": "Menukar e-mel anda akan menghantar kod sekali guna terlebih dahulu. Nombor telefon boleh ditukar secara terus."
   },
   "auth": {
     "adminLogin": "Log masuk pentadbir"

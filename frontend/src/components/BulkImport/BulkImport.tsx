@@ -172,9 +172,11 @@ export default function BulkImport() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setImportedCount(data.imported ?? rows.length);
+        const completedCount = data.imported ?? rows.length;
+        setImportedCount(completedCount);
         setRows([]);
         setFileName('');
+        showToast(t('import.successBody', { count: completedCount }), 'success');
       } else if (Array.isArray(data.errors) && data.errors.length > 0) {
         setServerErrors(data.errors);
       } else {

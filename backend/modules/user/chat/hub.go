@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
+	"transcendence/modules/user/notifications"
 )
 
 type OutgoingMessage struct {
@@ -24,13 +26,14 @@ type Client struct {
 }
 
 type Hub struct {
-	Clients    map[int]*Client
-	Send       chan OutgoingMessage
-	Broadcast  chan []byte
-	Register   chan *Client
-	Unregister chan int
-	Snapshots  chan chan []int
-	Repo       *Repository
+	Clients       map[int]*Client
+	Send          chan OutgoingMessage
+	Broadcast     chan []byte
+	Register      chan *Client
+	Unregister    chan int
+	Snapshots     chan chan []int
+	Repo          *Repository
+	Notifications *notifications.Service
 }
 
 func NewHub(repo *Repository) *Hub {
@@ -205,6 +208,10 @@ func (c *Client) readPump(h *Hub) {
 			log.Printf("JSON parse error: %v", err)
 			continue
 		}
+		if inbound.ReceiverId <= 0 || inbound.ReceiverId == c.UserId || strings.TrimSpace(inbound.Content) == "" {
+			log.Printf("Rejected invalid private message from user %d", c.UserId)
+			continue
+		}
 
 		//store in database and retake
 		//h.repo.createmessage
@@ -214,7 +221,7 @@ func (c *Client) readPump(h *Hub) {
 			continue
 		}
 
-		msg, err := repo.CreateMessage(c.UserId, inbound.ReceiverId, inbound.Content)
+		msg, notificationID, err := repo.CreateMessageWithNotification(c.UserId, inbound.ReceiverId, inbound.Content)
 		if err != nil {
 			log.Printf("Failed to save message: %v", err)
 			continue
@@ -232,6 +239,9 @@ func (c *Client) readPump(h *Hub) {
 		payload, _ := json.Marshal(outbound)
 		h.SendPrivateMessage(msg.ReceiverId, payload)
 		h.SendPrivateMessage(msg.SenderId, payload)
+		if h.Notifications != nil {
+			h.Notifications.PublishByID(msg.ReceiverId, notificationID)
+		}
 	}
 }
 
@@ -259,11 +269,6 @@ func (c *Client) writePump() {
 				return
 			}
 			w.Write(message)
-
-			n := len(c.Send)
-			for i := 0; i < n; i++ {
-				w.Write(<-c.Send)
-			}
 
 			if err := w.Close(); err != nil {
 				return

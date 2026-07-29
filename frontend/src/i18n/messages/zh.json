@@ -18,6 +18,42 @@
     "ms": "Bahasa Melayu",
     "zh": "中文"
   },
+  "notifications": {
+    "title": "通知",
+    "bell": "通知",
+    "bellUnread": "{count} 条未读通知",
+    "unread": "{count} 条未读",
+    "new": "新",
+    "someone": "有人",
+    "anItem": "一件商品",
+    "messageOne": "{name} 给您发了一条消息",
+    "messageMany": "{name} 给您发了 {count} 条消息",
+    "friendAdded": "{name} 添加您为好友",
+    "orderNew": "{name} 下单购买了 {count} × {title}",
+    "orderCompleted": "{name} 已将您购买的 {title} 标记为已送达",
+    "loading": "正在加载通知…",
+    "loadingMore": "正在加载更多…",
+    "empty": "您还没有通知。",
+    "error": "无法加载通知。",
+    "retry": "重试",
+    "loadMore": "加载更多",
+    "end": "您已查看全部通知"
+  },
+  "toast": {
+    "listingCreated": "商品发布成功",
+    "friendRemoved": "已删除好友",
+    "friendRemoveFailed": "无法删除好友",
+    "conversationDeleted": "对话已删除",
+    "conversationDeleteFailed": "无法删除对话",
+    "emailUpdated": "邮箱更新成功",
+    "emailUpdateFailed": "无法更新邮箱",
+    "phoneUpdated": "电话号码更新成功",
+    "phoneUpdateFailed": "无法更新电话号码",
+    "networkError": "网络错误，请重试。",
+    "accountSuspended": "{name} 已被停用",
+    "accountRestored": "{name} 已恢复",
+    "accountUpdateFailed": "无法更新账户状态"
+  },
   "chat": {
     "title": "您的对话",
     "onlineNow": "当前在线",
@@ -49,7 +85,10 @@
     "phoneNo": "电话号码",
     "gender": "性别",
     "dateOfBirth": "出生日期",
-    "notProvided": "未提供"
+    "notProvided": "未提供",
+    "googleManaged": "由您的 Google 帐户管理",
+    "googleSecurityHint": "您的电子邮件和密码由 Google 帐户管理。",
+    "emailOtpHint": "更改电子邮件会先发送一次性验证码。电话号码可以直接更改。"
   },
   "auth": {
     "adminLogin": "管理员登录"
