@@ -8,7 +8,6 @@ import { useI18n } from '@/context/LanguageContext';
 import Header from '@/components/Header/Header';
 import ChatModal from './ChatModal';
 import type { PrivateMessage, Conversation, OnlineUser } from '@/types/websocket';
-import styles from './chat.module.css';
 
 export default function ChatPage() {
 	const { user } = useAuth();
@@ -89,7 +88,7 @@ export default function ChatPage() {
 		}
 	};
 
-	const openChat = async (partnerId: number) => 
+	const openChat = async (partnerId: number) =>
 	{
 		//setSelectedPartner(partnerId);
 		try
@@ -130,26 +129,31 @@ export default function ChatPage() {
 	return (
         <main>
 		  <Header />
-            <div className={styles.container}>
-              <h1 className={styles.title}>{t('chat.title')}</h1>
-              <section className={styles.onlineSection} aria-labelledby="online-users-heading">
-                <h2 id="online-users-heading" className={styles.sectionTitle}>{t('chat.onlineNow')}</h2>
+            <div className="p-5 max-w-[800px] mx-auto">
+              <h1 className="text-2xl mb-5">{t('chat.title')}</h1>
+              <section className="mb-7" aria-labelledby="online-users-heading">
+                <h2 id="online-users-heading" className="text-lg mb-2.5">{t('chat.onlineNow')}</h2>
                 {onlineChatUsers.length === 0 ? (
-                  <p className={styles.onlineEmpty}>{t('chat.noOnlineUsers')}</p>
+                  <p className="text-[#666] m-0">{t('chat.noOnlineUsers')}</p>
                 ) : (
-                  <ul className={styles.onlineUserList}>
+                  <ul className="flex flex-wrap gap-2.5 list-none m-0 p-0">
                     {onlineChatUsers.map((onlineUser) => (
                       <li key={onlineUser.id}>
-                        <button className={styles.onlineUser} onClick={() => openChat(onlineUser.id)}>
-                          <span className={styles.avatar}>
+                        <button
+                          className="flex items-center gap-2 border border-[#e5e7eb] rounded-full bg-white cursor-pointer py-1.5 pr-3 pl-1.5 hover:bg-[#f5f5f5]"
+                          onClick={() => openChat(onlineUser.id)}
+                        >
+                          <span className="w-8 h-8 rounded-full">
                             {onlineUser.avatar_url ? (
-                              <img src={onlineUser.avatar_url} alt="" />
+                              <img src={onlineUser.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                             ) : (
-                              <span className={styles.avatarPlaceholder}>{onlineUser.username[0]}</span>
+                              <span className="w-full h-full rounded-full bg-[#ccc] flex items-center justify-center text-white font-bold">
+                                {onlineUser.username[0]}
+                              </span>
                             )}
                           </span>
-                          <span className={styles.onlineUserName}>{onlineUser.username}</span>
-                          <span className={styles.onlineDot} aria-label={t('chat.online')} />
+                          <span className="font-semibold">{onlineUser.username}</span>
+                          <span className="w-2 h-2 rounded-full bg-[#22c55e]" aria-label={t('chat.online')} />
                         </button>
                       </li>
                     ))}
@@ -157,20 +161,20 @@ export default function ChatPage() {
                 )}
               </section>
               {conversations.length === 0 ? (
-                <div className={styles.emptyState}>{t('chat.noConversations')}</div>
+                <div className="text-center text-[#666] text-lg mt-[50px]">{t('chat.noConversations')}</div>
               ) : (
-                <ul className={styles.conversationList}>
+                <ul className="list-none p-0">
                   {conversations.map((conv) =>
-                    <li key={conv.partner_id} onClick={() => openChat(conv.partner_id)} className={styles.conversationItem}>
-                      <div className={styles.avatar}>
-                    	{conv.partner_avatar_url ? 
-                    	  (<img src={conv.partner_avatar_url} alt="" />) : (<span className={styles.avatarPlaceholder}>{conv.partner_username[0]}</span>)}
+                    <li key={conv.partner_id} onClick={() => openChat(conv.partner_id)} className="flex items-center p-[10px] border-b border-[#eee] cursor-pointer hover:bg-[#f5f5f5]">
+                      <div className="w-10 h-10 rounded-full mr-[10px]">
+                        {conv.partner_avatar_url ?
+                          (<img src={conv.partner_avatar_url} alt="" className="w-full h-full rounded-full object-cover" />) : (<span className="w-full h-full rounded-full bg-[#ccc] flex items-center justify-center text-white font-bold">{conv.partner_username[0]}</span>)}
                       </div>
-                      <div className={styles.conversationInfo}>
-                    	<div className={styles.conversationName}>{conv.partner_username}</div>
+                      <div className="flex-1">
+                        <div className="font-bold m-0">{conv.partner_username}</div>
                       </div>
-                      <div className={styles.conversationActions}>
-                        <button className={styles.delete} onClick={(e) => deleteConversation(conv.partner_id, e)} title="Delete conversation">x</button>
+                      <div className="flex items-center gap-2">
+                        <button className="bg-transparent border-none text-[#ff6b6b] cursor-pointer text-base" onClick={(e) => deleteConversation(conv.partner_id, e)} title="Delete conversation">x</button>
                         {/*<div>{new Date(conv.last_message_at).toLocaleDateString()}</div>*/}
                       </div>
                     </li>

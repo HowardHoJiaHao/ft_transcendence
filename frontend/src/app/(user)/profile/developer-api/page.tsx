@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import Header from '@/components/Header/Header';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast/ToastContext';
-import styles from './developer-api.module.css';
 
 type APIKeyInfo = {
   id: number;
@@ -401,13 +400,13 @@ export default function DeveloperApiPage() {
   };
 
   const methodClass = (m: string) =>
-    m === 'GET' ? styles.methodGet
-      : m === 'POST' ? styles.methodPost
-        : m === 'PUT' ? styles.methodPut
-          : styles.methodDelete;
+    m === 'GET' ? 'bg-[#e3edfb] text-[#1c5cab]'
+      : m === 'POST' ? 'bg-[#e6f4ea] text-[#1a7f37]'
+        : m === 'PUT' ? 'bg-[#fff3cd] text-[#8d6e00]'
+          : 'bg-[#fee2e2] text-[#991b1b]';
 
   const logStatusClass = (status: number) =>
-    status < 300 ? styles.logOk : status < 500 ? styles.logWarn : styles.logErr;
+    status < 300 ? 'bg-[#e6f4ea] text-[#1a7f37]' : status < 500 ? 'bg-[#fff3cd] text-[#8d6e00]' : 'bg-[#fee2e2] text-[#991b1b]';
 
   const totalLogPages = Math.max(1, Math.ceil(logs.length / LOGS_PER_PAGE));
   const clampedLogPage = Math.min(logPage, totalLogPages);
@@ -417,73 +416,73 @@ export default function DeveloperApiPage() {
   );
 
   const renderEndpoint = (ep: Endpoint) => (
-    <div key={ep.method + ep.path} className={styles.endpointCard}>
-      <div className={styles.endpointHead}>
-        <span className={`${styles.methodPill} ${methodClass(ep.method)}`}>{ep.method}</span>
-        <code className={styles.endpointPath}>{ep.path}</code>
+    <div key={ep.method + ep.path} className="border border-[#eee] rounded-[10px] p-4 mb-3.5 bg-[#fdfdfc] last:mb-0">
+      <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
+        <span className={`inline-block px-2.5 py-[3px] rounded-[10px] text-[11.5px] font-bold tracking-[0.3px] ${methodClass(ep.method)}`}>{ep.method}</span>
+        <code className="text-sm font-bold text-[#222]">{ep.path}</code>
       </div>
-      <p className={styles.endpointAuth}>{ep.auth}</p>
-      <p className={styles.endpointDesc}>{ep.description}</p>
+      <p className="text-xs text-[#898781] mt-0 mx-0 mb-2">{ep.auth}</p>
+      <p className="text-[13.5px] text-[#444] leading-[1.55] mt-0 mx-0 mb-2.5">{ep.description}</p>
       {ep.params && (
-        <ul className={styles.paramList}>
+        <ul className="mt-0 mx-0 mb-3 pl-[18px] text-[#555] text-[13px] leading-[1.65]">
           {ep.params.map((p) => (
             <li key={p}>{p}</li>
           ))}
         </ul>
       )}
-      <div className={styles.exampleBlock}>
-        <div className={styles.exampleHead}>
+      <div className="mb-2.5 last:mb-0">
+        <div className="flex justify-between items-center mb-1.5 [&_span]:text-[11px] [&_span]:text-[#898781] [&_span]:uppercase [&_span]:tracking-[0.4px] [&_span]:font-bold">
           <span>Example request</span>
-          <button className={styles.copyBtn} type="button" onClick={() => copyText(ep.request)}>
+          <button className="border border-[#ddd] bg-white rounded-md px-2.5 py-[3px] text-xs font-semibold text-[#444] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]" type="button" onClick={() => copyText(ep.request)}>
             Copy
           </button>
         </div>
-        <pre className={styles.codeBox}>{ep.request}</pre>
+        <pre className="m-0 px-3.5 py-3 bg-[#1c1c1a] text-[#e8e6df] rounded-lg overflow-x-auto text-[12.5px] leading-[1.6]">{ep.request}</pre>
       </div>
       {ep.response && (
-        <div className={styles.exampleBlock}>
-          <div className={styles.exampleHead}>
+        <div className="mb-2.5 last:mb-0">
+          <div className="flex justify-between items-center mb-1.5 [&_span]:text-[11px] [&_span]:text-[#898781] [&_span]:uppercase [&_span]:tracking-[0.4px] [&_span]:font-bold">
             <span>Example response</span>
           </div>
-          <pre className={styles.codeBox}>{ep.response}</pre>
+          <pre className="m-0 px-3.5 py-3 bg-[#1c1c1a] text-[#e8e6df] rounded-lg overflow-x-auto text-[12.5px] leading-[1.6]">{ep.response}</pre>
         </div>
       )}
     </div>
   );
 
   return (
-    <main className={styles.main}>
+    <main className="min-h-screen bg-[#f0f0f0]">
       <Header />
 
-      <div className={styles.container}>
-        <button className={styles.backBtn} onClick={() => router.push('/profile/my-ads')}>
+      <div className="max-w-[1180px] mx-auto pt-7 px-8 pb-16 max-[640px]:pt-5 max-[640px]:px-4 max-[640px]:pb-12">
+        <button className="bg-white border border-[#ddd] rounded-[20px] text-[#444] text-[13px] font-semibold cursor-pointer px-4 py-[7px] mb-3.5 inline-flex items-center gap-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 hover:border-[#888] hover:text-[#111] hover:-translate-x-0.5" onClick={() => router.push('/profile/my-ads')}>
           ← Back to My Shop
         </button>
 
-        <h1 className={styles.heading}>🔑 Developer API</h1>
-        <p className={styles.subheading}>
+        <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-1.5">🔑 Developer API</h1>
+        <p className="text-[#898781] text-sm mt-0 mx-0 mb-[18px]">
           Generate secret keys, read the API documentation, and audit every request made
           with your keys.
         </p>
 
-        <div className={styles.card}>
-          <div className={styles.tabBar}>
+        <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] overflow-hidden">
+          <div className="flex gap-2.5 px-5 py-4 border-b border-[#eee] flex-wrap">
             <button
-              className={`${styles.tab} ${activeTab === 'keys' ? styles.tabActive : ''}`}
+              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'keys' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
               onClick={() => setActiveTab('keys')}
               type="button"
             >
               🔐 Create Secret Key
             </button>
             <button
-              className={`${styles.tab} ${activeTab === 'docs' ? styles.tabActive : ''}`}
+              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'docs' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
               onClick={() => setActiveTab('docs')}
               type="button"
             >
               📖 API Documentation
             </button>
             <button
-              className={`${styles.tab} ${activeTab === 'logs' ? styles.tabActive : ''}`}
+              className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'logs' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
               onClick={() => setActiveTab('logs')}
               type="button"
             >
@@ -491,37 +490,37 @@ export default function DeveloperApiPage() {
             </button>
           </div>
 
-          <div className={styles.tabContent}>
+          <div className="p-5">
             {activeTab === 'keys' && (
               <>
-                <div className={styles.sectionCard}>
-                  <h2 className={styles.sectionTitle}>🔐 Create a secret key</h2>
-                  <p className={styles.sectionHint}>
+                <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
+                  <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">🔐 Create a secret key</h2>
+                  <p className="text-[#898781] text-[13.5px] leading-[1.55] mt-0 mx-0 mb-3.5">
                     The key is shown once, right after creation. Store it somewhere safe —
                     only a hash is kept on our side, so it can never be displayed again.
                   </p>
-                  <form className={styles.formRow} onSubmit={handleCreateKey}>
+                  <form className="flex gap-2.5 flex-wrap" onSubmit={handleCreateKey}>
                     <input
-                      className={styles.input}
+                      className="flex-[1_1_320px] min-w-[220px] border border-[#ddd] rounded-lg px-3 py-[9px] text-sm bg-white text-[#333] focus:outline-none focus:border-[#888]"
                       value={newKeyName}
                       onChange={(e) => setNewKeyName(e.target.value)}
                       placeholder="Key name, e.g. My Inventory Bot"
                     />
-                    <button className={styles.primaryBtn} type="submit" disabled={creating}>
+                    <button className="border-none rounded-[20px] bg-[#111] text-white text-sm font-semibold px-5 py-[9px] cursor-pointer transition-colors duration-150 hover:bg-[#333] disabled:opacity-55 disabled:cursor-not-allowed" type="submit" disabled={creating}>
                       {creating ? 'Creating…' : '+ Create key'}
                     </button>
                   </form>
 
                   {generatedKey && (
-                    <div className={styles.generatedKeyBox}>
-                      <div className={styles.generatedKeyText}>
-                        <p className={styles.generatedKeyWarning}>
+                    <div className="flex justify-between items-center gap-3.5 px-4 py-3.5 mt-4 rounded-[10px] bg-[#fff8e1] border border-[#ffe082] max-[640px]:flex-col max-[640px]:items-start">
+                      <div className="min-w-0">
+                        <p className="text-[#8d6e00] text-[13px] font-bold mt-0 mx-0 mb-1.5">
                           ⚠ Copy this key now — it will not be shown again.
                         </p>
-                        <code className={styles.generatedKeyValue}>{generatedKey}</code>
+                        <code className="block break-all text-[13px] text-[#111]">{generatedKey}</code>
                       </div>
                       <button
-                        className={styles.secondaryBtn}
+                        className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]"
                         type="button"
                         onClick={() => copyText(generatedKey)}
                       >
@@ -531,22 +530,22 @@ export default function DeveloperApiPage() {
                   )}
                 </div>
 
-                <div className={styles.sectionCard}>
-                  <div className={styles.sectionHeader}>
-                    <h2 className={styles.sectionTitle}>🗝 Your keys</h2>
-                    <button className={styles.secondaryBtn} type="button" onClick={refreshKeys}>
+                <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
+                  <div className="flex justify-between items-center gap-3 mt-0 mx-0 mb-3 max-[640px]:flex-wrap">
+                    <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-0">🗝 Your keys</h2>
+                    <button className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]" type="button" onClick={refreshKeys}>
                       ↻ Refresh
                     </button>
                   </div>
                   {loadingKeys ? (
-                    <p className={styles.emptyText}>Loading keys…</p>
+                    <p className="text-[#888] text-[15px] m-0 py-5">Loading keys…</p>
                   ) : keys.length === 0 ? (
-                    <p className={styles.emptyText}>
+                    <p className="text-[#888] text-[15px] m-0 py-5">
                       No API keys yet — create your first one above.
                     </p>
                   ) : (
-                    <div className={styles.tableWrap}>
-                      <table className={styles.statsTable}>
+                    <div className="w-full overflow-x-auto">
+                      <table className="w-full border-collapse text-sm [&_th]:text-left [&_th]:px-3 [&_th]:py-2.5 [&_th]:border-b-2 [&_th]:border-b-[#eee] [&_th]:text-[#666] [&_th]:font-semibold [&_th]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2.5 [&_td]:border-b [&_td]:border-b-[#f0f0f0] [&_td]:whitespace-nowrap [&_tr:last-child_td]:border-b-0">
                         <thead>
                           <tr>
                             <th>#</th>
@@ -561,11 +560,11 @@ export default function DeveloperApiPage() {
                         <tbody>
                           {keys.map((key) => (
                             <tr key={key.id}>
-                              <td className={styles.mutedCell}>{key.id}</td>
-                              <td className={styles.strongCell}>{key.name}</td>
+                              <td className="text-[#898781] text-[13px]">{key.id}</td>
+                              <td className="font-semibold text-[#222]">{key.name}</td>
                               <td>
                                 <span
-                                  className={`${styles.statusChip} ${key.isActive ? styles.statusActive : styles.statusRevoked}`}
+                                  className={`inline-block px-3 py-[3px] rounded-xl text-xs font-bold ${key.isActive ? 'bg-[#e6f4ea] text-[#1a7f37]' : 'bg-[#fee2e2] text-[#991b1b]'}`}
                                 >
                                   {key.isActive ? 'Active' : 'Revoked'}
                                 </span>
@@ -575,7 +574,7 @@ export default function DeveloperApiPage() {
                               <td>{formatDateTime(key.lastUsedAt)}</td>
                               <td>
                                 <button
-                                  className={styles.dangerBtn}
+                                  className="border border-[#f3c2c2] bg-[#fff5f5] rounded-lg px-3 py-1.5 text-[13px] font-semibold text-[#b42318] cursor-pointer transition-all duration-150 hover:border-[#d92d20] disabled:opacity-50 disabled:cursor-not-allowed"
                                   type="button"
                                   disabled={!key.isActive || revokingId === key.id}
                                   onClick={() => handleRevoke(key.id)}
@@ -595,16 +594,16 @@ export default function DeveloperApiPage() {
 
             {activeTab === 'docs' && (
               <>
-                <div className={styles.sectionCard}>
-                  <h2 className={styles.sectionTitle}>🚀 Quickstart</h2>
-                  <ol className={styles.quickstart}>
+                <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
+                  <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">🚀 Quickstart</h2>
+                  <ol className="mt-0 mx-0 mb-4 pl-5 text-[#444] text-sm leading-[1.7] [&_li]:mb-1.5">
                     <li>
                       <strong>Create a key</strong> in the “Create Secret Key” tab and copy it —
                       it is shown only once.
                     </li>
                     <li>
                       <strong>Send it on every request</strong> as a header:{' '}
-                      <code className={styles.inlineCode}>X-API-Key: sk_live_...</code>
+                      <code className="bg-[#f5f5f3] border border-[#e8e8e6] rounded-md px-[7px] py-px text-[12.5px] text-[#c2185b]">X-API-Key: sk_live_...</code>
                     </li>
                     <li>
                       <strong>Call any endpoint below.</strong> Each key is rate-limited
@@ -612,21 +611,21 @@ export default function DeveloperApiPage() {
                       Request Log.
                     </li>
                   </ol>
-                  <div className={styles.calloutRow}>
-                    <div className={styles.callout}>
-                      <p className={styles.calloutTitle}>Base URL</p>
-                      <code className={styles.inlineCode}>https://localhost/api/public/v1</code>
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
+                    <div className="bg-[#fafaf8] border border-[#eee] rounded-lg px-3.5 py-3">
+                      <p className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mt-0 mx-0 mb-1.5">Base URL</p>
+                      <code className="bg-[#f5f5f3] border border-[#e8e8e6] rounded-md px-[7px] py-px text-[12.5px] text-[#c2185b]">https://localhost/api/public/v1</code>
                     </div>
-                    <div className={styles.callout}>
-                      <p className={styles.calloutTitle}>Rate limit</p>
-                      <p className={styles.calloutText}>
+                    <div className="bg-[#fafaf8] border border-[#eee] rounded-lg px-3.5 py-3">
+                      <p className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mt-0 mx-0 mb-1.5">Rate limit</p>
+                      <p className="text-[13px] text-[#444] m-0 leading-[1.5]">
                         Per key, per minute (default 100). Exceeding it returns 429 until the
                         next minute window.
                       </p>
                     </div>
-                    <div className={styles.callout}>
-                      <p className={styles.calloutTitle}>Audit log</p>
-                      <p className={styles.calloutText}>
+                    <div className="bg-[#fafaf8] border border-[#eee] rounded-lg px-3.5 py-3">
+                      <p className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mt-0 mx-0 mb-1.5">Audit log</p>
+                      <p className="text-[13px] text-[#444] m-0 leading-[1.5]">
                         Every request is logged: method, path, status, IP, and time — see the
                         Request Log tab.
                       </p>
@@ -634,34 +633,34 @@ export default function DeveloperApiPage() {
                   </div>
                 </div>
 
-                <div className={styles.sectionCard}>
-                  <h2 className={styles.sectionTitle}>🌐 Public API — products</h2>
-                  <p className={styles.sectionHint}>
-                    Authenticate with <code className={styles.inlineCode}>X-API-Key</code>. Write
+                <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
+                  <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">🌐 Public API — products</h2>
+                  <p className="text-[#898781] text-[13.5px] leading-[1.55] mt-0 mx-0 mb-3.5">
+                    Authenticate with <code className="bg-[#f5f5f3] border border-[#e8e8e6] rounded-md px-[7px] py-px text-[12.5px] text-[#c2185b]">X-API-Key</code>. Write
                     operations act as the key&apos;s owner: you can only modify your own listings.
                   </p>
                   {publicEndpoints.map(renderEndpoint)}
                 </div>
 
-                <div className={styles.sectionCard}>
-                  <h2 className={styles.sectionTitle}>🛠 Key management API</h2>
-                  <p className={styles.sectionHint}>
+                <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
+                  <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">🛠 Key management API</h2>
+                  <p className="text-[#898781] text-[13.5px] leading-[1.55] mt-0 mx-0 mb-3.5">
                     These endpoints use your normal login session (
-                    <code className={styles.inlineCode}>Authorization: Bearer &lt;JWT&gt;</code>
+                    <code className="bg-[#f5f5f3] border border-[#e8e8e6] rounded-md px-[7px] py-px text-[12.5px] text-[#c2185b]">Authorization: Bearer &lt;JWT&gt;</code>
                     ) — the same calls this page makes for you.
                   </p>
 
-                  <div className={styles.jwtHelpBox}>
-                    <p className={styles.jwtHelpTitle}>🔑 How to get a JWT to call these directly</p>
-                    <ol className={styles.jwtHelpSteps}>
+                  <div className="bg-[#eff6ff] border border-[#bfdbfe] rounded-[10px] px-4 py-3.5 mb-4">
+                    <p className="text-[13.5px] font-bold text-[#1c5cab] mt-0 mx-0 mb-2">🔑 How to get a JWT to call these directly</p>
+                    <ol className="mt-0 mx-0 mb-3 pl-[18px] text-[#334155] text-[13px] leading-[1.7] [&_li]:mb-1">
                       <li>
-                        Log in via the API — <code className={styles.inlineCode}>POST /api/v1/auth/login</code>{' '}
-                        with your email/password; the response&apos;s <code className={styles.inlineCode}>token</code> field is your JWT.
+                        Log in via the API — <code className="bg-[#f5f5f3] border border-[#e8e8e6] rounded-md px-[7px] py-px text-[12.5px] text-[#c2185b]">POST /api/v1/auth/login</code>{' '}
+                        with your email/password; the response&apos;s <code className="bg-[#f5f5f3] border border-[#e8e8e6] rounded-md px-[7px] py-px text-[12.5px] text-[#c2185b]">token</code> field is your JWT.
                       </li>
                       <li>
                         <strong>Or, since you&apos;re already logged in here:</strong> open DevTools
                         (F12) → Console tab → run{' '}
-                        <code className={styles.inlineCode}>localStorage.getItem(&apos;token&apos;)</code>.
+                        <code className="bg-[#f5f5f3] border border-[#e8e8e6] rounded-md px-[7px] py-px text-[12.5px] text-[#c2185b]">localStorage.getItem(&apos;token&apos;)</code>.
                       </li>
                       <li>
                         <strong>Or</strong> click the button below to copy your current session&apos;s
@@ -669,7 +668,7 @@ export default function DeveloperApiPage() {
                       </li>
                     </ol>
                     <button
-                      className={styles.secondaryBtn}
+                      className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]"
                       type="button"
                       onClick={() => (token ? copyText(token) : showToast('No active session token found', 'error'))}
                     >
@@ -680,10 +679,10 @@ export default function DeveloperApiPage() {
                   {managementEndpoints.map(renderEndpoint)}
                 </div>
 
-                <div className={styles.sectionCard}>
-                  <h2 className={styles.sectionTitle}>📟 Status codes</h2>
-                  <div className={styles.tableWrap}>
-                    <table className={styles.statsTable}>
+                <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
+                  <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">📟 Status codes</h2>
+                  <div className="w-full overflow-x-auto">
+                    <table className="w-full border-collapse text-sm [&_th]:text-left [&_th]:px-3 [&_th]:py-2.5 [&_th]:border-b-2 [&_th]:border-b-[#eee] [&_th]:text-[#666] [&_th]:font-semibold [&_th]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2.5 [&_td]:border-b [&_td]:border-b-[#f0f0f0] [&_td]:whitespace-nowrap [&_tr:last-child_td]:border-b-0">
                       <thead>
                         <tr>
                           <th>Code</th>
@@ -693,7 +692,7 @@ export default function DeveloperApiPage() {
                       <tbody>
                         {statusCodes.map(([code, meaning]) => (
                           <tr key={code}>
-                            <td className={styles.strongCell}>{code}</td>
+                            <td className="font-semibold text-[#222]">{code}</td>
                             <td>{meaning}</td>
                           </tr>
                         ))}
@@ -705,28 +704,28 @@ export default function DeveloperApiPage() {
             )}
 
             {activeTab === 'logs' && (
-              <div className={styles.sectionCard}>
-                <div className={styles.sectionHeader}>
-                  <h2 className={styles.sectionTitle}>📋 Request log</h2>
-                  <button className={styles.secondaryBtn} type="button" onClick={refreshLogs}>
+              <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
+                <div className="flex justify-between items-center gap-3 mt-0 mx-0 mb-3 max-[640px]:flex-wrap">
+                  <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-0">📋 Request log</h2>
+                  <button className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]" type="button" onClick={refreshLogs}>
                     ↻ Refresh
                   </button>
                 </div>
-                <p className={styles.sectionHint}>
+                <p className="text-[#898781] text-[13.5px] leading-[1.55] mt-0 mx-0 mb-3.5">
                   Every call made with your API keys, newest first — review this for
                   unfamiliar IPs or unexpected activity, and revoke a key if it looks
                   compromised.
                 </p>
                 {loadingLogs ? (
-                  <p className={styles.emptyText}>Loading logs…</p>
+                  <p className="text-[#888] text-[15px] m-0 py-5">Loading logs…</p>
                 ) : logs.length === 0 ? (
-                  <p className={styles.emptyText}>
+                  <p className="text-[#888] text-[15px] m-0 py-5">
                     No requests logged yet — calls appear here as soon as a key is used.
                   </p>
                 ) : (
                   <>
-                    <div className={styles.tableWrap}>
-                      <table className={styles.statsTable}>
+                    <div className="w-full overflow-x-auto">
+                      <table className="w-full border-collapse text-sm [&_th]:text-left [&_th]:px-3 [&_th]:py-2.5 [&_th]:border-b-2 [&_th]:border-b-[#eee] [&_th]:text-[#666] [&_th]:font-semibold [&_th]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2.5 [&_td]:border-b [&_td]:border-b-[#f0f0f0] [&_td]:whitespace-nowrap [&_tr:last-child_td]:border-b-0">
                         <thead>
                           <tr>
                             <th>Method</th>
@@ -741,19 +740,19 @@ export default function DeveloperApiPage() {
                           {paginatedLogs.map((log) => (
                             <tr key={log.id}>
                               <td>
-                                <span className={`${styles.methodPill} ${methodClass(log.method)}`}>
+                                <span className={`inline-block px-2.5 py-[3px] rounded-[10px] text-[11.5px] font-bold tracking-[0.3px] ${methodClass(log.method)}`}>
                                   {log.method}
                                 </span>
                               </td>
-                              <td className={styles.pathCell}>{log.path}</td>
+                              <td className="font-mono text-[13px]">{log.path}</td>
                               <td>
-                                <span className={`${styles.logStatus} ${logStatusClass(log.status)}`}>
+                                <span className={`inline-block px-2.5 py-0.5 rounded-[10px] text-xs font-bold ${logStatusClass(log.status)}`}>
                                   {log.status}
                                 </span>
                               </td>
                               <td>{log.keyName}</td>
-                              <td className={styles.mutedCell}>{log.ipAddress || '—'}</td>
-                              <td className={styles.mutedCell}>{formatDateTime(log.createdAt)}</td>
+                              <td className="text-[#898781] text-[13px]">{log.ipAddress || '—'}</td>
+                              <td className="text-[#898781] text-[13px]">{formatDateTime(log.createdAt)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -761,9 +760,9 @@ export default function DeveloperApiPage() {
                     </div>
 
                     {totalLogPages > 1 && (
-                      <div className={styles.pagination}>
+                      <div className="flex justify-center items-center gap-1.5 pt-4 pb-1">
                         <button
-                          className={styles.pageBtn}
+                          className="w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]"
                           type="button"
                           disabled={clampedLogPage === 1}
                           onClick={() => setLogPage((p) => Math.max(1, p - 1))}
@@ -773,7 +772,7 @@ export default function DeveloperApiPage() {
                         {Array.from({ length: totalLogPages }, (_, i) => (
                           <button
                             key={i + 1}
-                            className={`${styles.pageBtn} ${clampedLogPage === i + 1 ? styles.pageBtnActive : ''}`}
+                            className={`w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${clampedLogPage === i + 1 ? 'bg-[#2563eb] text-white border-[#2563eb]' : 'bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]'}`}
                             type="button"
                             onClick={() => setLogPage(i + 1)}
                           >
@@ -781,7 +780,7 @@ export default function DeveloperApiPage() {
                           </button>
                         ))}
                         <button
-                          className={styles.pageBtn}
+                          className="w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]"
                           type="button"
                           disabled={clampedLogPage === totalLogPages}
                           onClick={() => setLogPage((p) => Math.min(totalLogPages, p + 1))}

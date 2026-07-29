@@ -7,7 +7,6 @@ import { useAuth } from '@/context/AuthContext'; //import hook to access global 
 import { useI18n, LOCALES, type Locale } from '@/context/LanguageContext';
 import { useSearch } from '@/hooks/useSearch';
 import SearchBar from '@/components/SearchBar/SearchBar';
-import styles from './Header.module.css';
 
 type HeaderProps = {
   searchValue?: string;
@@ -31,19 +30,19 @@ export default function Header({
   const router = useRouter();
   const { user, logout } = useAuth();
   const { itemCount } = useCart();
-  const { t, lang, setLang } = useI18n();
+  const { t, lang, setLang } = useI18n(); // connection to the useI18n and pull these functions
   const { searchQuery, setSearchQuery, handleSearch } = useSearch();
   const activeSearchValue = searchValue ?? searchQuery;
   const handleSearchChange = onSearchChange ?? setSearchQuery;
   const submitSearch = onSearchSubmit ?? handleSearch;
 
     return (
-     <header className={styles.header}>
+     <header className="py-4">
         <div className="container">
-          <div className={styles.headerTop}>
-			<Link href="/" className={styles.logo}><h1>🏸 RacketDiction 💉 </h1></Link>
+          <div className="grid grid-cols-[auto_minmax(200px,1fr)_auto] items-center gap-4 max-[900px]:grid-cols-1 max-[900px]:gap-2.5">
+			<Link href="/" className="text-2xl font-bold text-[var(--primary)] m-0 no-underline inline-block"><h1>🏸 RacketDiction 💉 </h1></Link>
             <SearchBar value={activeSearchValue} onChange={handleSearchChange} onSubmit={submitSearch} />
-            <div className={styles.headerActions}>
+            <div className="flex gap-2 flex-nowrap items-center justify-end max-[900px]:justify-start max-[900px]:flex-wrap *:shrink-0 *:whitespace-nowrap [&>.btn]:h-7 [&>.btn]:py-0 [&>.btn]:box-border [&>.btn]:inline-flex [&>.btn]:items-center">
               {user ? (
                 <>
                   <Link href="/profile" className="btn btn-secondary btn-sm">{user.username}</Link>
@@ -53,17 +52,17 @@ export default function Header({
               ) : (
                 <Link href="/login" className="btn btn-secondary btn-sm">{t('header.login')}</Link>
               )}
-              <Link href="/cart" className={styles.cartBtn}>🛒{itemCount > 0 && (<span className={styles.cartBadge}>{itemCount}</span>)}</Link>
+              <Link href="/cart" className="relative bg-[var(--light)] text-[var(--dark)] h-7 px-2.5 box-border border border-[var(--border)] rounded no-underline text-[15px] leading-none inline-flex items-center transition-colors duration-300 hover:bg-[#e9ecef]">🛒{itemCount > 0 && (<span className="absolute -top-1.5 -right-1.5 bg-[#ef4444] text-white rounded-full w-5 h-5 text-xs font-bold flex items-center justify-center">{itemCount}</span>)}</Link>
               <button
               className="btn btn-primary btn-sm"
               onClick={() => router.push(user ? '/profile/my-ads' : '/login')}
               >
               {t('header.myShop')}
               </button>
-              <label className={styles.langSwitcher} title={t('language.label')}>
-                <span className={styles.langIcon} aria-hidden="true">🌐</span>
+              <label className="inline-flex items-center gap-1.5 h-7 px-2.5 box-border border border-[var(--border)] rounded bg-[var(--light)] cursor-pointer transition-colors duration-300 hover:bg-[#e9ecef] focus-within:border-[var(--primary)]" title={t('language.label')}>
+                <span className="text-sm leading-none" aria-hidden="true">🌐</span>
                 <select
-                  className={styles.langSelect}
+                  className="border-none bg-transparent text-[var(--dark)] text-xs font-medium font-[inherit] p-0 h-full cursor-pointer focus:outline-none"
                   value={lang}
                   onChange={(e) => setLang(e.target.value as Locale)}
                   aria-label={t('language.label')}

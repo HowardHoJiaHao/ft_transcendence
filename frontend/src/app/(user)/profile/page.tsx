@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useToast } from "@/components/Toast/ToastContext";
 import Header from "@/components/Header/Header";
-import styles from "./profile.module.css";
 
 interface UserProfile {
   id: number;
@@ -317,10 +316,10 @@ export default function ProfilePage() {
 
   if (showOtp) {
     return (
-      <div className={styles.otpContainer}>
-        <form onSubmit={handleOtpSubmit} className={styles.otpForm}>
-          <h2>Enter OTP Code</h2>
-          <p className={styles.otpPurpose}>
+      <div className="flex justify-center items-center min-h-[calc(100vh-80px)] px-4 py-6 bg-[#fafafa]">
+        <form onSubmit={handleOtpSubmit} className="bg-white p-10 rounded-lg shadow-[0_4px_6px_rgba(0,0,0,0.1)] w-full max-w-[400px] flex flex-col gap-4">
+          <h2 className="text-center mb-2 text-[#333]">Enter OTP Code</h2>
+          <p className="text-center m-0 text-[#666]">
             Verifying Purpose:{" "}
             {changeTarget === "email" ? "Change Email" : "Change Phone Number"}
           </p>
@@ -330,15 +329,15 @@ export default function ProfilePage() {
             value={otpCode}
             onChange={(e) => setOtpCode(e.target.value)}
             required
-            className={styles.input}
+            className="flex-1 p-2 border border-[#ddd] rounded bg-white text-base"
           />
-          <div className={styles.otpActions}>
-            <button type="submit" className={styles.button}>
+          <div className="flex gap-2">
+            <button type="submit" className="flex-1 p-3 bg-[#e53935] text-white border-none rounded text-base font-bold cursor-pointer hover:bg-[#d32f2f] disabled:opacity-70 disabled:cursor-not-allowed">
               Verify Code
             </button>
             <button
               type="button"
-              className={styles.button}
+              className="flex-1 p-3 bg-[#e53935] text-white border-none rounded text-base font-bold cursor-pointer hover:bg-[#d32f2f] disabled:opacity-70 disabled:cursor-not-allowed"
               onClick={sendOtp}
               disabled={resendCd > 0}
             >
@@ -350,21 +349,21 @@ export default function ProfilePage() {
     );
   }
   return (
-    <main className={styles.main}>
+    <main className="flex flex-col min-h-screen">
       <Header/>
 
-      <div className={styles.cardFlex}>
+      <div className="flex-1">
         <div className="container">
-          <div className={styles.card}>
+          <div className="bg-white rounded-lg shadow-[var(--shadow)] p-6 max-w-[760px] my-6 mx-auto">
             <h1>My profile</h1>
             <p>Manage and protect your account</p>
 
-            <hr className={styles.divider} />
-            <div className={styles.avatarContainer}>
+            <hr className="my-5 border-0 border-t border-[#eee]" />
+            <div className="flex flex-col items-center gap-6 mb-6">
               <img
                 src={resolveAvatarUrl(user.avatarUrl)}
                 alt="Profile Avatar"
-                className={styles.avatarImg}
+                className="w-24 h-24 rounded-full object-cover border-2 border-[#eee] bg-[#f5f5f5]"
                 onError={(event) => {
                   (event.currentTarget as HTMLImageElement).src = placeholderAvatarUrl;
                 }}
@@ -387,14 +386,14 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className={styles.row}>
-              <div className={styles.label}>Username</div>
-              <div className={styles.static}>{user.username}</div>
+            <div className="flex gap-3 items-center my-2.5">
+              <div className="w-[140px] font-semibold">Username</div>
+              <div className="flex-1 p-2 text-[#666]">{user.username}</div>
             </div>
 
-            <div className={styles.row}>
-              <div className={styles.label}>Email</div>
-              <div className={styles.static}>{user.email}</div>
+            <div className="flex gap-3 items-center my-2.5">
+              <div className="w-[140px] font-semibold">Email</div>
+              <div className="flex-1 p-2 text-[#666]">{user.email}</div>
               <button
                 className="btn btn-secondary btn-sm"
                 onClick={() => startOtpFlow("email")}
@@ -403,9 +402,9 @@ export default function ProfilePage() {
               </button>
             </div>
 
-            <div className={styles.row}>
-              <div className={styles.label}>Phone Number</div>
-              <div className={styles.static}>{user.phoneNo}</div>
+            <div className="flex gap-3 items-center my-2.5">
+              <div className="w-[140px] font-semibold">Phone Number</div>
+              <div className="flex-1 p-2 text-[#666]">{user.phoneNo}</div>
               <button
                 className="btn btn-secondary btn-sm"
                 onClick={() => startOtpFlow("phoneNo")}
@@ -414,11 +413,11 @@ export default function ProfilePage() {
               </button>
             </div>
 
-            <hr className={styles.divider} />
+            <hr className="my-5 border-0 border-t border-[#eee]" />
 
-			<div className={styles.row}>
-			  <div className={styles.label}>Password</div>
-			  <div className={styles.static}>••••••••</div>
+			<div className="flex gap-3 items-center my-2.5">
+			  <div className="w-[140px] font-semibold">Password</div>
+			  <div className="flex-1 p-2 text-[#666]">••••••••</div>
 			  <button
 				className="btn btn-secondary btn-sm"
 				onClick={() => router.push("/profile/change-password")}
@@ -427,33 +426,33 @@ export default function ProfilePage() {
 			  </button>
 			</div>
 
-			<hr className={styles.divider} />
+			<hr className="my-5 border-0 border-t border-[#eee]" />
 
-            <div className={styles.row}>
-              <div className={styles.label}>First Name</div>
+            <div className="flex gap-3 items-center my-2.5">
+              <div className="w-[140px] font-semibold">First Name</div>
               <input
                 name="firstName"
                 value={inputData.firstName}
                 onChange={handleChange}
-                className={styles.input}
+                className="flex-1 p-2 border border-[#ddd] rounded bg-white text-base"
               />
             </div>
 
-            <div className={styles.row}>
-              <div className={styles.label}>Last Name</div>
+            <div className="flex gap-3 items-center my-2.5">
+              <div className="w-[140px] font-semibold">Last Name</div>
               <input
                 name="lastName"
                 value={inputData.lastName}
                 onChange={handleChange}
-                className={styles.input}
+                className="flex-1 p-2 border border-[#ddd] rounded bg-white text-base"
               />
             </div>
 
-            <div className={styles.row}>
-              <div className={styles.label}>Gender</div>
-              <div className={styles.genderGroup}>
-                <div className={styles.static}>{user.gender}</div>
-                <label className={styles.radioLabel}>
+            <div className="flex gap-3 items-center my-2.5">
+              <div className="w-[140px] font-semibold">Gender</div>
+              <div className="flex gap-4 items-center">
+                <div className="flex-1 p-2 text-[#666]">{user.gender}</div>
+                <label className="flex items-center gap-1 cursor-pointer">
                   <input
                     type="radio"
                     name="gender"
@@ -463,7 +462,7 @@ export default function ProfilePage() {
                   />
                   Male
                 </label>
-                <label className={styles.radioLabel}>
+                <label className="flex items-center gap-1 cursor-pointer">
                   <input
                     type="radio"
                     name="gender"
@@ -473,7 +472,7 @@ export default function ProfilePage() {
                   />
                   Female
                 </label>
-                <label className={styles.radioLabel}>
+                <label className="flex items-center gap-1 cursor-pointer">
                   <input
                     type="radio"
                     name="gender"
@@ -497,9 +496,9 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className={styles.row}>
-              <div className={styles.label}>Date of birth</div>
-              <div className={styles.static}>
+            <div className="flex gap-3 items-center my-2.5">
+              <div className="w-[140px] font-semibold">Date of birth</div>
+              <div className="flex-1 p-2 text-[#666]">
                 {user.dateOfBirth
                   ? new Date(user.dateOfBirth).toLocaleDateString()
                   : ""}
@@ -514,7 +513,7 @@ export default function ProfilePage() {
               />
             </div>
 
-            <div className={styles.footer}>
+            <div className="mt-6 border-t border-[#eee] pt-5">
               <button className="btn btn-primary" onClick={handleSave}>
                 Save Profile Changes
               </button>

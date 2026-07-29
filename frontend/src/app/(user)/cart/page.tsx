@@ -7,7 +7,14 @@ import { useToast } from '@/components/Toast/ToastContext'
 import Header from '@/components/Header/Header'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import styles from './cart.module.css'
+
+// Tailwind classes per order status, replacing the old .status_* CSS module rules.
+const STATUS_BADGE_STYLES: Record<string, string> = {
+	pending: 'bg-[#fff8e1] text-[#8d6e00]',
+	completed: 'bg-[#e6f4ea] text-[#1a7f37]',
+	cancelled: 'bg-[#fef2f2] text-[#b91c1c]',
+	refunded: 'bg-[#fef2f2] text-[#b91c1c]',
+};
 
 interface PurchaseOrder {
 	id: number;
@@ -134,8 +141,8 @@ export default function CartPage() {
 	}, [activeTab, ordersLoaded, showToast, user]);
 
 	const renderEmptyCart = () => (
-		<div className={styles.empty}>
-			<h2>Your cart is empty</h2>
+		<div className="text-center px-5 py-[100px]">
+			<h2 className="mb-5 text-[#666]">Your cart is empty</h2>
 			<Link href="/" className="btn btn-primary">Continue Shopping</Link>
 		</div>
 	);
@@ -143,37 +150,37 @@ export default function CartPage() {
 	const renderPurchases = () => {
 		if (!user) {
 			return (
-				<div className={styles.empty}>
-					<h2>Please login to view purchases</h2>
+				<div className="text-center px-5 py-[100px]">
+					<h2 className="mb-5 text-[#666]">Please login to view purchases</h2>
 					<Link href="/login" className="btn btn-primary">Login</Link>
 				</div>
 			);
 		}
 		if (ordersLoading)
-			return <p className={styles.emptyText}>Loading purchases...</p>;
+			return <p className="text-[#666] py-8">Loading purchases...</p>;
 		if (orders.length === 0) {
 			return (
-				<div className={styles.empty}>
-					<h2>No purchases yet</h2>
+				<div className="text-center px-5 py-[100px]">
+					<h2 className="mb-5 text-[#666]">No purchases yet</h2>
 					<Link href="/" className="btn btn-primary">Start Shopping</Link>
 				</div>
 			);
 		}
 		return (
-			<div className={styles.purchaseList}>
+			<div className="flex flex-col gap-4">
 				{orders.map(order => (
-					<div key={order.id} className={styles.purchaseItem}>
-						<img src={getImageUrl(order.listingImage)} alt={order.listingTitle} className={styles.itemImage}/>
-						<div className={styles.itemInfo}>
-							<h3>{order.listingTitle}</h3>
-							<p className={styles.meta}>Seller: {order.sellerName || 'Seller'}</p>
-							<p className={styles.meta}>Ordered {formatDate(order.createdAt)} · Qty {order.quantity}</p>
+					<div key={order.id} className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] max-[768px]:flex-wrap">
+						<img src={getImageUrl(order.listingImage)} alt={order.listingTitle} className="w-20 h-20 object-cover rounded-lg"/>
+						<div className="flex-1">
+							<h3 className="text-base mb-1">{order.listingTitle}</h3>
+							<p className="text-[#666] text-[13px] mt-1 mb-0">Seller: {order.sellerName || 'Seller'}</p>
+							<p className="text-[#666] text-[13px] mt-1 mb-0">Ordered {formatDate(order.createdAt)} · Qty {order.quantity}</p>
 						</div>
-						<div className={styles.purchaseSide}>
-							<span className={`${styles.statusBadge} ${styles[`status_${order.status}`] || ''}`}>
+						<div className="flex flex-col items-end gap-2 ml-auto min-w-[160px] max-[768px]:items-start max-[768px]:ml-0 max-[768px]:w-full">
+							<span className={`rounded-full inline-block text-xs font-bold px-3 py-[5px] ${STATUS_BADGE_STYLES[order.status] || ''}`}>
 								{statusLabel(order.status)}
 							</span>
-							<p className={styles.subtotal}>RM {order.totalPrice.toFixed(2)}</p>
+							<p className="font-bold min-w-20 text-right">RM {order.totalPrice.toFixed(2)}</p>
 						</div>
 					</div>
 				))}
@@ -184,53 +191,53 @@ export default function CartPage() {
 	return (
 		<main>
           <Header />
-            <div className={styles.container}>
-			  <h1>{activeTab === 'cart' ? `Shopping Cart (${items.length} items)` : 'My Purchases'}</h1>
-			  <div className={styles.tabBar}>
-				<button className={`${styles.tabBtn} ${activeTab === 'cart' ? styles.tabActive : ''}`} onClick={() => setActiveTab('cart')}>
+            <div className="max-w-[1000px] mx-auto p-6">
+			  <h1 className="mb-6 text-[#333]">{activeTab === 'cart' ? `Shopping Cart (${items.length} items)` : 'My Purchases'}</h1>
+			  <div className="flex gap-2 mb-6 border-b border-[#e5e5e5]">
+				<button className={`bg-transparent cursor-pointer text-[15px] font-semibold px-4 py-3 border-0 border-solid border-b-[3px] ${activeTab === 'cart' ? 'text-[#111] border-b-[#111]' : 'text-[#666] border-b-transparent hover:text-[#111]'}`} onClick={() => setActiveTab('cart')}>
 					Cart
 				</button>
-				<button className={`${styles.tabBtn} ${activeTab === 'purchases' ? styles.tabActive : ''}`} onClick={() => setActiveTab('purchases')}>
+				<button className={`bg-transparent cursor-pointer text-[15px] font-semibold px-4 py-3 border-0 border-solid border-b-[3px] ${activeTab === 'purchases' ? 'text-[#111] border-b-[#111]' : 'text-[#666] border-b-transparent hover:text-[#111]'}`} onClick={() => setActiveTab('purchases')}>
 					My Purchases
 				</button>
 			  </div>
 
 			  {activeTab === 'purchases' ? renderPurchases() : items.length === 0 ? renderEmptyCart() : (
-			  <div className={styles.layout}>
-			    <div className={styles.items}>
+			  <div className="grid grid-cols-[1fr_300px] gap-6 max-[768px]:grid-cols-1">
+			    <div className="flex flex-col gap-4">
 				  {items.map(item => (
-					<div key={item.id} className={styles.item}>
-					  <img src={getImageUrl(item.image)} alt={item.title} className={styles.itemImage}/>
-					  <div className={styles.itemInfo}>
-						<h3>{item.title}</h3>
-						<p className={styles.price}>RM {item.price.toFixed(2)}</p>
+					<div key={item.id} className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] max-[768px]:flex-wrap">
+					  <img src={getImageUrl(item.image)} alt={item.title} className="w-20 h-20 object-cover rounded-lg"/>
+					  <div className="flex-1">
+						<h3 className="text-base mb-1">{item.title}</h3>
+						<p className="text-[#059669] font-bold">RM {item.price.toFixed(2)}</p>
 					  </div>
 					  <div className="quantitySelector">
 						<button className="quantityBtn" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={isCheckingOut}>-</button>
 						<span className="quantityDisplay"> {item.quantity} </span>
 						<button className="quantityBtn "onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={isCheckingOut}>+</button>
 					  </div>
-					  <p className={styles.subtotal}>RM {(item.price * item.quantity).toFixed(2)}</p>
-					  <button className={styles.removeBtn} onClick={() => removeFromCart(item.id)} disabled={isCheckingOut}>✕</button>
+					  <p className="font-bold min-w-20 text-right">RM {(item.price * item.quantity).toFixed(2)}</p>
+					  <button className="bg-none border-none text-[#ef4444] cursor-pointer text-lg px-2 py-1 hover:bg-[#fef2f2] hover:rounded disabled:cursor-not-allowed disabled:opacity-50" onClick={() => removeFromCart(item.id)} disabled={isCheckingOut}>✕</button>
 					</div>
 				  ))}
 				</div>
 
-				<div className={styles.summary}>
-				  <h3>Order Summary</h3>
-				  <div className={styles.summaryRow}>
+				<div className="bg-white p-5 rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] h-fit sticky top-6">
+				  <h3 className="mb-4 pb-3 border-b border-[#eee]">Order Summary</h3>
+				  <div className="flex justify-between mb-3 text-[#666]">
 				    <span>Subtotal</span>
 					<span>RM {total.toFixed(2)}</span>
 				  </div>
-				  <div className={styles.summaryRow}>
+				  <div className="flex justify-between mb-3 text-[#666]">
 					<span>Shipping</span>
 					<span>Free</span>
 				  </div>
-				  <div className={styles.summaryRow + ' ' + styles.total}>
+				  <div className="flex justify-between mb-3 text-lg font-bold text-[#333] pt-3 border-t border-[#eee]">
 					<span>Total</span>
 					<span>RM {total.toFixed(2)}</span>
 				  </div>
-				  {checkoutError && <p className={styles.checkoutError}>{checkoutError}</p>}
+				  {checkoutError && <p className="text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] rounded p-2.5 mt-3 mb-0 text-sm">{checkoutError}</p>}
 				  <button className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }} onClick={handleCheckout} disabled={isCheckingOut}>
 					{isCheckingOut ? 'Checking out...' : 'Checkout'}
 				  </button>

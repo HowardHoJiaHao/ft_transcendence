@@ -13,7 +13,6 @@ import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
 import Header from '@/components/Header/Header';
 import { downloadCsv, parseCsv } from '@/lib/csv';
-import styles from './import.module.css';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 // Keep in sync with maxImportRows in backend/products_import.go.
@@ -180,45 +179,45 @@ export default function ImportProductsPage() {
   };
 
   return (
-    <main className={styles.main}>
+    <main className="min-h-screen bg-[#f0f0f0]">
       <Header />
 
-      <div className={styles.container}>
-        <button className={styles.backBtn} onClick={() => router.push('/profile/my-ads')}>
+      <div className="max-w-[980px] mx-auto pt-7 px-8 pb-16">
+        <button className="bg-white border border-[#ddd] rounded-[20px] text-[#444] text-[13px] font-semibold cursor-pointer px-4 py-[7px] mb-3.5 inline-flex items-center gap-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 hover:border-[#888] hover:text-[#111] hover:-translate-x-0.5" onClick={() => router.push('/profile/my-ads')}>
           {t('myShop.back')}
         </button>
 
-        <h1 className={styles.heading}>{t('import.heading')}</h1>
-        <p className={styles.subheading}>{t('import.subheading', { max: MAX_ROWS })}</p>
+        <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">{t('import.heading')}</h1>
+        <p className="text-[#898781] text-sm mt-[-8px] mx-0 mb-[18px]">{t('import.subheading', { max: MAX_ROWS })}</p>
 
         {importedCount !== null && (
-          <div className={styles.successBanner}>
-            <p className={styles.successTitle}>{t('import.successTitle')}</p>
+          <div className="bg-[#e8f5e9] border border-[#a5d6a7] rounded-md text-[#1b5e20] text-sm px-4 py-3.5 mt-0 mx-0 mb-4">
+            <p className="font-bold mt-0 mx-0 mb-1.5">{t('import.successTitle')}</p>
             <p>{t('import.successBody', { count: importedCount })}</p>
-            <div className={styles.footerRow}>
-              <Link href="/profile/my-ads" className={styles.shopLink}>
+            <div className="flex gap-3 items-center mt-[18px]">
+              <Link href="/profile/my-ads" className="text-[#2563eb] font-semibold no-underline text-sm hover:underline">
                 {t('import.viewInShop')}
               </Link>
             </div>
           </div>
         )}
 
-        <div className={styles.sectionCard}>
-          <ul className={styles.steps}>
+        <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <ul className="text-[#555] text-sm mt-0 mx-0 mb-4 p-0 list-none grid gap-1.5">
             <li>{t('import.step1')}</li>
             <li>{t('import.step2')}</li>
             <li>{t('import.step3')}</li>
           </ul>
 
-          <div className={styles.toolbar}>
-            <button className={styles.actionBtn} onClick={downloadTemplate}>
+          <div className="flex gap-2.5 flex-wrap items-center">
+            <button className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 inline-flex items-center gap-1.5 hover:border-[#888]" onClick={downloadTemplate}>
               {t('import.downloadTemplate')}
             </button>
-            <label className={styles.actionBtn}>
+            <label className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 inline-flex items-center gap-1.5 hover:border-[#888]">
               {t('import.chooseFile')}
               <input
                 ref={fileInputRef}
-                className={styles.fileInput}
+                className="hidden"
                 type="file"
                 accept=".csv,text/csv"
                 onChange={(e) => {
@@ -230,7 +229,7 @@ export default function ImportProductsPage() {
               />
             </label>
             {fileName && rows.length > 0 && (
-              <span className={styles.fileSummary}>
+              <span className="text-[13px] text-[#555] font-semibold">
                 {t('import.fileSummary', {
                   name: fileName,
                   count: rows.length,
@@ -239,15 +238,15 @@ export default function ImportProductsPage() {
               </span>
             )}
           </div>
-          <p className={styles.note}>{t('import.requiredNote')}</p>
+          <p className="text-[#898781] text-xs mt-3 mb-0">{t('import.requiredNote')}</p>
 
-          {fileError && <p className={styles.errorBanner}>{fileError}</p>}
-          {errorCount > 0 && <p className={styles.errorBanner}>{t('import.fixErrors')}</p>}
+          {fileError && <p className="bg-[#fdecea] border border-[#f5c6c0] rounded-md text-[#b71c1c] text-sm px-3.5 py-2.5 mt-4 mb-0">{fileError}</p>}
+          {errorCount > 0 && <p className="bg-[#fdecea] border border-[#f5c6c0] rounded-md text-[#b71c1c] text-sm px-3.5 py-2.5 mt-4 mb-0">{t('import.fixErrors')}</p>}
 
           {serverErrors.length > 0 && (
-            <div className={styles.errorBanner}>
+            <div className="bg-[#fdecea] border border-[#f5c6c0] rounded-md text-[#b71c1c] text-sm px-3.5 py-2.5 mt-4 mb-0">
               {t('import.serverErrors')}
-              <ul className={styles.serverErrorList}>
+              <ul className="mt-2 mb-0 pl-[18px] text-[13px]">
                 {serverErrors.map((e, i) => (
                   <li key={i}>
                     {t('import.serverRow', { row: e.row, field: e.field, message: e.message })}
@@ -259,8 +258,8 @@ export default function ImportProductsPage() {
 
           {rows.length > 0 && (
             <>
-              <div className={styles.tableWrap}>
-                <table className={styles.previewTable}>
+              <div className="w-full overflow-x-auto mt-4">
+                <table className="w-full border-collapse text-sm [&_th]:text-left [&_th]:px-3 [&_th]:py-2.5 [&_th]:border-b-2 [&_th]:border-b-[#eee] [&_th]:text-[#666] [&_th]:font-semibold [&_th]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2.5 [&_td]:border-b [&_td]:border-b-[#f0f0f0] [&_tr:last-child_td]:border-b-0">
                   <thead>
                     <tr>
                       <th>{t('import.colRow')}</th>
@@ -273,12 +272,12 @@ export default function ImportProductsPage() {
                   </thead>
                   <tbody>
                     {rows.map((r) => (
-                      <tr key={r.line} className={r.errors.length > 0 ? styles.rowError : ''}>
+                      <tr key={r.line} className={r.errors.length > 0 ? '[&>td]:bg-[#fff5f5]' : ''}>
                         <td>{r.line}</td>
                         <td>
                           {r.item.title || '—'}
                           {r.errors.length > 0 && (
-                            <p className={styles.cellErrors}>{r.errors.join(' · ')}</p>
+                            <p className="text-[#c62828] text-xs mt-1 mb-0">{r.errors.join(' · ')}</p>
                           )}
                         </td>
                         <td>{Number.isNaN(r.item.price) ? '—' : `RM ${r.item.price.toFixed(2)}`}</td>
@@ -286,9 +285,9 @@ export default function ImportProductsPage() {
                         <td>{r.item.stockQuantity ?? 1}</td>
                         <td>
                           {r.errors.length > 0 ? (
-                            <span className={styles.statusError}>{t('import.statusError')}</span>
+                            <span className="text-[#c62828] font-semibold whitespace-nowrap">{t('import.statusError')}</span>
                           ) : (
-                            <span className={styles.statusOk}>{t('import.statusOk')}</span>
+                            <span className="text-[#1a7f4b] font-semibold whitespace-nowrap">{t('import.statusOk')}</span>
                           )}
                         </td>
                       </tr>
@@ -297,8 +296,8 @@ export default function ImportProductsPage() {
                 </table>
               </div>
 
-              <div className={styles.footerRow}>
-                <button className={styles.importBtn} disabled={!canImport} onClick={handleImport}>
+              <div className="flex gap-3 items-center mt-[18px]">
+                <button className="inline-flex items-center px-[22px] py-[9px] rounded-[20px] bg-[#111] text-white border-none text-sm font-semibold cursor-pointer transition-colors duration-150 enabled:hover:bg-[#333] disabled:bg-[#bbb] disabled:cursor-not-allowed" disabled={!canImport} onClick={handleImport}>
                   {importing
                     ? t('import.importing')
                     : t('import.importBtn', { count: rows.length })}
