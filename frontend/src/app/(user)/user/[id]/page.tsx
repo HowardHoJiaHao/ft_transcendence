@@ -7,7 +7,6 @@ import Link from 'next/link';
 import Header from '@/components/Header/Header';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useAuth } from '@/context/AuthContext';;
-import { useI18n } from '@/context/LanguageContext';
 import ChatModal from '@/app/(user)/chat/ChatModal';
 import { useWebSocketContext } from '@/context/WebSocketContext';
 
@@ -69,7 +68,6 @@ export default function UserPage()
 	const [chatLoading, setChatLoading] = useState(false);
 
 	const { showToast } = useToast();
-	const { t } = useI18n();
 	const { onlineUsers } = useWebSocketContext();
 	const resolveAvatarUrl = (url?: string) => {
 		if (!url)
@@ -89,12 +87,6 @@ export default function UserPage()
 			return `${apiBaseUrl}${url}`;
 		return `${apiBaseUrl}/${url}`;
 	}
-	const formatDateOfBirth = (dateOfBirth?: string) => {
-		if (!dateOfBirth) return t('profile.notProvided');
-		const date = new Date(dateOfBirth);
-		return Number.isNaN(date.getTime()) ? t('profile.notProvided') : date.toLocaleDateString();
-	}
-
 	const fetchChatHistory = async (partnerId: number) => {
 		if (!currentUser?.id) return [];
 		try {
