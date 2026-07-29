@@ -3,10 +3,7 @@ package profile
 import (
 	"net/http"
 	"strconv"
-<<<<<<< HEAD
 	"strings"
-=======
->>>>>>> c746944 (feat(chat): add people directory endpoint and UI integration)
 	"time"
 
 	"database/sql"
@@ -123,15 +120,7 @@ func (h *Handler) GetProfile(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
 	}
-	profile := toPublicProfile(u)
-	// Reveal the seller's phone number only to signed-in users so they can make
-	// contact, while anonymous callers still cannot scrape contact PII. Other
-	// sensitive fields (email, DOB, gender) are never exposed here — the owner
-	// reads their own full record through the authenticated /me route.
-	if requesterIsAuthenticated(c) {
-		profile.PhoneNo = u.PhoneNo
-	}
-	return c.JSON(http.StatusOK, profile)
+	return c.JSON(http.StatusOK, user)
 }
 
 func (h *Handler) UpdateProfile(c echo.Context) error {
