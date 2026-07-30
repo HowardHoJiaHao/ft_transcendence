@@ -43,7 +43,7 @@
   },
   "toast": {
     "listingCreated": "商品发布成功",
-    "loggedOut": "您已退出登录",
+    "loggedOut": "您已成功退出登录",
     "friendRemoved": "已删除好友",
     "friendRemoveFailed": "无法删除好友",
     "conversationDeleted": "对话已删除",

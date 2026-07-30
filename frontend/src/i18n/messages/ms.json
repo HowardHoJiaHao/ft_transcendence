@@ -43,7 +43,7 @@
   },
   "toast": {
     "listingCreated": "Senarai berjaya dicipta",
-    "loggedOut": "Anda telah log keluar",
+    "loggedOut": "Anda telah berjaya log keluar",
     "friendRemoved": "Rakan dibuang",
     "friendRemoveFailed": "Tidak dapat membuang rakan",
     "conversationDeleted": "Perbualan dipadam",

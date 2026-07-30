@@ -264,10 +264,11 @@ export default function Header({
                     setConfirmLogout(false);
                     logout();
                     showToast(t('toast.loggedOut'), 'success');
-                    // The session is gone, so send them somewhere that works
-                    // signed out rather than leaving them on a page that no
-                    // longer has the data to render.
-                    router.push('/login');
+                    // Home, not the login page — signing out is not a prompt to
+                    // sign back in, and the marketplace browses fine signed out.
+                    // It still has to leave the current page, which may need the
+                    // session that was just discarded.
+                    router.push('/');
                   }}
                 >
                   {t('header.logoutConfirmYes')}
