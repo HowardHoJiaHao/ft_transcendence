@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
+import { useToast } from '@/components/Toast/ToastContext';
 import { useAuth } from '@/context/AuthContext'; //import hook to access global authentication data
 import { useI18n, LOCALES, type Locale } from '@/context/LanguageContext';
 import { useSearch } from '@/hooks/useSearch';
@@ -33,6 +35,8 @@ export default function Header({
   onSearchChange,
   onSearchSubmit,
 }: HeaderProps) {
+  const router = useRouter();
+  const { showToast } = useToast();
   const { user, logout } = useAuth();
   const { itemCount } = useCart();
   const { t, lang, setLang } = useI18n(); // connection to the useI18n and pull these functions
@@ -90,7 +94,10 @@ export default function Header({
                 />
               )}
 
-              <Link href="/cart" className="relative bg-[var(--light)] text-[var(--dark)] h-7 px-2.5 box-border border border-[var(--border)] rounded no-underline text-[15px] leading-none inline-flex items-center transition-colors duration-300 hover:bg-[#e9ecef]">🛒{itemCount > 0 && (<span className="absolute -top-1.5 -right-1.5 bg-[#ef4444] text-white rounded-full w-5 h-5 text-xs font-bold flex items-center justify-center">{itemCount}</span>)}</Link>
+              {/* A cart is meaningless signed out — checkout requires a session. */}
+              {user && (
+                <Link href="/cart" className="relative bg-[var(--light)] text-[var(--dark)] h-7 px-2.5 box-border border border-[var(--border)] rounded no-underline text-[15px] leading-none inline-flex items-center transition-colors duration-300 hover:bg-[#e9ecef]">🛒{itemCount > 0 && (<span className="absolute -top-1.5 -right-1.5 bg-[#ef4444] text-white rounded-full w-5 h-5 text-xs font-bold flex items-center justify-center">{itemCount}</span>)}</Link>
+              )}
 
               {/* Language: globe only, names live in the menu. Shaped like the
                   cart button next to it so the pair reads as one group. */}
@@ -256,6 +263,11 @@ export default function Header({
                   onClick={() => {
                     setConfirmLogout(false);
                     logout();
+                    showToast(t('toast.loggedOut'), 'success');
+                    // The session is gone, so send them somewhere that works
+                    // signed out rather than leaving them on a page that no
+                    // longer has the data to render.
+                    router.push('/login');
                   }}
                 >
                   {t('header.logoutConfirmYes')}

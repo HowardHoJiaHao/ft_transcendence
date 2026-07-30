@@ -10,6 +10,8 @@ import { useI18n } from '@/context/LanguageContext';
 import OnlineStatus from '@/components/OnlineStatus';
 import ChatModal from '@/app/(user)/chat/ChatModal'
 import Header from '@/components/Header/Header'
+import ListingImage from '@/components/ListingImage/ListingImage';
+import { resolveListingImageUrl } from '@/lib/listingImage';
 import { formatFileSize, type ListingFile } from '@/lib/listingFiles';
 
 interface Product {
@@ -78,7 +80,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 	const defaultAvatarUrl = '/default-avatar.png';
 	const placeholderAvatarUrl = 'https://via.placeholder.com/120';
-	const placeholderListingImageUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='900' viewBox='0 0 700 900'%3E%3Crect width='700' height='900' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%236b7280' font-family='Arial,sans-serif' font-size='32'%3ENo image%3C/text%3E%3C/svg%3E";
 
 	const [product, setProduct] = useState<Product | null>(null);
 	const [imageUrls, setImageUrls] = useState<string[]>([]);
@@ -99,15 +100,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const [reviewComment, setReviewComment] = useState('');
 	const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
-	const resolveImageUrl = (url?: string) => {
-		if (!url)
-			return placeholderListingImageUrl;
-		if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:'))
-			return url;
-		if (url.startsWith('/'))
-			return `${apiBaseUrl}${url}`;
-		return `${apiBaseUrl}/${url}`;
-	}
+	const resolveImageUrl = (url?: string) => resolveListingImageUrl(url, apiBaseUrl);
 	const resolveAvatarUrl = (url?: string) => {
 		if (!url)
 			return defaultAvatarUrl;
@@ -344,13 +337,11 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		    <div className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex w-[90%] max-w-[1138px] h-auto min-h-[450px] my-6 mx-auto gap-[30px] max-[600px]:flex-col max-[600px]:m-5">
 		  	  <div className="flex-[0_0_50%] overflow-hidden rounded-lg aspect-[4/5] max-h-[520px]">
 					<div className="relative w-full h-full">
-						<img
+						<ListingImage
 							className="w-full h-full object-cover block"
-							src={resolveImageUrl(activeImage)}
+							src={activeImage}
 							alt={product.title || 'Product image'}
-							onError={(event) => {
-								(event.currentTarget as HTMLImageElement).src = placeholderListingImageUrl;
-							}}
+							apiBase={apiBaseUrl}
 						/>
 						{canNavigate && (
 							<div className="absolute inset-0 flex items-center justify-between p-3 pointer-events-none">

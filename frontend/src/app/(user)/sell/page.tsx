@@ -429,6 +429,12 @@ function SellPageInner() {
       showToast("Please select at least one dealing method", "error");
       return;
     }
+    // A listing with no photo shows a placeholder everywhere it appears, which
+    // buyers skip past. Require one rather than letting it go live blank.
+    if (existingImages.length + photos.length === 0) {
+      showToast("Please add at least one photo of your item", "error");
+      return;
+    }
     if (!acknowledged) {
       showToast("Please confirm the acknowledgement", "error");
       return;

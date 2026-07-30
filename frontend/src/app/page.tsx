@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'; //std react hook for managing local state & side effects
 import { useAuth } from '@/context/AuthContext';; //import hook to access global authentication data
 import Header from '@/components/Header/Header';
+import ListingImage from '@/components/ListingImage/ListingImage';
 import Link from 'next/link';
 
 interface Product
@@ -54,7 +55,6 @@ export default function Home()
 {
   const { user, logout } = useAuth();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-  const placeholderListingImageUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='900' viewBox='0 0 700 900'%3E%3Crect width='700' height='900' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%236b7280' font-family='Arial,sans-serif' font-size='32'%3ENo image%3C/text%3E%3C/svg%3E";
   const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
   const [selectedFlexibilities, setSelectedFlexibilities] = useState<string[]>([]);
   const [selectedBalances, setSelectedBalances] = useState<string[]>([]);
@@ -72,15 +72,6 @@ export default function Home()
 //     setSearchQuery(nextSearchQuery);
 //   };
 
-  const resolveListingImageUrl = (url?: string) => {
-    if (!url)
-      return placeholderListingImageUrl;
-    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:'))
-      return url;
-    if (url.startsWith('/'))
-      return `${apiBaseUrl}${url}`;
-    return `${apiBaseUrl}/${url}`;
-  }
 
   //			SEARH INITIALIZATION (FROM OTHER PAGE SEARCH)
   useEffect(() => {
@@ -357,13 +348,11 @@ export default function Home()
                 {products.map((product) => (
                   <div key={product.id} className="group bg-white rounded-lg overflow-hidden shadow-[var(--shadow)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[var(--shadow-lg)]">
                     <div className="relative w-full h-[200px] overflow-hidden">
-                      <img
+                      <ListingImage
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        src={resolveListingImageUrl(product.image)}
+                        src={product.image}
                         alt={product.title}
-                        onError={(event) => {
-                          (event.currentTarget as HTMLImageElement).src = placeholderListingImageUrl;
-                        }}
+                        apiBase={apiBaseUrl}
                       />
                       {product.isFeatured && (
                         <span className="badge badge-primary absolute top-2 left-2 text-[11px] px-2 py-1">
