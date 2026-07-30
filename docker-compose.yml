@@ -179,8 +179,8 @@ services:
 
   ai:
     build:
-      context: ./ai_service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ai_service/Dockerfile
     container_name: transcendence-ai
     environment:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
@@ -200,8 +200,13 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-transcendence}
       BACKEND_URL: http://backend:8080
+      RACKET_RECOMMENDER_MODEL_DIR: /app/ml_models
+      RACKET_RECOMMENDER_BASELINE_DATASET: /app/training_data/dummy_racket_recommendation_data.csv
+      RACKET_RECOMMENDER_SEED_DIR: /app/model_seed
     expose:
       - "8000"
+    volumes:
+      - recommender_models:/app/ml_models
     depends_on:
       db:
         condition: service_healthy
@@ -395,6 +400,7 @@ services:
 
 volumes:
   postgres_data:
+  recommender_models:
   prometheus_data:
   alertmanager_data:
   grafana_data:

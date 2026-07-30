@@ -194,6 +194,8 @@ jobs:
                'notifications',
                'reviews',
                'listing_reviews',
+               'recommendation_training_feedback',
+               'ml_training_runs',
                'api_keys',
                'api_request_logs',
                'analytics_events',
@@ -202,7 +204,7 @@ jobs:
 
           assert_sql_true \
             "required cross-feature columns" \
-            "SELECT count(*) = 27
+            "SELECT count(*) = 35
              FROM (VALUES
                ('users', 'account_status'),
                ('users', 'role'),
@@ -224,6 +226,14 @@ jobs:
                ('listing_reviews', 'reviewer_id'),
                ('listing_reviews', 'order_id'),
                ('listing_reviews', 'rating'),
+               ('recommendation_training_feedback', 'order_id'),
+               ('recommendation_training_feedback', 'buyer_id'),
+               ('recommendation_training_feedback', 'age_group'),
+               ('recommendation_training_feedback', 'weight_category'),
+               ('ml_training_runs', 'status'),
+               ('ml_training_runs', 'progress'),
+               ('ml_training_runs', 'model_version'),
+               ('ml_training_runs', 'is_active'),
                ('api_keys', 'key_hash'),
                ('api_keys', 'rate_limit'),
                ('analytics_events', 'listing_id'),
@@ -248,6 +258,9 @@ jobs:
                'idx_notifications_user_unread',
                'idx_notifications_unread_message_group',
                'idx_listing_reviews_listing_newest',
+               'idx_recommendation_feedback_newest',
+               'idx_ml_training_runs_one_in_progress',
+               'idx_ml_training_runs_one_active',
                'idx_knowledge_chunks_active',
                'idx_knowledge_chunks_search'
              ]) AS required(index_name);"

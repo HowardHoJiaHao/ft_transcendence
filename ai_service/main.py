@@ -19,6 +19,7 @@ from agent import (
 )
 from rag import ingest_knowledge
 from recommender import RecommendationProfileError, validate_profile
+from training import ensure_model_storage, training_worker
 from tools import auth_token_var, user_id_var
 
 
@@ -71,6 +72,9 @@ async def lifespan(app: FastAPI):
             "OPENROUTER_API_KEY is missing; vector RAG will use its local "
             "fallback and cannot generate new embeddings"
         )
+    ensure_model_storage()
+    training_task = asyncio.create_task(training_worker())
+    app.state.ml_training_task = training_task
     ingestion_task = None
     if os.getenv("RAG_INGEST_ON_STARTUP", "true").lower() in {"1", "true", "yes"}:
         ingestion_task = asyncio.create_task(_ingest_in_background())
@@ -78,6 +82,8 @@ async def lifespan(app: FastAPI):
     yield
     if ingestion_task and not ingestion_task.done():
         ingestion_task.cancel()
+    if not training_task.done():
+        training_task.cancel()
 
 
 app = FastAPI(title="RacketDiction AI Service", lifespan=lifespan)

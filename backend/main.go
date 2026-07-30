@@ -112,6 +112,12 @@ func main() {
 		return completeOrderWithNotifications(c, gormDB, notificationService)
 	})
 	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) }) //howai AI maybe. merge residue 21 june
+	protected.GET("/orders/:id/recommendation-survey", func(c echo.Context) error {
+		return getRecommendationSurvey(c, gormDB)
+	})
+	protected.POST("/orders/:id/recommendation-survey", func(c echo.Context) error {
+		return createRecommendationSurvey(c, gormDB)
+	})
 
 	// Seller dashboard routes
 	protected.GET("/seller/orders", func(c echo.Context) error { return getSellerOrders(c, gormDB) })

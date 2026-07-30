@@ -54,6 +54,11 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 		return nil, nil, nil, fmt.Errorf("listing reviews migration failed: %w", err)
 	}
 
+	if err := runMLTrainingMigration(rawDB); err != nil {
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("ML training migration failed: %w", err)
+	}
+
 	log.Println("Database connected successfully")
 
 	cleanup := func() {
@@ -242,6 +247,83 @@ func runListingReviewsMigration(db *sql.DB) error {
 		}
 	}
 	log.Println("Listing reviews migration completed")
+	return nil
+}
+
+func runMLTrainingMigration(db *sql.DB) error {
+	migrations := []string{
+		`CREATE TABLE IF NOT EXISTS recommendation_training_feedback (
+			id BIGSERIAL PRIMARY KEY,
+			order_id INT NOT NULL UNIQUE REFERENCES orders(id) ON DELETE CASCADE,
+			buyer_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			age_group VARCHAR(32) NOT NULL CHECK (
+				age_group IN ('under_13', '13-17', '18-25', '26-35', '36-45', '46_plus')
+			),
+			gender VARCHAR(32) NOT NULL CHECK (
+				gender IN ('male', 'female', 'prefer_not_to_say')
+			),
+			experience_level VARCHAR(32) NOT NULL CHECK (
+				experience_level IN (
+					'less_than_6_months', '6_months_1_year', '1-3_years',
+					'3-5_years', 'more_than_5_years'
+				)
+			),
+			play_style VARCHAR(32) NOT NULL CHECK (
+				play_style IN ('attacking', 'defensive', 'balanced', 'not_sure')
+			),
+			budget_range VARCHAR(32) NOT NULL CHECK (
+				budget_range IN ('under_200', '200-400', '400-700', '700_plus')
+			),
+			weight_category VARCHAR(32) NOT NULL CHECK (
+				weight_category IN ('1U', '2U', '3U', '4U', '5U', '6U', '7U', '8U')
+			),
+			flexibility_category VARCHAR(32) NOT NULL CHECK (
+				flexibility_category IN ('Stiff Shaft', 'Medium Flex', 'High Flexibility')
+			),
+			balance_category VARCHAR(32) NOT NULL CHECK (
+				balance_category IN ('Head Heavy', 'Even Balance', 'Head Light')
+			),
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_recommendation_feedback_newest
+			ON recommendation_training_feedback(created_at DESC, id DESC)`,
+		`CREATE TABLE IF NOT EXISTS ml_training_runs (
+			id BIGSERIAL PRIMARY KEY,
+			requested_by INT REFERENCES users(id) ON DELETE SET NULL,
+			requested_by_role VARCHAR(20) NOT NULL CHECK (
+				requested_by_role IN ('moderator', 'admin')
+			),
+			status VARCHAR(20) NOT NULL DEFAULT 'queued' CHECK (
+				status IN ('queued', 'running', 'succeeded', 'failed')
+			),
+			progress SMALLINT NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
+			stage VARCHAR(100) NOT NULL DEFAULT 'Queued',
+			synthetic_rows INT NOT NULL DEFAULT 0 CHECK (synthetic_rows >= 0),
+			survey_rows INT NOT NULL DEFAULT 0 CHECK (survey_rows >= 0),
+			total_rows INT NOT NULL DEFAULT 0 CHECK (total_rows >= 0),
+			model_version VARCHAR(100),
+			metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
+			dataset_sha256 CHAR(64),
+			artifact_sha256 CHAR(64),
+			error_message VARCHAR(500),
+			is_active BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			started_at TIMESTAMPTZ,
+			finished_at TIMESTAMPTZ
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ml_training_runs_one_in_progress
+			ON ml_training_runs ((1)) WHERE status IN ('queued', 'running')`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ml_training_runs_one_active
+			ON ml_training_runs ((1)) WHERE is_active`,
+		`CREATE INDEX IF NOT EXISTS idx_ml_training_runs_newest
+			ON ml_training_runs(created_at DESC, id DESC)`,
+	}
+	for _, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("ML training migration completed")
 	return nil
 }
 

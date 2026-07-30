@@ -41,6 +41,51 @@ type CreateUserForm = UserForm & {
   role: UserRole;
 };
 
+type MLTrainingRun = {
+  id: number;
+  requestedBy?: number;
+  requestedByRole: "moderator" | "admin";
+  status: "queued" | "running" | "succeeded" | "failed";
+  progress: number;
+  stage: string;
+  syntheticRows: number;
+  surveyRows: number;
+  totalRows: number;
+  modelVersion?: string;
+  artifactSha256?: string;
+  errorMessage?: string;
+  isActive: boolean;
+  createdAt: string;
+  finishedAt?: string;
+};
+
+type MLStatus = {
+  syntheticRows: number;
+  surveyRows: number;
+  totalRows: number;
+  activeModel: {
+    version?: string;
+    trainedAt?: string;
+    artifactSha256?: string;
+  };
+  activeRun: MLTrainingRun | null;
+};
+
+type MLFeedback = {
+  id: number;
+  orderId: number;
+  source: "transaction_survey";
+  age_group: string;
+  gender: string;
+  experience_level: string;
+  play_style: string;
+  budget_range: string;
+  weightCategory: string;
+  flexibilityCategory: string;
+  balanceCategory: string;
+  createdAt: string;
+};
+
 const emptyCreateForm: CreateUserForm = {
   username: "",
   email: "",
@@ -75,6 +120,10 @@ export default function AdminUsersPage() {
   const [editingID, setEditingID] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<UserForm | null>(null);
   const [busyID, setBusyID] = useState<number | null>(null);
+  const [mlStatus, setMLStatus] = useState<MLStatus | null>(null);
+  const [mlRuns, setMLRuns] = useState<MLTrainingRun[]>([]);
+  const [mlFeedback, setMLFeedback] = useState<MLFeedback[]>([]);
+  const [mlBusy, setMLBusy] = useState(false);
 
   const adminFetch = useCallback(async (url: string, init?: RequestInit) => {
     // Database moderators/admins use the ordinary login flow and token. The
@@ -128,8 +177,42 @@ export default function AdminUsersPage() {
     }
   }, [adminFetch, t]);
 
+  const loadMLData = useCallback(async () => {
+    try {
+      const [statusResponse, runsResponse, feedbackResponse] = await Promise.all([
+        adminFetch("/api/v1/admin/ml/status"),
+        adminFetch("/api/v1/admin/ml/runs"),
+        adminFetch("/api/v1/admin/ml/feedback"),
+      ]);
+      const [statusData, runsData, feedbackData] = await Promise.all([
+        statusResponse.json(),
+        runsResponse.json(),
+        feedbackResponse.json(),
+      ]);
+      if (!statusResponse.ok || !runsResponse.ok || !feedbackResponse.ok) {
+        throw new Error(
+          statusData.error
+          ?? runsData.error
+          ?? feedbackData.error
+          ?? t("admin.mlLoadFailed"),
+        );
+      }
+      setMLStatus(statusData);
+      setMLRuns(runsData.runs ?? []);
+      setMLFeedback(feedbackData.feedback ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("admin.mlLoadFailed"));
+    }
+  }, [adminFetch, t]);
+
   useEffect(() => { void loadUsers(); }, [loadUsers]);
   useEffect(() => { void loadSummary(); }, [loadSummary]);
+  useEffect(() => { void loadMLData(); }, [loadMLData]);
+  useEffect(() => {
+    if (!mlStatus?.activeRun) return;
+    const interval = window.setInterval(() => { void loadMLData(); }, 1000);
+    return () => window.clearInterval(interval);
+  }, [loadMLData, mlStatus?.activeRun?.id]);
 
   const reportMutationError = (err: unknown) => {
     const message = err instanceof Error ? err.message : t("admin.updateFailed");
@@ -248,6 +331,21 @@ export default function AdminUsersPage() {
     }
   };
 
+  const startRetraining = async () => {
+    setMLBusy(true);
+    try {
+      const response = await adminFetch("/api/v1/admin/ml/retrain", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? t("admin.mlRetrainFailed"));
+      showToast(t("admin.mlRetrainQueued"), "success");
+      await loadMLData();
+    } catch (err) {
+      reportMutationError(err);
+    } finally {
+      setMLBusy(false);
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem("adminToken");
     localStorage.removeItem("token");
@@ -284,6 +382,82 @@ export default function AdminUsersPage() {
           <div className={summaryCardClass}><span className={summaryLabelClass}>{t("admin.completedSales")}</span><strong className={summaryValueClass}>RM {summary.completedRevenue.toFixed(2)}</strong></div>
         </section>
       )}
+
+      <section className="max-w-[1250px] mx-auto mb-5 rounded-[10px] bg-white p-5 shadow-[var(--shadow)]" aria-labelledby="ml-retraining-heading">
+        <div className="flex items-start justify-between gap-4 max-[700px]:flex-col">
+          <div>
+            <h2 id="ml-retraining-heading" className="mt-0 mb-1">{t("admin.mlRetraining")}</h2>
+            <p className="mt-0 text-sm text-[#666]">{t("admin.mlDescription")}</p>
+          </div>
+          <button
+            type="button"
+            className={primaryButtonClass}
+            disabled={mlBusy || Boolean(mlStatus?.activeRun)}
+            onClick={() => void startRetraining()}
+          >
+            {mlStatus?.activeRun ? t("admin.mlRetrainingNow") : t("admin.mlRetrain")}
+          </button>
+        </div>
+
+        <div className="my-4 grid grid-cols-4 gap-3 max-[800px]:grid-cols-2">
+          <div className="rounded-lg bg-[#f5f7fa] p-3"><span className="block text-xs text-[#666]">{t("admin.mlSyntheticRows")}</span><strong>{mlStatus?.syntheticRows ?? 1000}</strong></div>
+          <div className="rounded-lg bg-[#f5f7fa] p-3"><span className="block text-xs text-[#666]">{t("admin.mlSurveyRows")}</span><strong>{mlStatus?.surveyRows ?? 0}</strong></div>
+          <div className="rounded-lg bg-[#f5f7fa] p-3"><span className="block text-xs text-[#666]">{t("admin.mlCombinedRows")}</span><strong>{mlStatus?.totalRows ?? 1000}</strong></div>
+          <div className="rounded-lg bg-[#f5f7fa] p-3"><span className="block text-xs text-[#666]">{t("admin.mlActiveVersion")}</span><strong className="break-all">{mlStatus?.activeModel?.version ?? "1.0.0"}</strong></div>
+        </div>
+
+        {mlStatus?.activeRun && (
+          <div className="mb-4 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-4">
+            <div className="mb-2 flex justify-between gap-4 text-sm font-semibold">
+              <span>{mlStatus.activeRun.stage}</span>
+              <span>{mlStatus.activeRun.progress}%</span>
+            </div>
+            <div className="h-3 overflow-hidden rounded-full bg-[#dbeafe]" role="progressbar" aria-valuenow={mlStatus.activeRun.progress} aria-valuemin={0} aria-valuemax={100}>
+              <div className="h-full bg-[#2457d6] transition-[width] duration-300" style={{ width: `${mlStatus.activeRun.progress}%` }} />
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4 max-[900px]:grid-cols-1">
+          <div className="overflow-x-auto">
+            <h3 className="mt-0 text-base">{t("admin.mlRecentRuns")}</h3>
+            <table className="w-full border-collapse text-sm">
+              <thead><tr><th className={cellClass}>ID</th><th className={cellClass}>{t("admin.status")}</th><th className={cellClass}>{t("admin.mlRows")}</th><th className={cellClass}>{t("admin.mlVersion")}</th></tr></thead>
+              <tbody>
+                {mlRuns.slice(0, 5).map(run => (
+                  <tr key={run.id}>
+                    <td className={cellClass}>{run.id}</td>
+                    <td className={cellClass}>
+                      <span className={run.status === "failed" ? "text-[#b42318]" : run.status === "succeeded" ? "text-[#1a7f37]" : "text-[#2457d6]"}>{run.status}</span>
+                      {run.errorMessage && <span className="block text-xs">{run.errorMessage}</span>}
+                    </td>
+                    <td className={cellClass}>{run.totalRows}</td>
+                    <td className={`${cellClass} max-w-[180px] break-all text-xs`}>{run.modelVersion ?? "—"}{run.artifactSha256 && <span className="block text-[#666]">{run.artifactSha256.slice(0, 12)}…</span>}</td>
+                  </tr>
+                ))}
+                {mlRuns.length === 0 && <tr><td className={cellClass} colSpan={4}>{t("admin.mlNoRuns")}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className="overflow-x-auto">
+            <h3 className="mt-0 text-base">{t("admin.mlRecentFeedback")}</h3>
+            <table className="w-full border-collapse text-sm">
+              <thead><tr><th className={cellClass}>ID</th><th className={cellClass}>{t("admin.mlSource")}</th><th className={cellClass}>{t("admin.mlProfile")}</th><th className={cellClass}>{t("admin.mlTargets")}</th></tr></thead>
+              <tbody>
+                {mlFeedback.slice(0, 5).map(item => (
+                  <tr key={item.id}>
+                    <td className={cellClass}>{item.id}<span className="block text-xs text-[#666]">Order {item.orderId}</span></td>
+                    <td className={cellClass}>{item.source}</td>
+                    <td className={`${cellClass} text-xs`}>{item.age_group} · {item.gender}<br />{item.experience_level} · {item.play_style} · {item.budget_range}</td>
+                    <td className={`${cellClass} text-xs`}>{item.weightCategory} · {item.flexibilityCategory} · {item.balanceCategory}</td>
+                  </tr>
+                ))}
+                {mlFeedback.length === 0 && <tr><td className={cellClass} colSpan={4}>{t("admin.mlNoFeedback")}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       {isAdmin && showCreate && (
         <form onSubmit={createUser} className="max-w-[1250px] mx-auto mb-5 p-5 bg-white rounded-[10px] shadow-[var(--shadow)] grid grid-cols-3 gap-3 max-[800px]:grid-cols-1">

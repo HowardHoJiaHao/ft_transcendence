@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/components/Toast/ToastContext'
+import { useI18n } from '@/context/LanguageContext'
 import Header from '@/components/Header/Header'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -27,12 +28,89 @@ interface PurchaseOrder {
 	listingTitle: string;
 	listingImage: string;
 	sellerName: string;
+	recommendationSurveySubmitted: boolean;
 }
+
+type SurveyForm = {
+	age_group: string;
+	gender: string;
+	experience_level: string;
+	play_style: string;
+	budget_range: string;
+};
+
+const EMPTY_SURVEY: SurveyForm = {
+	age_group: '',
+	gender: '',
+	experience_level: '',
+	play_style: '',
+	budget_range: '',
+};
+
+const SURVEY_OPTIONS: Array<{
+	key: keyof SurveyForm;
+	labelKey: string;
+	options: Array<{ value: string; labelKey: string }>;
+}> = [
+	{
+		key: 'age_group',
+		labelKey: 'mlSurvey.ageGroup',
+		options: [
+			{ value: 'under_13', labelKey: 'mlSurvey.under13' },
+			{ value: '13-17', labelKey: 'mlSurvey.age13To17' },
+			{ value: '18-25', labelKey: 'mlSurvey.age18To25' },
+			{ value: '26-35', labelKey: 'mlSurvey.age26To35' },
+			{ value: '36-45', labelKey: 'mlSurvey.age36To45' },
+			{ value: '46_plus', labelKey: 'mlSurvey.age46Plus' },
+		],
+	},
+	{
+		key: 'gender',
+		labelKey: 'mlSurvey.gender',
+		options: [
+			{ value: 'male', labelKey: 'mlSurvey.male' },
+			{ value: 'female', labelKey: 'mlSurvey.female' },
+			{ value: 'prefer_not_to_say', labelKey: 'mlSurvey.preferNotToSay' },
+		],
+	},
+	{
+		key: 'experience_level',
+		labelKey: 'mlSurvey.experience',
+		options: [
+			{ value: 'less_than_6_months', labelKey: 'mlSurvey.lessThan6Months' },
+			{ value: '6_months_1_year', labelKey: 'mlSurvey.sixMonthsTo1Year' },
+			{ value: '1-3_years', labelKey: 'mlSurvey.oneTo3Years' },
+			{ value: '3-5_years', labelKey: 'mlSurvey.threeTo5Years' },
+			{ value: 'more_than_5_years', labelKey: 'mlSurvey.moreThan5Years' },
+		],
+	},
+	{
+		key: 'play_style',
+		labelKey: 'mlSurvey.playStyle',
+		options: [
+			{ value: 'attacking', labelKey: 'mlSurvey.attacking' },
+			{ value: 'defensive', labelKey: 'mlSurvey.defensive' },
+			{ value: 'balanced', labelKey: 'mlSurvey.balanced' },
+			{ value: 'not_sure', labelKey: 'mlSurvey.notSure' },
+		],
+	},
+	{
+		key: 'budget_range',
+		labelKey: 'mlSurvey.budget',
+		options: [
+			{ value: 'under_200', labelKey: 'mlSurvey.under200' },
+			{ value: '200-400', labelKey: 'mlSurvey.price200To400' },
+			{ value: '400-700', labelKey: 'mlSurvey.price400To700' },
+			{ value: '700_plus', labelKey: 'mlSurvey.price700Plus' },
+		],
+	},
+];
 
 export default function CartPage() {
 	const { items, removeFromCart, updateQuantity, clearCart, total } = useCart();
 	const { user } = useAuth();
 	const { showToast } = useToast();
+	const { t } = useI18n();
 	const router = useRouter();
 	const [activeTab, setActiveTab] = useState<'cart' | 'purchases'>('cart');
 	const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -40,6 +118,10 @@ export default function CartPage() {
 	const [orders, setOrders] = useState<PurchaseOrder[]>([]);
 	const [ordersLoading, setOrdersLoading] = useState(false);
 	const [ordersLoaded, setOrdersLoaded] = useState(false);
+	const [recentCheckoutOrderIDs, setRecentCheckoutOrderIDs] = useState<number[]>([]);
+	const [surveyOrderID, setSurveyOrderID] = useState<number | null>(null);
+	const [surveyForm, setSurveyForm] = useState<SurveyForm>(EMPTY_SURVEY);
+	const [surveySubmitting, setSurveySubmitting] = useState(false);
 	const getImageUrl = (url: string) => {
 		if (!url)
 			return 'https://via.placeholder.com/100';
@@ -76,20 +158,67 @@ export default function CartPage() {
 					paymentMethod: 'meetup',
 				}),
 			});
-			const data = await res.json().catch(() => ({})) as { error?: string };
+			const data = await res.json().catch(() => ({})) as {
+				error?: string;
+				orders?: Array<{ id: number }>;
+			};
 			if (!res.ok) {
 				const message = data.error || 'Checkout failed';
 				setCheckoutError(message);
 				showToast(message, 'error');
 				return;
 			}
+			const createdOrderIDs = (data.orders ?? []).map(order => order.id);
+			setRecentCheckoutOrderIDs(createdOrderIDs);
 			clearCart();
-			showToast('Checkout successful', 'success');
+			setOrdersLoaded(false);
+			setActiveTab('purchases');
+			showToast(t('mlSurvey.checkoutSuccess'), 'success');
 		} catch (err) {
 			setCheckoutError('Network error during checkout');
 			showToast('Network error during checkout', 'error');
 		} finally {
 			setIsCheckingOut(false);
+		}
+	};
+
+	const openSurvey = (orderID: number) => {
+		setSurveyOrderID(orderID);
+		setSurveyForm(EMPTY_SURVEY);
+	};
+
+	const submitSurvey = async () => {
+		if (!surveyOrderID)
+			return;
+		const token = localStorage.getItem('token');
+		if (!token)
+			return;
+		setSurveySubmitting(true);
+		try {
+			const response = await fetch(`/api/v1/orders/${surveyOrderID}/recommendation-survey`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify(surveyForm),
+			});
+			const data = await response.json().catch(() => ({})) as { error?: string };
+			if (!response.ok)
+				throw new Error(data.error || t('mlSurvey.submitFailed'));
+			setOrders(current => current.map(order => (
+				order.id === surveyOrderID
+					? { ...order, recommendationSurveySubmitted: true }
+					: order
+			)));
+			setRecentCheckoutOrderIDs(current => current.filter(id => id !== surveyOrderID));
+			setSurveyOrderID(null);
+			setSurveyForm(EMPTY_SURVEY);
+			showToast(t('mlSurvey.submitSuccess'), 'success');
+		} catch (err) {
+			showToast(err instanceof Error ? err.message : t('mlSurvey.submitFailed'), 'error');
+		} finally {
+			setSurveySubmitting(false);
 		}
 	};
 	const statusLabel = (status: string) => {
@@ -168,6 +297,18 @@ export default function CartPage() {
 		}
 		return (
 			<div className="flex flex-col gap-4">
+				{recentCheckoutOrderIDs.length > 0 && (
+					<div className="rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-4">
+						<p className="m-0 mb-3 font-semibold">{t('mlSurvey.checkoutPrompt')}</p>
+						<div className="flex flex-wrap gap-2">
+							{recentCheckoutOrderIDs.map(orderID => (
+								<button key={orderID} type="button" className="btn btn-primary" onClick={() => openSurvey(orderID)}>
+									{t('mlSurvey.completeForOrder', { id: orderID })}
+								</button>
+							))}
+						</div>
+					</div>
+				)}
 				{orders.map(order => (
 					<div key={order.id} className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] max-[768px]:flex-wrap">
 						<img src={getImageUrl(order.listingImage)} alt={order.listingTitle} className="w-20 h-20 object-cover rounded-lg"/>
@@ -181,6 +322,11 @@ export default function CartPage() {
 								{statusLabel(order.status)}
 							</span>
 							<p className="font-bold min-w-20 text-right">RM {order.totalPrice.toFixed(2)}</p>
+							{(order.status === 'pending' || order.status === 'completed') && (
+								order.recommendationSurveySubmitted
+									? <span className="text-xs font-semibold text-[#1a7f37]">{t('mlSurvey.submitted')}</span>
+									: <button type="button" className="btn btn-secondary" onClick={() => openSurvey(order.id)}>{t('mlSurvey.complete')}</button>
+							)}
 						</div>
 					</div>
 				))}
@@ -246,6 +392,40 @@ export default function CartPage() {
 			  </div>
 			  )}
 			</div>
+			{surveyOrderID !== null && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="ml-survey-title">
+					<div className="max-h-[90vh] w-full max-w-[560px] overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+						<h2 id="ml-survey-title" className="mt-0">{t('mlSurvey.title', { id: surveyOrderID })}</h2>
+						<p className="text-sm text-[#666]">{t('mlSurvey.description')}</p>
+						<div className="flex flex-col gap-4">
+							{SURVEY_OPTIONS.map(field => (
+								<label key={field.key} className="flex flex-col gap-1.5 text-sm font-semibold">
+									{t(field.labelKey)}
+									<select
+										value={surveyForm[field.key]}
+										onChange={event => setSurveyForm(current => ({ ...current, [field.key]: event.target.value }))}
+										className="rounded-md border border-[#ccc] bg-white px-3 py-2.5 font-normal"
+									>
+										<option value="">{t('mlSurvey.chooseOption')}</option>
+										{field.options.map(option => <option key={option.value} value={option.value}>{t(option.labelKey)}</option>)}
+									</select>
+								</label>
+							))}
+						</div>
+						<div className="mt-6 flex justify-end gap-2">
+							<button type="button" className="btn btn-secondary" disabled={surveySubmitting} onClick={() => setSurveyOrderID(null)}>{t('mlSurvey.cancel')}</button>
+							<button
+								type="button"
+								className="btn btn-primary"
+								disabled={surveySubmitting || Object.values(surveyForm).some(value => !value)}
+								onClick={() => void submitSurvey()}
+							>
+								{surveySubmitting ? t('mlSurvey.submitting') : t('mlSurvey.submit')}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</main>
 	);
 }

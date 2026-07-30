@@ -26,13 +26,14 @@ type Order struct {
 
 type EnrichedOrder struct {
 	Order
-	ListingTitle    string  `json:"listingTitle"`
-	ListingImage    string  `json:"listingImage"`
-	ListingCategory string  `json:"listingCategory"`
-	ListingPrice    float64 `json:"listingPrice"`
-	SellerName      string  `json:"sellerName,omitempty"`
-	BuyerUsername   string  `json:"buyerUsername,omitempty"`
-	BuyerEmail      string  `json:"buyerEmail,omitempty"`
+	ListingTitle                  string  `json:"listingTitle"`
+	ListingImage                  string  `json:"listingImage"`
+	ListingCategory               string  `json:"listingCategory"`
+	ListingPrice                  float64 `json:"listingPrice"`
+	SellerName                    string  `json:"sellerName,omitempty"`
+	BuyerUsername                 string  `json:"buyerUsername,omitempty"`
+	BuyerEmail                    string  `json:"buyerEmail,omitempty"`
+	RecommendationSurveySubmitted bool    `json:"recommendationSurveySubmitted"`
 }
 
 type CreateOrderItemRequest struct {
@@ -248,7 +249,11 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 			o.id, o.buyer_id, o.seller_id, o.listing_id, o.quantity, o.total_price,
 			o.status, o.payment_method, o.created_at, o.updated_at,
 			COALESCE(l.title, ''), COALESCE(l.image, ''), COALESCE(l.category, 'Others'),
-			COALESCE(l.price, 0), COALESCE(l.seller_name, '')
+			COALESCE(l.price, 0), COALESCE(l.seller_name, ''),
+			EXISTS (
+				SELECT 1 FROM recommendation_training_feedback feedback
+				WHERE feedback.order_id = o.id
+			)
 		FROM orders o
 		JOIN listings l ON l.id = o.listing_id
 		WHERE o.buyer_id = $1`
@@ -274,6 +279,7 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 			&o.ID, &o.BuyerID, &o.SellerID, &o.ListingID, &o.Quantity,
 			&o.TotalPrice, &o.Status, &paymentMethod, &o.CreatedAt, &o.UpdatedAt,
 			&o.ListingTitle, &o.ListingImage, &o.ListingCategory, &o.ListingPrice, &o.SellerName,
+			&o.RecommendationSurveySubmitted,
 		)
 		if err != nil {
 			log.Printf("Error scanning order: %v", err)

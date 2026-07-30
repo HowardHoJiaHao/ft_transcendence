@@ -504,7 +504,9 @@ The deployed AI service should use package versions compatible with the Google C
 
 The MVP should not:
 
-- Store recommendation profiles in the database.
+- Store standalone chatbot recommendation profiles in the database. The later
+  transaction-survey retraining extension stores controlled training examples
+  linked to purchased orders.
 - Build a separate full-page recommendation form.
 - Predict exact product IDs.
 - Require users to type profile answers.
@@ -586,3 +588,26 @@ For version 1:
 - Predict racket specs, not product IDs.
 - Search current marketplace listings after prediction.
 - Keep rule-based beginner recommendation as fallback.
+
+## 22. Transaction-Survey Retraining Extension
+
+The deployed application extends the original inference-only MVP with a
+demo-first retraining loop:
+
+1. A pending or completed buyer order may submit one controlled five-field
+   recommendation survey.
+2. The Go backend snapshots the purchased listing's weight, flexibility, and
+   balance values as the row's three training targets.
+3. PostgreSQL stores survey rows and durable administrator/moderator training
+   runs.
+4. The AI service combines the immutable 1,000-row synthetic CSV with all
+   survey rows and writes a reproducible training snapshot.
+5. The existing MultiOutput Random Forest pipeline trains in a background
+   worker and reports stage-based progress.
+6. A validated candidate is stored in the persistent recommender model volume
+   and activated through an atomic manifest update without interrupting chat
+   predictions.
+
+This extension intentionally demonstrates that the model can relearn from new
+transaction data. It does not require a minimum number of survey rows or a
+quality-regression gate before activation.

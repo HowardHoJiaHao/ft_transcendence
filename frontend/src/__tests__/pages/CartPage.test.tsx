@@ -46,6 +46,15 @@ vi.mock('next/link', () => ({
 }));
 
 import CartPage from '@/app/(user)/cart/page';
+import { LanguageProvider } from '@/context/LanguageContext';
+
+function renderCartPage() {
+  return render(
+    <LanguageProvider>
+      <CartPage />
+    </LanguageProvider>,
+  );
+}
 
 describe('CartPage checkout', () => {
   beforeEach(() => {
@@ -66,7 +75,7 @@ describe('CartPage checkout', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const user = userEvent.setup();
-    render(<CartPage />);
+    renderCartPage();
     await user.click(screen.getByRole('button', { name: 'Checkout' }));
 
     expect(mocks.showToast).toHaveBeenCalledWith('Please login first', 'error');
@@ -83,10 +92,10 @@ describe('CartPage checkout', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const user = userEvent.setup();
-    render(<CartPage />);
+    renderCartPage();
     await user.click(screen.getByRole('button', { name: 'Checkout' }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/api/v1/orders');
     expect(options).toMatchObject({
@@ -112,11 +121,67 @@ describe('CartPage checkout', () => {
     }));
 
     const user = userEvent.setup();
-    render(<CartPage />);
+    renderCartPage();
     await user.click(screen.getByRole('button', { name: 'Checkout' }));
 
     expect(await screen.findByText('Insufficient stock for listing')).toBeInTheDocument();
     expect(mocks.showToast).toHaveBeenCalledWith('Insufficient stock for listing', 'error');
     expect(mocks.clearCart).not.toHaveBeenCalled();
+  });
+
+  it('submits a controlled survey row for a newly created order', async () => {
+    localStorage.setItem('token', 'valid-jwt');
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ orders: [{ id: 91 }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ([{
+          id: 91,
+          listingId: 10,
+          quantity: 2,
+          totalPrice: 200,
+          status: 'pending',
+          paymentMethod: 'meetup',
+          createdAt: new Date().toISOString(),
+          listingTitle: 'Racket',
+          listingImage: '',
+          sellerName: 'seller',
+          recommendationSurveySubmitted: false,
+        }]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 1, orderId: 91 }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const user = userEvent.setup();
+    renderCartPage();
+    await user.click(screen.getByRole('button', { name: 'Checkout' }));
+    await user.click(await screen.findByRole('button', { name: 'Complete survey for order #91' }));
+
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[0], '18-25');
+    await user.selectOptions(selects[1], 'prefer_not_to_say');
+    await user.selectOptions(selects[2], '1-3_years');
+    await user.selectOptions(selects[3], 'attacking');
+    await user.selectOptions(selects[4], '200-400');
+    await user.click(screen.getByRole('button', { name: 'Add training row' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const [url, options] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(url).toBe('/api/v1/orders/91/recommendation-survey');
+    expect(options.method).toBe('POST');
+    expect(JSON.parse(String(options.body))).toEqual({
+      age_group: '18-25',
+      gender: 'prefer_not_to_say',
+      experience_level: '1-3_years',
+      play_style: 'attacking',
+      budget_range: '200-400',
+    });
+    expect(mocks.showToast).toHaveBeenCalledWith('Training row added', 'success');
   });
 });
