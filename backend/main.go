@@ -14,6 +14,7 @@ import (
 	"transcendence/modules/user/auth"
 	"transcendence/modules/user/chat"
 	"transcendence/modules/user/friends"
+	"transcendence/modules/user/notifications"
 	"transcendence/modules/user/profile"
 	"transcendence/myMiddleware"
 )
@@ -53,26 +54,63 @@ func main() {
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 	v1 := e.Group("/api/v1")
 	v1.GET("/status", statusHandler)
-	v1.POST("/ai/chat", handleAIChat)
+	v1.POST("/ai/chat", func(c echo.Context) error { return handleAIChat(c, rawDB) })
 
 	// Product routes
 	v1.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
 	v1.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
 	v1.GET("/products/:id/images", func(c echo.Context) error { return getListingImages(c, gormDB) })
+	v1.GET("/products/:id/files", func(c echo.Context) error { return listListingFiles(c, gormDB) })
+	v1.GET("/files/:fileId/content", func(c echo.Context) error { return serveListingFile(c, gormDB) })
+	v1.GET("/products/:id/reviews", func(c echo.Context) error { return getListingReviews(c, gormDB) })
 
 	// protected product routes
 	protected := e.Group("/api/v1")
 	protected.Use(myMiddleware.JWTAuth(rawDB))
+
+	// Shared user, real-time, and notification services. Notifications reuse
+	// the authenticated chat WebSocket rather than opening a second connection.
+	baseRepo := user.NewRepository(rawDB, gormDB)
+	authService := auth.NewService(baseRepo)
+	authHandler := auth.NewHandler(baseRepo, authService)
+	profileService := profile.NewService(baseRepo)
+	profileHandler := profile.NewHandler(baseRepo, profileService)
+	friendsRepo := friends.NewRepository(baseRepo)
+	friendsHandler := friends.NewHandler(friendsRepo, authService)
+	chatRepo := chat.NewRepository(baseRepo)
+	chatHub := chat.NewHub(chatRepo)
+	notificationRepo := notifications.NewRepository(rawDB)
+	notificationService := notifications.NewService(notificationRepo)
+	notificationService.Publisher = chatHub.SendPrivateMessage
+	notificationHandler := notifications.NewHandler(notificationService)
+	chatRepo.Notifications = notificationRepo
+	chatHub.Notifications = notificationService
+	go chatHub.Run()
+	chatHandler := chat.NewHandler(chatHub, chatRepo, authService)
+	chatHandler.Notifications = notificationService
+	friendsHandler.Notifications = notificationService
 
 	protected.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
 	protected.POST("/products/import", func(c echo.Context) error { return importProducts(c, gormDB) })
 	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
 	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 	protected.POST("/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
+	protected.POST("/products/:id/files", func(c echo.Context) error { return uploadListingFiles(c, gormDB) })
+	protected.DELETE("/products/:id/files/:fileId", func(c echo.Context) error {
+		return deleteListingFile(c, gormDB)
+	})
+	protected.GET("/products/:id/review-eligibility", func(c echo.Context) error { return getListingReviewEligibility(c, gormDB) })
+	protected.POST("/products/:id/reviews", func(c echo.Context) error {
+		return createListingReview(c, gormDB, notificationService)
+	})
 
-	protected.POST("/orders", func(c echo.Context) error { return createOrders(c, gormDB) })
+	protected.POST("/orders", func(c echo.Context) error {
+		return createOrdersWithNotifications(c, gormDB, notificationService)
+	})
 	protected.GET("/orders", func(c echo.Context) error { return getOrders(c, gormDB) }) // howai AI maybe. merge residue 21 june
-	protected.PUT("/orders/:id/complete", func(c echo.Context) error { return completeOrder(c, gormDB) })
+	protected.PUT("/orders/:id/complete", func(c echo.Context) error {
+		return completeOrderWithNotifications(c, gormDB, notificationService)
+	})
 	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) }) //howai AI maybe. merge residue 21 june
 
 	// Seller dashboard routes
@@ -97,27 +135,6 @@ func main() {
 	public.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
 	public.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 
-	//User Module initialization
-	baseRepo := user.NewRepository(rawDB, gormDB)
-
-	// Initialize Auth module
-	authService := auth.NewService(baseRepo)
-	authHandler := auth.NewHandler(baseRepo, authService)
-
-	// Initialize Profile module
-	profileService := profile.NewService(baseRepo)
-	profileHandler := profile.NewHandler(baseRepo, profileService)
-
-	// Initialize Friends module
-	friendsRepo := friends.NewRepository(baseRepo)
-	friendsHandler := friends.NewHandler(friendsRepo, authService)
-
-	// Initialize Chat module
-	chatRepo := chat.NewRepository(baseRepo)
-	chatHub := chat.NewHub(chatRepo)
-	go chatHub.Run()
-	chatHandler := chat.NewHandler(chatHub, chatRepo, authService)
-
 	// Register routes
 	authHandler.RegisterRoutes(v1)
 	protected.POST("/auth/change-password/request", authHandler.RequestPasswordChange)
@@ -125,6 +142,7 @@ func main() {
 	profileHandler.RegisterRoutes(v1)
 	friendsHandler.RegisterRoutes(v1)
 	chatHandler.RegisterRoutes(v1)
+	notificationHandler.RegisterRoutes(v1)
 	registerAdminRoutes(v1, rawDB)
 
 	// serve static files (avatars) from ./static mapped to /static URL

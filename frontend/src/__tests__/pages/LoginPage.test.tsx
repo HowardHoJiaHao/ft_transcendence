@@ -2,6 +2,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LanguageProvider } from '@/context/LanguageContext';
 
 const mocks = vi.hoisted(() => ({
   login: vi.fn(),
@@ -21,13 +22,20 @@ vi.mock('next/navigation', () => ({
 
 import LoginPage from '@/app/(user)/login/page';
 
+const renderLoginPage = () => render(
+  <LanguageProvider>
+    <LoginPage />
+  </LanguageProvider>,
+);
+
 const authenticatedUser = {
   id: 42,
   username: 'alice',
   email: 'alice@example.com',
   firstName: 'Alice',
   lastName: 'Player',
-  status: 'active',
+  role: 'user' as const,
+  accountStatus: 'active' as const,
 };
 
 describe('LoginPage', () => {
@@ -46,7 +54,7 @@ describe('LoginPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const user = userEvent.setup();
-    render(<LoginPage />);
+    renderLoginPage();
     await user.type(screen.getByPlaceholderText('Email'), 'alice@example.com');
     await user.type(screen.getByPlaceholderText('Password'), 'Strong!Password');
     await user.click(screen.getByRole('button', { name: 'Sign In' }));
@@ -70,7 +78,7 @@ describe('LoginPage', () => {
     }));
 
     const user = userEvent.setup();
-    render(<LoginPage />);
+    renderLoginPage();
     await user.type(screen.getByPlaceholderText('Email'), 'alice@example.com');
     await user.type(screen.getByPlaceholderText('Password'), 'wrong');
     await user.click(screen.getByRole('button', { name: 'Sign In' }));
@@ -96,7 +104,7 @@ describe('LoginPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const user = userEvent.setup();
-    render(<LoginPage />);
+    renderLoginPage();
     await user.type(screen.getByPlaceholderText('Email'), 'alice@example.com');
     await user.type(screen.getByPlaceholderText('Password'), 'Strong!Password');
     await user.click(screen.getByRole('button', { name: 'Sign In' }));

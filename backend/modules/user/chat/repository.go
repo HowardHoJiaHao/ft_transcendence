@@ -7,10 +7,12 @@ import (
 	"time"
 
 	"transcendence/modules/user"
+	"transcendence/modules/user/notifications"
 )
 
 type Repository struct {
 	*user.Repository
+	Notifications *notifications.Repository
 }
 
 func NewRepository(baseRepo *user.Repository) *Repository {
@@ -32,6 +34,54 @@ func (r *Repository) CreateMessage(senderId, receiverId int, content string) (*M
 	}
 
 	return &msg, nil
+}
+
+// CreateMessageWithNotification persists the message and its grouped
+// notification atomically. Repositories without a notification store retain
+// the original behavior, which keeps the module reusable in focused tests.
+func (r *Repository) CreateMessageWithNotification(senderID, receiverID int, content string) (*Message, int64, error) {
+	if senderID <= 0 || receiverID <= 0 || senderID == receiverID || strings.TrimSpace(content) == "" {
+		return nil, 0, fmt.Errorf("invalid private message")
+	}
+	if r.Notifications == nil {
+		message, err := r.CreateMessage(senderID, receiverID, content)
+		return message, 0, err
+	}
+
+	tx, err := r.DB.Begin()
+	if err != nil {
+		return nil, 0, fmt.Errorf("start message transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	var message Message
+	err = tx.QueryRow(`
+		INSERT INTO messages (sender_id, receiver_id, content, is_read)
+		VALUES ($1, $2, $3, false)
+		RETURNING id, sender_id, receiver_id, content, is_read, created_at`,
+		senderID, receiverID, content,
+	).Scan(
+		&message.Id,
+		&message.SenderId,
+		&message.ReceiverId,
+		&message.Content,
+		&message.IsRead,
+		&message.CreatedAt,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("create message: %w", err)
+	}
+
+	notificationID, err := r.Notifications.UpsertMessageTx(
+		tx, receiverID, senderID, message.Id, content,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, 0, fmt.Errorf("commit message transaction: %w", err)
+	}
+	return &message, notificationID, nil
 }
 
 // distinct maybe unnecessary

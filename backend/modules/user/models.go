@@ -23,6 +23,7 @@ type User struct {
 	CreatedAt     time.Time  `json:"createdAt"`
 	HasAvatarBin  bool       `json:"hasAvatarBinary,omitempty"`
 	Requires2FA   bool       `json:"require2FA"`
+	Role          string     `json:"role"`
 	AccountStatus string     `json:"accountStatus"`
 	OAuthID       string     `json:"-"`
 	OAuthProvider string     `json:"oauthProvider,omitempty"`

@@ -1,3 +1,5 @@
+import type { AppNotification } from './notifications';
+
 export interface PrivateMessage {
 	id?: number;
 	sender_id: number;
@@ -46,4 +48,14 @@ export interface OnlineUsersMessage {
 	user_ids: number[];
 }
 
-export type WSMessage = WSPrivateMessage | OnlineStatusMessage | OnlineUsersMessage;
+export interface WSNotificationUpsert {
+	type: 'notification_upsert';
+	notification: AppNotification;
+	unread_count: number;
+}
+
+export type WSMessage =
+	| WSPrivateMessage
+	| OnlineStatusMessage
+	| OnlineUsersMessage
+	| WSNotificationUpsert;

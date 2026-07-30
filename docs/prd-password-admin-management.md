@@ -89,8 +89,9 @@ role. The administrator is then redirected to `/admin/users`.
 Administrator authorization must be checked by the backend. A hidden frontend
 button or route redirect alone is not sufficient.
 
-The administrator identity is environment-backed and is not a record in the
-`users` table.
+The environment-backed administrator remains the bootstrap identity. Database
+users can additionally hold `moderator` or `admin` roles and use their ordinary
+authenticated session to open the management page.
 
 ### 3. User list
 
@@ -101,8 +102,9 @@ The administrator users page displays:
 | User ID | Yes |
 | Username | Yes |
 | Email | Yes |
+| Role | Yes |
 | Account status | Yes |
-| Suspend or restore action | Yes |
+| Role-aware actions | Yes |
 
 The page also includes a small dashboard summary (member, listing, and
 completed-order totals) plus username/email search and account-status filters.
@@ -123,6 +125,7 @@ Add an `account_status` field to `users` with these supported values:
 ```text
 active
 suspended
+deleted
 ```
 
 New registrations always receive `active` status. Clients cannot choose or
@@ -158,6 +161,20 @@ Suspension must preserve:
 - Avatars and other uploaded files.
 
 Restoring the member allows them to log in and use protected features again.
+
+### 5. Roles and irreversible user deletion
+
+Database users have one role: `user`, `moderator`, or `admin`. Guests are
+unauthenticated visitors rather than stored accounts. Moderators can view the
+management dashboard and suspend or restore ordinary users. Administrators can
+also create and edit users, assign roles, and delete users.
+
+`DELETE /api/v1/admin/users/:id` is an irreversible anonymization operation,
+not a physical SQL row deletion. It rejects users with unresolved orders,
+archives active listings, revokes API keys, removes active social links, clears
+personal data, and sets `account_status = 'deleted'` plus `deleted_at`. The
+existing user ID and completed transaction references remain so order and
+review history displays the participant as `Deleted user`.
 
 ## Authorization and Responses
 

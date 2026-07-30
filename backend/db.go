@@ -29,6 +29,11 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 		return nil, nil, nil, fmt.Errorf("listings migration failed: %w", err)
 	}
 
+	if err := runListingFilesMigration(rawDB); err != nil {
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("listing files migration failed: %w", err)
+	}
+
 	if err := runAnalyticsEventsMigration(rawDB); err != nil {
 		_ = rawDB.Close()
 		return nil, nil, nil, fmt.Errorf("analytics_events migration failed: %w", err)
@@ -37,6 +42,16 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 	if err := runUsersMigration(rawDB); err != nil {
 		_ = rawDB.Close()
 		return nil, nil, nil, fmt.Errorf("users migration failed: %w", err)
+	}
+
+	if err := runNotificationsMigration(rawDB); err != nil {
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("notifications migration failed: %w", err)
+	}
+
+	if err := runListingReviewsMigration(rawDB); err != nil {
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("listing reviews migration failed: %w", err)
 	}
 
 	log.Println("Database connected successfully")
@@ -52,14 +67,22 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 func runUsersMigration(db *sql.DB) error {
 	migrations := []string{
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status VARCHAR(20) NOT NULL DEFAULT 'active'`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id VARCHAR(255)`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(50)`,
 		`ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`,
 		`DO $$
 		BEGIN
-			IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_account_status_check') THEN
-				ALTER TABLE users ADD CONSTRAINT users_account_status_check CHECK (account_status IN ('active', 'suspended'));
-			END IF;
+			ALTER TABLE users DROP CONSTRAINT IF EXISTS users_account_status_check;
+			ALTER TABLE users ADD CONSTRAINT users_account_status_check
+				CHECK (account_status IN ('active', 'suspended', 'deleted'));
+		END $$`,
+		`DO $$
+		BEGIN
+			ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+			ALTER TABLE users ADD CONSTRAINT users_role_check
+				CHECK (role IN ('user', 'moderator', 'admin'));
 		END $$`,
 		`DO $$
 		BEGIN
@@ -113,6 +136,31 @@ func runListingsMigration(db *sql.DB) error {
 	return nil
 }
 
+func runListingFilesMigration(db *sql.DB) error {
+	migrations := []string{
+		`CREATE TABLE IF NOT EXISTS listing_files (
+			id BIGSERIAL PRIMARY KEY,
+			listing_id INT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+			original_name VARCHAR(255) NOT NULL,
+			storage_name VARCHAR(255) NOT NULL UNIQUE,
+			file_kind VARCHAR(20) NOT NULL CHECK (file_kind IN ('image', 'document')),
+			mime_type VARCHAR(100) NOT NULL,
+			size_bytes BIGINT NOT NULL CHECK (size_bytes > 0),
+			display_order INT NOT NULL DEFAULT 0,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_listing_files_listing_order
+			ON listing_files(listing_id, file_kind, display_order, id)`,
+	}
+	for _, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("Listing files migration completed")
+	return nil
+}
+
 func runAnalyticsEventsMigration(db *sql.DB) error {
 	migrations := []string{
 		`ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS listing_id INT`,
@@ -135,6 +183,65 @@ func runAnalyticsEventsMigration(db *sql.DB) error {
 		}
 	}
 	log.Println("analytics_events migration completed")
+	return nil
+}
+
+func runNotificationsMigration(db *sql.DB) error {
+	migrations := []string{
+		`CREATE TABLE IF NOT EXISTS notifications (
+			id BIGSERIAL PRIMARY KEY,
+			user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			actor_id INT REFERENCES users(id) ON DELETE SET NULL,
+			notification_type VARCHAR(40) NOT NULL,
+			resource_id INT,
+			data JSONB NOT NULL DEFAULT '{}'::jsonb,
+			read_at TIMESTAMP,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check`,
+		`ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
+			CHECK (notification_type IN ('message', 'friend_added', 'order_new', 'order_completed', 'review_added'))`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user_order
+		 ON notifications(user_id, updated_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+		 ON notifications(user_id, updated_at DESC, id DESC)
+		 WHERE read_at IS NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_unread_message_group
+		 ON notifications(user_id, actor_id, notification_type)
+		 WHERE read_at IS NULL AND notification_type = 'message'`,
+	}
+	for _, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("Notifications migration completed")
+	return nil
+}
+
+func runListingReviewsMigration(db *sql.DB) error {
+	migrations := []string{
+		`CREATE TABLE IF NOT EXISTS listing_reviews (
+			id BIGSERIAL PRIMARY KEY,
+			listing_id INT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+			reviewer_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			order_id INT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
+			rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+			comment TEXT NOT NULL CHECK (char_length(btrim(comment)) BETWEEN 1 AND 1000),
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT listing_reviews_listing_reviewer_unique UNIQUE (listing_id, reviewer_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_listing_reviews_listing_newest
+			ON listing_reviews(listing_id, created_at DESC, id DESC)`,
+	}
+	for _, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("Listing reviews migration completed")
 	return nil
 }
 

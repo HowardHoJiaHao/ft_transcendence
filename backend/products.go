@@ -298,9 +298,8 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 
 	// The seller's phone number is contact PII. Reveal it only to authenticated
 	// users so anonymous visitors cannot read (or scrape) seller contact
-	// details. A valid Bearer JWT is enough — the owner's edit form and any
-	// signed-in buyer both send one.
-	if uid, _, authErr := getOptionalJWTAuth(c); authErr != nil || uid <= 0 {
+	// details. The JWT must still belong to an active database user.
+	if uid, _, authErr := getOptionalJWTAuth(c, sqlDB); authErr != nil || uid <= 0 {
 		product.PhoneNumber = ""
 	}
 
@@ -475,6 +474,12 @@ func deleteProduct(c echo.Context, gormDB *gorm.DB) error {
 	if _, err := sqlDB.Exec("DELETE FROM listings WHERE id = $1", id); err != nil {
 		log.Printf("Error deleting product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to delete product"})
+	}
+	if err := removeListingFileDirectory(id); err != nil {
+		log.Printf("Product %d deleted but attachment cleanup failed: %v", id, err)
+	}
+	if err := clearStoredListingImages(id); err != nil {
+		log.Printf("Product %d deleted but legacy image cleanup failed: %v", id, err)
 	}
 	return c.JSON(200, map[string]string{"message": "Product deleted"})
 }

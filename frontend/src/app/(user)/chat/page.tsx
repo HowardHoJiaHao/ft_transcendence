@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useWebSocketContext } from '@/context/WebSocketContext';
 import { useI18n } from '@/context/LanguageContext';
+import { useToast } from '@/components/Toast/ToastContext';
 import Header from '@/components/Header/Header';
 import ChatModal from './ChatModal';
 import type { Conversation, DirectoryUser, PrivateMessage } from '@/types/websocket';
@@ -24,6 +25,7 @@ export default function ChatPage() {
 	const { user } = useAuth();
 	const { onlineUsers } = useWebSocketContext();
 	const { t } = useI18n();
+	const { showToast } = useToast();
 	const [conversations, setConversations] = useState<Conversation[]>([]);
 	const [people, setPeople] = useState<DirectoryUser[]>([]);
 	const [selectedPartner, setSelectedPartner] = useState<number | null>(null);
@@ -39,6 +41,7 @@ export default function ChatPage() {
 	const peopleLoadingRef = useRef(false);
 	const peopleRequestRef = useRef(0);
 	const peopleAbortRef = useRef<AbortController | null>(null);
+	const deepLinkOpenedRef = useRef(false);
 
 	useEffect(() => {
 		const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -120,9 +123,15 @@ export default function ChatPage() {
 				method: 'DELETE',
 				headers: { Authorization: `Bearer ${token}` },
 			});
-			if (res.ok) setConversations(previous => previous.filter(conversation => conversation.partner_id !== partnerId));
+			if (res.ok) {
+				setConversations(previous => previous.filter(conversation => conversation.partner_id !== partnerId));
+				showToast(t('toast.conversationDeleted'), 'success');
+			} else {
+				showToast(t('toast.conversationDeleteFailed'), 'error');
+			}
 		} catch (err) {
 			console.error('Failed to delete conversation: ', err);
+			showToast(t('toast.networkError'), 'error');
 		}
 	};
 
@@ -144,6 +153,16 @@ export default function ChatPage() {
 		setSelectedPartner(partnerId);
 	};
 
+	useEffect(() => {
+		if (!user || deepLinkOpenedRef.current) return;
+		const rawPartner = new URLSearchParams(window.location.search).get('partner');
+		if (!rawPartner || !/^[1-9]\d*$/.test(rawPartner)) return;
+		const partnerID = Number(rawPartner);
+		if (!Number.isSafeInteger(partnerID)) return;
+		deepLinkOpenedRef.current = true;
+		void openChat(partnerID);
+	}, [user]);
+
 	const addFriend = async (person: DirectoryUser) => {
 		setContextMenu(null);
 		try {
@@ -152,10 +171,17 @@ export default function ChatPage() {
 				method: 'POST',
 				headers: { Authorization: `Bearer ${token}` },
 			});
-			setActionMessage(res.ok ? t('chat.friendAdded') : t('chat.friendAddError'));
+			if (res.ok) {
+				setActionMessage(t('chat.friendAdded'));
+				showToast(t('chat.friendAdded'), 'success');
+			} else {
+				setActionMessage(t('chat.friendAddError'));
+				showToast(t('chat.friendAddError'), 'error');
+			}
 		} catch (err) {
 			console.error('Failed to add friend: ', err);
 			setActionMessage(t('chat.friendAddError'));
+			showToast(t('chat.friendAddError'), 'error');
 		}
 	};
 

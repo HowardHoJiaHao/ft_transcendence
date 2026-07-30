@@ -143,6 +143,7 @@ services:
       - ./avatar:/app/avatar
       - ./static/avatars:/app/static/avatars
       - ./static/listings:/app/static/listings
+      - ./storage:/app/storage
     depends_on:
       db:
         condition: service_healthy
@@ -380,9 +381,9 @@ services:
       DETECTION_PARANOIA: "1"
       REPORTING_LEVEL: "2"
       ALLOWED_METHODS: "GET HEAD POST PUT PATCH DELETE OPTIONS"
-      MODSEC_REQ_BODY_LIMIT: "73400320"
+      MODSEC_REQ_BODY_LIMIT: "75497472"
       MAX_FILE_SIZE: "10485760"
-      COMBINED_FILE_SIZES: "62914560"
+      COMBINED_FILE_SIZES: "73400320"
     volumes:
       # Loaded before CRS rules. Keep application-specific exclusions narrow.
       - ./waf/racketbot-before.conf:/opt/owasp-crs/plugins/racketbot-before.conf:ro

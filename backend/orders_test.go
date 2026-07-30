@@ -11,6 +11,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/labstack/echo/v4"
+	"transcendence/modules/user/notifications"
 )
 
 func TestIsValidOrderStatusUsesStrictAllowlist(t *testing.T) {
@@ -135,6 +136,92 @@ func TestCreateOrdersLocksStockCommitsAndMarksSold(t *testing.T) {
 	}
 	if !bytes.Contains(recorder.Body.Bytes(), []byte(`"totalPrice":100`)) {
 		t.Fatalf("response does not contain trusted checkout total: %s", recorder.Body.String())
+	}
+	expectNoOutstandingSQL(t, mock)
+}
+
+func TestCreateOrdersPersistsSellerNotificationBeforeCommit(t *testing.T) {
+	gormDB, mock := newTestGormDB(t)
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("gorm DB() error = %v", err)
+	}
+	now := time.Now()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT seller_id, price, status, stock_quantity").
+		WithArgs(10).
+		WillReturnRows(sqlmock.NewRows([]string{"seller_id", "price", "status", "stock_quantity"}).
+			AddRow(7, 50.0, "active", 2))
+	mock.ExpectQuery("INSERT INTO orders").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "buyer_id", "seller_id", "listing_id", "quantity",
+			"total_price", "status", "payment_method", "created_at", "updated_at",
+		}).AddRow(1001, 42, 7, 10, 1, 50.0, "pending", "meetup", now, now))
+	mock.ExpectExec("UPDATE listings").
+		WithArgs(1, "active", 10).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT title FROM listings").
+		WithArgs(10).
+		WillReturnRows(sqlmock.NewRows([]string{"title"}).AddRow("Astrox 99"))
+	mock.ExpectQuery("INSERT INTO notifications").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(501))
+	mock.ExpectCommit()
+
+	service := notifications.NewService(notifications.NewRepository(sqlDB))
+	e := echo.New()
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/orders",
+		bytes.NewBufferString(`{"items":[{"listingId":10,"quantity":1}]}`),
+	)
+	request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	recorder := httptest.NewRecorder()
+	context := e.NewContext(request, recorder)
+	context.Set("userId", 42)
+
+	if err := createOrdersWithNotifications(context, gormDB, service); err != nil {
+		t.Fatalf("createOrdersWithNotifications() error = %v", err)
+	}
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusCreated, recorder.Body.String())
+	}
+	expectNoOutstandingSQL(t, mock)
+}
+
+func TestCompleteOrderPersistsBuyerNotificationBeforeCommit(t *testing.T) {
+	gormDB, mock := newTestGormDB(t)
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("gorm DB() error = %v", err)
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("UPDATE orders").
+		WithArgs(55, 7).
+		WillReturnRows(sqlmock.NewRows([]string{"buyer_id", "listing_id"}).AddRow(42, 10))
+	mock.ExpectQuery("SELECT title FROM listings").
+		WithArgs(10).
+		WillReturnRows(sqlmock.NewRows([]string{"title"}).AddRow("Astrox 99"))
+	mock.ExpectQuery("INSERT INTO notifications").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(502))
+	mock.ExpectCommit()
+
+	service := notifications.NewService(notifications.NewRepository(sqlDB))
+	e := echo.New()
+	request := httptest.NewRequest(http.MethodPut, "/orders/55/complete", nil)
+	recorder := httptest.NewRecorder()
+	context := e.NewContext(request, recorder)
+	context.SetPath("/orders/:id/complete")
+	context.SetParamNames("id")
+	context.SetParamValues("55")
+	context.Set("userId", 7)
+
+	if err := completeOrderWithNotifications(context, gormDB, service); err != nil {
+		t.Fatalf("completeOrderWithNotifications() error = %v", err)
+	}
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusOK, recorder.Body.String())
 	}
 	expectNoOutstandingSQL(t, mock)
 }

@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import OnlineStatus from '@/components/OnlineStatus';
 import Header from "@/components/Header/Header"
+import { useToast } from '@/components/Toast/ToastContext';
+import { useI18n } from '@/context/LanguageContext';
 
 type Friend = {
 	id: number;
@@ -18,6 +20,8 @@ type Friend = {
 export default function FriendPage()
 {
 	const { user } = useAuth();
+	const { showToast } = useToast();
+	const { t } = useI18n();
 	const [friendList, setFriendList] = useState<Friend[]>([]);
 	const [loading, setLoading] = useState(true);
 
@@ -38,11 +42,17 @@ export default function FriendPage()
 			if (res.ok)
 			{
 				setFriendList(prev => prev.filter(f => f.id !== partnerId));
+				showToast(t('toast.friendRemoved'), 'success');
+			}
+			else
+			{
+				showToast(t('toast.friendRemoveFailed'), 'error');
 			}
 		}
 		catch (err)
 		{
 			console.error('Failed to delete conversation: ', err);
+			showToast(t('toast.networkError'), 'error');
 		}
 	}
 
