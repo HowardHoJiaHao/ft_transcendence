@@ -20,8 +20,8 @@ func TestGetProfileReturnsMemberProfileFieldsWithoutEmail(t *testing.T) {
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{
-		"id", "username", "email", "first_name", "last_name", "phone_no", "date_of_birth", "gender", "avatar_url", "avatar_data", "avatar_mime_type", "bio", "requires_2fa", "account_status", "oauth_id", "oauth_provider", "created_at",
-	}).AddRow(5, "alice", "alice@example.com", "Alice", "Tan", "+60123456789", time.Date(1995, time.May, 20, 0, 0, 0, 0, time.UTC), "Female", "/avatar/alice.png", nil, nil, "Badminton fan", false, "active", nil, nil, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC))
+		"id", "username", "email", "first_name", "last_name", "phone_no", "date_of_birth", "gender", "avatar_url", "avatar_data", "avatar_mime_type", "bio", "requires_2fa", "role", "account_status", "oauth_id", "oauth_provider", "created_at",
+	}).AddRow(5, "alice", "alice@example.com", "Alice", "Tan", "+60123456789", time.Date(1995, time.May, 20, 0, 0, 0, 0, time.UTC), "Female", "/avatar/alice.png", nil, nil, "Badminton fan", false, "user", "active", nil, nil, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC))
 	mock.ExpectQuery("SELECT id, username, email").WithArgs(5).WillReturnRows(rows)
 
 	e := echo.New()

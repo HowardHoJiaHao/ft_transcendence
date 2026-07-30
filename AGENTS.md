@@ -23,7 +23,8 @@ The active database is PostgreSQL with pgvector, not MySQL. Some older docs stil
 Active product areas include authentication (password, OTP, and Google OAuth),
 profiles and avatars, friends and WebSocket chat, marketplace listings and image
 uploads, cart/orders, seller analytics and fulfillment, bulk CSV listing imports,
-administrator account controls, developer API keys, and the RacketBot assistant.
+role-based administrator/moderator account controls with anonymized deletion,
+developer API keys, and the RacketBot assistant.
 Operational coverage includes WAF rules, health and Prometheus endpoints,
 centralized logs, alerting, container metrics, blackbox probes, and scheduled
 database backups.
@@ -247,8 +248,9 @@ unit test cannot prove.
 - The developer API under `/api/public/v1` uses `X-API-Key` authentication,
   per-key rate limiting, and request logging. Keep its middleware and audit
   behavior intact when changing public API routes.
-- Admin authorization is separate from ordinary user JWT authorization; preserve
-  that boundary when editing `/api/v1/admin` routes.
+- `/api/v1/admin` authorization accepts the environment-backed bootstrap
+  administrator or an active database user with a moderator/admin role.
+  Moderators have narrower actions; preserve the server-side role checks.
 - Database access uses PostgreSQL; do not introduce MySQL-specific SQL or drivers.
 - Listing and avatar files are persisted through the mounted `uploads/`,
   `avatar/`, and `static/` paths. Validate file type, size, ownership, and path

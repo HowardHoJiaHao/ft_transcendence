@@ -1,28 +1,60 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useToast } from '@/components/Toast/ToastContext';
-import { useI18n } from '@/context/LanguageContext';
+import { useToast } from "@/components/Toast/ToastContext";
+import { useI18n } from "@/context/LanguageContext";
+
+type UserRole = "user" | "moderator" | "admin";
+type AccountStatus = "active" | "suspended" | "deleted";
 
 type ManagedUser = {
   id: number;
   username: string;
   email: string;
-  accountStatus: "active" | "suspended";
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  accountStatus: AccountStatus;
+  deletedAt?: string;
 };
 
 type AdminSummary = {
   totalUsers: number;
   activeUsers: number;
   suspendedUsers: number;
+  deletedUsers: number;
   activeListings: number;
   completedOrders: number;
   completedRevenue: number;
 };
 
-const cellClass = "px-4 py-[14px] text-left border-b border-[#eee]";
-const actionButtonClass = "px-4 py-[10px] border-0 rounded-md bg-[#d32f2f] text-white cursor-pointer";
+type UserForm = {
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+};
+
+type CreateUserForm = UserForm & {
+  password: string;
+  role: UserRole;
+};
+
+const emptyCreateForm: CreateUserForm = {
+  username: "",
+  email: "",
+  password: "",
+  firstName: "",
+  lastName: "",
+  role: "user",
+};
+
+const cellClass = "px-3 py-3 text-left border-b border-[#eee] align-top";
+const inputClass = "w-full min-w-[130px] px-2 py-2 border border-[#ccc] rounded-md";
+const primaryButtonClass = "px-3 py-2 border-0 rounded-md bg-[#2457d6] text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+const dangerButtonClass = "px-3 py-2 border-0 rounded-md bg-[#b42318] text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+const neutralButtonClass = "px-3 py-2 border border-[#bbb] rounded-md bg-white text-[#222] cursor-pointer";
 const summaryCardClass = "p-[18px] bg-white rounded-[10px] shadow-[var(--shadow)] flex flex-col gap-1.5";
 const summaryLabelClass = "text-[#666] text-[.9rem]";
 const summaryValueClass = "text-[1.45rem]";
@@ -33,134 +65,307 @@ export default function AdminUsersPage() {
   const { t } = useI18n();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [summary, setSummary] = useState<AdminSummary | null>(null);
+  const [viewerRole, setViewerRole] = useState<UserRole | null>(null);
   const [error, setError] = useState("");
-
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<"" | "active" | "suspended">("");
+  const [status, setStatus] = useState<"" | AccountStatus>("");
+  const [role, setRole] = useState<"" | UserRole>("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState<CreateUserForm>(emptyCreateForm);
+  const [editingID, setEditingID] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<UserForm | null>(null);
+  const [busyID, setBusyID] = useState<number | null>(null);
 
   const adminFetch = useCallback(async (url: string, init?: RequestInit) => {
-    const token = localStorage.getItem("adminToken");
+    // Database moderators/admins use the ordinary login flow and token. The
+    // separate adminToken remains the bootstrap administrator credential.
+    const token = localStorage.getItem("adminToken") ?? localStorage.getItem("token");
     if (!token) {
       router.replace("/admin/login");
-      throw new Error("Administrator login required");
+      throw new Error(t("admin.loginRequired"));
     }
     const response = await fetch(url, {
       ...init,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        ...init?.headers,
+      },
     });
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       localStorage.removeItem("adminToken");
       router.replace("/admin/login");
     }
     return response;
-  }, [router]);
+  }, [router, t]);
 
   const loadUsers = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (search.trim()) params.set("search", search.trim());
       if (status) params.set("status", status);
+      if (role) params.set("role", role);
       const suffix = params.size ? `?${params.toString()}` : "";
       const response = await adminFetch(`/api/v1/admin/users${suffix}`);
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Failed to load users");
+      if (!response.ok) throw new Error(data.error ?? t("admin.loadUsersFailed"));
       setUsers(data.users ?? []);
+      setViewerRole(data.viewerRole ?? null);
+      setError("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error");
+      setError(err instanceof Error ? err.message : t("admin.networkError"));
     }
-  }, [adminFetch, search, status]);
+  }, [adminFetch, role, search, status, t]);
 
   const loadSummary = useCallback(async () => {
     try {
       const response = await adminFetch("/api/v1/admin/summary");
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Failed to load summary");
+      if (!response.ok) throw new Error(data.error ?? t("admin.loadSummaryFailed"));
       setSummary(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error");
+      setError(err instanceof Error ? err.message : t("admin.networkError"));
     }
-  }, [adminFetch]);
+  }, [adminFetch, t]);
 
   useEffect(() => { void loadUsers(); }, [loadUsers]);
   useEffect(() => { void loadSummary(); }, [loadSummary]);
 
+  const reportMutationError = (err: unknown) => {
+    const message = err instanceof Error ? err.message : t("admin.updateFailed");
+    setError(message);
+    showToast(message, "error");
+  };
+
   const changeStatus = async (user: ManagedUser) => {
     const accountStatus = user.accountStatus === "active" ? "suspended" : "active";
+    setBusyID(user.id);
     try {
       const response = await adminFetch(`/api/v1/admin/users/${user.id}/status`, {
         method: "PATCH",
         body: JSON.stringify({ accountStatus }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Failed to update user");
+      if (!response.ok) throw new Error(data.error ?? t("admin.updateFailed"));
       setUsers((current) => current.map((item) => item.id === user.id ? { ...item, accountStatus } : item));
       showToast(
         accountStatus === "suspended"
-          ? t('toast.accountSuspended', { name: user.username })
-          : t('toast.accountRestored', { name: user.username }),
-        'success',
+          ? t("toast.accountSuspended", { name: user.username })
+          : t("toast.accountRestored", { name: user.username }),
+        "success",
       );
       void loadSummary();
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('toast.accountUpdateFailed');
-      setError(message);
-      showToast(message, 'error');
+      reportMutationError(err);
+    } finally {
+      setBusyID(null);
+    }
+  };
+
+  const changeRole = async (user: ManagedUser, nextRole: UserRole) => {
+    setBusyID(user.id);
+    try {
+      const response = await adminFetch(`/api/v1/admin/users/${user.id}/role`, {
+        method: "PATCH",
+        body: JSON.stringify({ role: nextRole }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? t("admin.updateFailed"));
+      setUsers((current) => current.map((item) => item.id === user.id ? { ...item, role: nextRole } : item));
+      showToast(t("admin.roleUpdated"), "success");
+    } catch (err) {
+      reportMutationError(err);
+    } finally {
+      setBusyID(null);
+    }
+  };
+
+  const beginEdit = (user: ManagedUser) => {
+    setEditingID(user.id);
+    setEditForm({
+      username: user.username,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    });
+  };
+
+  const saveEdit = async (userID: number) => {
+    if (!editForm) return;
+    setBusyID(userID);
+    try {
+      const response = await adminFetch(`/api/v1/admin/users/${userID}`, {
+        method: "PATCH",
+        body: JSON.stringify(editForm),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? t("admin.updateFailed"));
+      setUsers((current) => current.map((item) => item.id === userID ? data : item));
+      setEditingID(null);
+      setEditForm(null);
+      showToast(t("admin.userUpdated"), "success");
+    } catch (err) {
+      reportMutationError(err);
+    } finally {
+      setBusyID(null);
+    }
+  };
+
+  const createUser = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusyID(0);
+    try {
+      const response = await adminFetch("/api/v1/admin/users", {
+        method: "POST",
+        body: JSON.stringify(createForm),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? t("admin.createFailed"));
+      setCreateForm(emptyCreateForm);
+      setShowCreate(false);
+      showToast(t("admin.userCreated"), "success");
+      await Promise.all([loadUsers(), loadSummary()]);
+    } catch (err) {
+      reportMutationError(err);
+    } finally {
+      setBusyID(null);
+    }
+  };
+
+  const deleteUser = async (user: ManagedUser) => {
+    if (!window.confirm(t("admin.deleteConfirm", { name: user.username }))) return;
+    setBusyID(user.id);
+    try {
+      const response = await adminFetch(`/api/v1/admin/users/${user.id}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? t("admin.deleteFailed"));
+      showToast(t("admin.userDeleted"), "success");
+      await Promise.all([loadUsers(), loadSummary()]);
+    } catch (err) {
+      reportMutationError(err);
+    } finally {
+      setBusyID(null);
     }
   };
 
   const logout = () => {
     localStorage.removeItem("adminToken");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    void fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" });
     router.push("/admin/login");
   };
 
+  const isAdmin = viewerRole === "admin";
+
   return (
     <main className="min-h-screen bg-[#f4f5f7] p-10 max-[700px]:px-3 max-[700px]:py-5">
-      <div className="max-w-[1100px] mx-auto mb-6 flex items-center justify-between gap-5 max-[700px]:items-start">
-        <div><h1>User management</h1><p>Suspend or restore marketplace members.</p></div>
-        <button onClick={logout} className={actionButtonClass}>Log out</button>
+      <div className="max-w-[1250px] mx-auto mb-6 flex items-center justify-between gap-5 max-[700px]:items-start">
+        <div>
+          <h1>{t("admin.userManagement")}</h1>
+          <p>{isAdmin ? t("admin.adminDescription") : t("admin.moderatorDescription")}</p>
+        </div>
+        <div className="flex gap-2">
+          {isAdmin && <button onClick={() => setShowCreate((value) => !value)} className={primaryButtonClass}>{t("admin.addUser")}</button>}
+          <button onClick={logout} className={neutralButtonClass}>{t("admin.logout")}</button>
+        </div>
       </div>
-      {error && <p className="text-[#b42318] max-w-[1100px] mx-auto mb-4">{error}</p>}
+
+      {error && <p className="text-[#b42318] max-w-[1250px] mx-auto mb-4">{error}</p>}
+
       {summary && (
-        <section className="max-w-[1100px] mx-auto mb-5 grid grid-cols-3 gap-[14px] max-[700px]:grid-cols-2" aria-label="Marketplace summary">
-          <div className={summaryCardClass}><span className={summaryLabelClass}>Total users</span><strong className={summaryValueClass}>{summary.totalUsers}</strong></div>
-          <div className={summaryCardClass}><span className={summaryLabelClass}>Active users</span><strong className={summaryValueClass}>{summary.activeUsers}</strong></div>
-          <div className={summaryCardClass}><span className={summaryLabelClass}>Suspended users</span><strong className={summaryValueClass}>{summary.suspendedUsers}</strong></div>
-          <div className={summaryCardClass}><span className={summaryLabelClass}>Active listings</span><strong className={summaryValueClass}>{summary.activeListings}</strong></div>
-          <div className={summaryCardClass}><span className={summaryLabelClass}>Completed orders</span><strong className={summaryValueClass}>{summary.completedOrders}</strong></div>
-          <div className={summaryCardClass}><span className={summaryLabelClass}>Completed sales</span><strong className={summaryValueClass}>RM {summary.completedRevenue.toFixed(2)}</strong></div>
+        <section className="max-w-[1250px] mx-auto mb-5 grid grid-cols-4 gap-[14px] max-[900px]:grid-cols-2" aria-label={t("admin.marketplaceSummary")}>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>{t("admin.totalUsers")}</span><strong className={summaryValueClass}>{summary.totalUsers}</strong></div>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>{t("admin.activeUsers")}</span><strong className={summaryValueClass}>{summary.activeUsers}</strong></div>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>{t("admin.suspendedUsers")}</span><strong className={summaryValueClass}>{summary.suspendedUsers}</strong></div>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>{t("admin.deletedUsers")}</span><strong className={summaryValueClass}>{summary.deletedUsers}</strong></div>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>{t("admin.activeListings")}</span><strong className={summaryValueClass}>{summary.activeListings}</strong></div>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>{t("admin.completedOrders")}</span><strong className={summaryValueClass}>{summary.completedOrders}</strong></div>
+          <div className={summaryCardClass}><span className={summaryLabelClass}>{t("admin.completedSales")}</span><strong className={summaryValueClass}>RM {summary.completedRevenue.toFixed(2)}</strong></div>
         </section>
       )}
-      <section className="max-w-[1100px] mx-auto mb-4 flex gap-3 max-[700px]:flex-col">
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search username or email"
-          aria-label="Search users"
-          className="flex-1 px-3 py-[10px] border border-[#ccc] rounded-md text-base"
-        />
-        <select
-          value={status}
-          onChange={(event) => setStatus(event.target.value as "" | "active" | "suspended")}
-          aria-label="Filter users by status"
-          className="px-3 py-[10px] border border-[#ccc] rounded-md text-base"
-        >
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="suspended">Suspended</option>
+
+      {isAdmin && showCreate && (
+        <form onSubmit={createUser} className="max-w-[1250px] mx-auto mb-5 p-5 bg-white rounded-[10px] shadow-[var(--shadow)] grid grid-cols-3 gap-3 max-[800px]:grid-cols-1">
+          <input className={inputClass} required placeholder={t("admin.username")} value={createForm.username} onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })} />
+          <input className={inputClass} required type="email" placeholder={t("admin.email")} value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} />
+          <input className={inputClass} required minLength={8} type="password" placeholder={t("admin.temporaryPassword")} value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} />
+          <input className={inputClass} placeholder={t("admin.firstName")} value={createForm.firstName} onChange={(e) => setCreateForm({ ...createForm, firstName: e.target.value })} />
+          <input className={inputClass} placeholder={t("admin.lastName")} value={createForm.lastName} onChange={(e) => setCreateForm({ ...createForm, lastName: e.target.value })} />
+          <select className={inputClass} value={createForm.role} onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as UserRole })}>
+            <option value="user">{t("admin.roleUser")}</option>
+            <option value="moderator">{t("admin.roleModerator")}</option>
+            <option value="admin">{t("admin.roleAdmin")}</option>
+          </select>
+          <button disabled={busyID === 0} className={primaryButtonClass}>{t("admin.createUser")}</button>
+        </form>
+      )}
+
+      <section className="max-w-[1250px] mx-auto mb-4 flex gap-3 max-[700px]:flex-col">
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("admin.searchPlaceholder")} aria-label={t("admin.searchPlaceholder")} className="flex-1 px-3 py-[10px] border border-[#ccc] rounded-md" />
+        <select value={role} onChange={(e) => setRole(e.target.value as "" | UserRole)} aria-label={t("admin.filterRole")} className="px-3 py-[10px] border border-[#ccc] rounded-md">
+          <option value="">{t("admin.allRoles")}</option>
+          <option value="user">{t("admin.roleUser")}</option>
+          <option value="moderator">{t("admin.roleModerator")}</option>
+          <option value="admin">{t("admin.roleAdmin")}</option>
+        </select>
+        <select value={status} onChange={(e) => setStatus(e.target.value as "" | AccountStatus)} aria-label={t("admin.filterStatus")} className="px-3 py-[10px] border border-[#ccc] rounded-md">
+          <option value="">{t("admin.allStatuses")}</option>
+          <option value="active">{t("admin.statusActive")}</option>
+          <option value="suspended">{t("admin.statusSuspended")}</option>
+          <option value="deleted">{t("admin.statusDeleted")}</option>
         </select>
       </section>
-      <div className="max-w-[1100px] mx-auto bg-white rounded-[10px] overflow-x-auto shadow-[var(--shadow)]">
+
+      <div className="max-w-[1250px] mx-auto bg-white rounded-[10px] overflow-x-auto shadow-[var(--shadow)]">
         <table className="w-full border-collapse">
-          <thead><tr><th className={cellClass}>ID</th><th className={cellClass}>Username</th><th className={cellClass}>Email</th><th className={cellClass}>Status</th><th className={cellClass}>Action</th></tr></thead>
+          <thead>
+            <tr>
+              <th className={cellClass}>ID</th>
+              <th className={cellClass}>{t("admin.username")}</th>
+              <th className={cellClass}>{t("admin.email")}</th>
+              <th className={cellClass}>{t("admin.name")}</th>
+              <th className={cellClass}>{t("admin.role")}</th>
+              <th className={cellClass}>{t("admin.status")}</th>
+              <th className={cellClass}>{t("admin.actions")}</th>
+            </tr>
+          </thead>
           <tbody>
-            {users.map((user) => (
-              <tr key={user.id}>
-                <td className={cellClass}>{user.id}</td><td className={cellClass}>{user.username}</td><td className={cellClass}>{user.email}</td>
-                <td className={cellClass}><span className={user.accountStatus === "active" ? "inline-block px-[9px] py-[5px] rounded-full font-semibold text-[#176b36] bg-[#dff5e7]" : "inline-block px-[9px] py-[5px] rounded-full font-semibold text-[#962d22] bg-[#fde2df]"}>{user.accountStatus}</span></td>
-                <td className={cellClass}><button onClick={() => changeStatus(user)} className={actionButtonClass}>{user.accountStatus === "active" ? "Suspend" : "Restore"}</button></td>
-              </tr>
-            ))}
-			{users.length === 0 && <tr><td colSpan={5} className="px-4 py-[14px] border-b border-[#eee] text-center text-[#666]">No users match this filter.</td></tr>}
+            {users.map((user) => {
+              const editing = editingID === user.id && editForm;
+              const deleted = user.accountStatus === "deleted";
+              const moderatorCanManage = viewerRole === "moderator" && user.role === "user";
+              return (
+                <tr key={user.id}>
+                  <td className={cellClass}>{user.id}</td>
+                  <td className={cellClass}>{editing ? <input className={inputClass} value={editForm.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })} /> : user.username}</td>
+                  <td className={cellClass}>{editing ? <input className={inputClass} type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /> : (user.email || "—")}</td>
+                  <td className={cellClass}>
+                    {editing
+                      ? <div className="flex gap-2"><input className={inputClass} value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })} /><input className={inputClass} value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })} /></div>
+                      : ([user.firstName, user.lastName].filter(Boolean).join(" ") || "—")}
+                  </td>
+                  <td className={cellClass}>
+                    {isAdmin && !deleted
+                      ? <select disabled={busyID === user.id} value={user.role} onChange={(e) => void changeRole(user, e.target.value as UserRole)} className={inputClass}><option value="user">{t("admin.roleUser")}</option><option value="moderator">{t("admin.roleModerator")}</option><option value="admin">{t("admin.roleAdmin")}</option></select>
+                      : t(`admin.role${user.role[0].toUpperCase()}${user.role.slice(1)}`)}
+                  </td>
+                  <td className={cellClass}>{t(`admin.status${user.accountStatus[0].toUpperCase()}${user.accountStatus.slice(1)}`)}</td>
+                  <td className={cellClass}>
+                    {!deleted && (
+                      <div className="flex flex-wrap gap-2 min-w-[220px]">
+                        {(isAdmin || moderatorCanManage) && <button disabled={busyID === user.id} onClick={() => void changeStatus(user)} className={neutralButtonClass}>{user.accountStatus === "active" ? t("admin.suspend") : t("admin.restore")}</button>}
+                        {isAdmin && (editing
+                          ? <><button disabled={busyID === user.id} onClick={() => void saveEdit(user.id)} className={primaryButtonClass}>{t("admin.save")}</button><button onClick={() => { setEditingID(null); setEditForm(null); }} className={neutralButtonClass}>{t("admin.cancel")}</button></>
+                          : <button onClick={() => beginEdit(user)} className={neutralButtonClass}>{t("admin.edit")}</button>)}
+                        {isAdmin && <button disabled={busyID === user.id} onClick={() => void deleteUser(user)} className={dangerButtonClass}>{t("admin.delete")}</button>}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {users.length === 0 && <tr><td colSpan={7} className="px-4 py-5 text-center text-[#666]">{t("admin.noUsers")}</td></tr>}
           </tbody>
         </table>
       </div>

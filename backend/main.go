@@ -54,7 +54,7 @@ func main() {
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 	v1 := e.Group("/api/v1")
 	v1.GET("/status", statusHandler)
-	v1.POST("/ai/chat", handleAIChat)
+	v1.POST("/ai/chat", func(c echo.Context) error { return handleAIChat(c, rawDB) })
 
 	// Product routes
 	v1.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })

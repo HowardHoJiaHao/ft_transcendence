@@ -62,14 +62,22 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 func runUsersMigration(db *sql.DB) error {
 	migrations := []string{
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status VARCHAR(20) NOT NULL DEFAULT 'active'`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id VARCHAR(255)`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(50)`,
 		`ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`,
 		`DO $$
 		BEGIN
-			IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_account_status_check') THEN
-				ALTER TABLE users ADD CONSTRAINT users_account_status_check CHECK (account_status IN ('active', 'suspended'));
-			END IF;
+			ALTER TABLE users DROP CONSTRAINT IF EXISTS users_account_status_check;
+			ALTER TABLE users ADD CONSTRAINT users_account_status_check
+				CHECK (account_status IN ('active', 'suspended', 'deleted'));
+		END $$`,
+		`DO $$
+		BEGIN
+			ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+			ALTER TABLE users ADD CONSTRAINT users_role_check
+				CHECK (role IN ('user', 'moderator', 'admin'));
 		END $$`,
 		`DO $$
 		BEGIN

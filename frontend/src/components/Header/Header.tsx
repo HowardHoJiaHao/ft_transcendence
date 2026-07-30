@@ -91,7 +91,11 @@ export default function Header({
                   setLangOpen(false);
                 }} />
               )}
-			  <Link href="/admin/login" className="btn btn-secondary btn-sm">Admin</Link>
+				  {(!user || user.role === 'admin' || user.role === 'moderator') && (
+				    <Link href={user ? "/admin/users" : "/admin/login"} className="btn btn-secondary btn-sm">
+				      {user ? "Management" : "Admin"}
+				    </Link>
+				  )}
 
               <Link href="/cart" className="relative bg-[var(--light)] text-[var(--dark)] h-7 px-2.5 box-border border border-[var(--border)] rounded no-underline text-[15px] leading-none inline-flex items-center transition-colors duration-300 hover:bg-[#e9ecef]">🛒{itemCount > 0 && (<span className="absolute -top-1.5 -right-1.5 bg-[#ef4444] text-white rounded-full w-5 h-5 text-xs font-bold flex items-center justify-center">{itemCount}</span>)}</Link>
 

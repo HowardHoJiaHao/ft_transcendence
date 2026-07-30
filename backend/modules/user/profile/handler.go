@@ -69,19 +69,23 @@ func toPublicProfile(u *user.User) PublicProfile {
 // requesterIsAuthenticated reports whether the request carries a valid member
 // JWT, checking both the Authorization header and the OAuth cookie (mirroring
 // JWTAuth). Used to reveal contact details only to signed-in users.
-func requesterIsAuthenticated(c echo.Context) bool {
+func (h *Handler) requesterIsAuthenticated(c echo.Context) bool {
+	var token string
 	authHeader := c.Request().Header.Get("Authorization")
 	if strings.HasPrefix(authHeader, "Bearer ") {
-		if claims, err := auth.ValidateToken(strings.TrimPrefix(authHeader, "Bearer ")); err == nil && claims.UserId > 0 {
-			return true
-		}
+		token = strings.TrimPrefix(authHeader, "Bearer ")
+	} else if cookie, err := c.Cookie("oauth_token"); err == nil {
+		token = cookie.Value
 	}
-	if cookie, err := c.Cookie("oauth_token"); err == nil && cookie.Value != "" {
-		if claims, err := auth.ValidateToken(cookie.Value); err == nil && claims.UserId > 0 {
-			return true
-		}
+	claims, err := auth.ValidateToken(token)
+	if err != nil || claims.Role != "member" || claims.UserId <= 0 {
+		return false
 	}
-	return false
+	var status string
+	return h.repo.DB.QueryRow(
+		"SELECT account_status FROM users WHERE id = $1",
+		claims.UserId,
+	).Scan(&status) == nil && status == "active"
 }
 
 func (h *Handler) RegisterRoutes(e *echo.Group) {
@@ -120,12 +124,15 @@ func (h *Handler) GetProfile(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
 	}
+	if u.AccountStatus == "deleted" {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
+	}
 	profile := toPublicProfile(u)
 	// Reveal the seller's phone number only to signed-in users so they can make
 	// contact, while anonymous callers still cannot scrape contact PII. Other
 	// sensitive fields (email, DOB, gender) are never exposed here — the owner
 	// reads their own full record through the authenticated /me route.
-	if requesterIsAuthenticated(c) {
+	if h.requesterIsAuthenticated(c) {
 		profile.PhoneNo = u.PhoneNo
 	}
 	return c.JSON(http.StatusOK, profile)

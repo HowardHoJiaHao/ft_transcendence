@@ -202,9 +202,11 @@ jobs:
 
           assert_sql_true \
             "required cross-feature columns" \
-            "SELECT count(*) = 25
+            "SELECT count(*) = 27
              FROM (VALUES
                ('users', 'account_status'),
+               ('users', 'role'),
+               ('users', 'deleted_at'),
                ('users', 'oauth_id'),
                ('users', 'requires_2fa'),
                ('listings', 'seller_id'),

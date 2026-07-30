@@ -61,7 +61,10 @@ func (r *Repository) AddFriendWithNotification(
 
 	//check if friend exists
 	var exists int
-	err := r.DB.QueryRow("SELECT id FROM users WHERE id = $1", friendID).Scan(&exists)
+	err := r.DB.QueryRow(
+		"SELECT id FROM users WHERE id = $1 AND account_status = 'active'",
+		friendID,
+	).Scan(&exists)
 	if err != nil {
 		return 0, fmt.Errorf("friend user does not exist")
 	}

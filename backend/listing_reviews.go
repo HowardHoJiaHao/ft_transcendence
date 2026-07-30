@@ -110,8 +110,10 @@ func getListingReviews(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	rows, err := sqlDB.Query(`
-		SELECT r.id, r.listing_id, r.rating, r.comment, r.created_at,
-			u.id, u.username, u.avatar_url
+			SELECT r.id, r.listing_id, r.rating, r.comment, r.created_at,
+				u.id,
+				CASE WHEN u.deleted_at IS NOT NULL THEN 'Deleted user' ELSE u.username END,
+				CASE WHEN u.deleted_at IS NOT NULL THEN NULL ELSE u.avatar_url END
 		FROM listing_reviews r
 		JOIN users u ON u.id = r.reviewer_id
 		WHERE r.listing_id = $1

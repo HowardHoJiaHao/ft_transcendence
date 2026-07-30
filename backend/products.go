@@ -298,9 +298,8 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 
 	// The seller's phone number is contact PII. Reveal it only to authenticated
 	// users so anonymous visitors cannot read (or scrape) seller contact
-	// details. A valid Bearer JWT is enough — the owner's edit form and any
-	// signed-in buyer both send one.
-	if uid, _, authErr := getOptionalJWTAuth(c); authErr != nil || uid <= 0 {
+	// details. The JWT must still belong to an active database user.
+	if uid, _, authErr := getOptionalJWTAuth(c, sqlDB); authErr != nil || uid <= 0 {
 		product.PhoneNumber = ""
 	}
 

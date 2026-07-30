@@ -317,7 +317,8 @@ func getSellerOrders(c echo.Context, gormDB *gorm.DB) error {
 			o.status, o.payment_method, o.created_at, o.updated_at,
 			COALESCE(l.title, ''), COALESCE(l.image, ''), COALESCE(l.category, 'Others'),
 			COALESCE(l.price, 0), COALESCE(l.seller_name, ''),
-			COALESCE(u.username, ''), COALESCE(u.email, '')
+				CASE WHEN u.deleted_at IS NOT NULL THEN 'Deleted user' ELSE COALESCE(u.username, '') END,
+				CASE WHEN u.deleted_at IS NOT NULL THEN '' ELSE COALESCE(u.email, '') END
 		FROM orders o
 		JOIN listings l ON l.id = o.listing_id
 		JOIN users u ON u.id = o.buyer_id
