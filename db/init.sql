@@ -457,6 +457,14 @@ INSERT INTO users (username, email, password_hash, first_name, last_name, avatar
 ('howard', 'howardho992002@gmail.com', '$2a$10$B41tPZmXQszHGGHj6qwRNOX9V4eTDKw1JOVg0jbl2SFgtqmitanjS', 'howard', '', 'https://ui-avatars.com/api/?name=howard', TRUE, FALSE)
 ON CONFLICT DO NOTHING;
 
+-- Second demo account, for testing buyer/seller interactions between two logins.
+-- Same password "aaa" — the bcrypt salt is carried inside the hash, so reusing
+-- the digest gives the same password without needing a second one generated.
+-- is_verified skips e-mail verification and requires_2fa off skips the OTP step.
+INSERT INTO users (username, email, password_hash, first_name, last_name, avatar_url, is_verified, requires_2fa) VALUES
+('howard2', 'howardho992003@gmail.com', '$2a$10$B41tPZmXQszHGGHj6qwRNOX9V4eTDKw1JOVg0jbl2SFgtqmitanjS', 'howard', '', 'https://ui-avatars.com/api/?name=howard2', TRUE, FALSE)
+ON CONFLICT DO NOTHING;
+
 -- Listings for ahmad_store (seller 1), ids 20-26
 INSERT INTO listings (id, seller_id, title, description, category, condition, dealing_method, weight_category, flexibility_category, balance_category, price, original_price, location, image, seller_name, rating, reviews, is_new, is_featured, status, views_count, created_at, updated_at) VALUES
 (20, 1, 'Victor Jetspeed S12', 'Fast attacking racket, lightly used.', 'Rackets', 'Second-hand (Used)', 'Meet Up', '4U', 'Stiff Shaft', 'Even Balance', 450, 550, 'Kuala Lumpur', 'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?w=400&h=300&fit=crop', 'Ahmad Store', 4.7, 12, FALSE, FALSE, 'sold', 34, NOW() - INTERVAL '95 days', NOW() - INTERVAL '80 days'),

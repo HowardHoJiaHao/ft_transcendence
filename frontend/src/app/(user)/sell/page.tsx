@@ -97,6 +97,32 @@ function SellPageInner() {
   const [acknowledged, setAcknowledged] = useState(false);
   /* this block is temporary page state */
 
+  /* ── Unsaved-changes guard (edit mode) ──
+     baseline is a snapshot of the listing as it was loaded; comparing the live
+     form against it is what makes "are there changes?" answerable. pendingHref
+     holds the destination of a navigation that was intercepted and is waiting
+     on the seller's answer. */
+  const [baseline, setBaseline] = useState<string | null>(null);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  // The fields the discard guard compares. Dealing methods are order-insensitive
+  // — reordering the checkboxes is not an edit — so they are sorted first.
+  // Photos are not here: they are Files, and are checked by count instead.
+  const formSnapshot = (v: {
+    category: string;
+    condition: string;
+    title: string;
+    description: string;
+    price: string;
+    stockQuantity: string;
+    location: string;
+    dealingMethods: string[];
+    phoneNumber: string;
+    weightCategory: string;
+    flexibilityCategory: string;
+    balanceCategory: string;
+  }) => JSON.stringify({ ...v, dealingMethods: [...v.dealingMethods].sort() });
+
   /* Load listing data in edit mode, editing an existing listing */
   /* this is about when user trying to edit the existing listing, call api, fetch data from postgreSQL to make amendment */
   useEffect(() => {
@@ -109,21 +135,40 @@ function SellPageInner() {
       .then((r) => r.json())	// take api response and fills the edit form, read response body and convert to javaScript object
       //Take the existing listing data returned by the backend, convert it into the formats expected by the frontend, and fill the edit form.
 	  .then((p) => {
-        setCategory(p.category || "Others");
-        if (CONDITIONS.includes(p.condition))
-          setCondition(p.condition as Condition);
-        setTitle(p.title || "");
-        setDescription(p.description || "");
-        setPrice(p.price?.toString() || "");
-        setStockQuantity((p.stockQuantity ?? 1).toString());
-        setLocation(p.location || "");
-        setDealingMethods(
-          p.dealingMethod ? p.dealingMethod.split(", ").filter(Boolean) : [],
-        );
-        setPhoneNumber(p.phoneNumber || "");
-        setWeightCategory(p.weightCategory || "4U");
-        setFlexibilityCategory(p.flexibilityCategory || "Medium Flex");
-        setBalanceCategory(p.balanceCategory || "Even Balance");
+        // Map once into locals, then use them for both the form and the
+        // baseline — deriving the baseline from state instead would race the
+        // setters and record an empty form as "the original".
+        const loaded = {
+          category: p.category || "Others",
+          condition: (CONDITIONS.includes(p.condition)
+            ? p.condition
+            : "Second-hand (Used)") as Condition,
+          title: p.title || "",
+          description: p.description || "",
+          price: p.price?.toString() || "",
+          stockQuantity: (p.stockQuantity ?? 1).toString(),
+          location: p.location || "",
+          dealingMethods: p.dealingMethod
+            ? p.dealingMethod.split(", ").filter(Boolean)
+            : [],
+          phoneNumber: p.phoneNumber || "",
+          weightCategory: p.weightCategory || "4U",
+          flexibilityCategory: p.flexibilityCategory || "Medium Flex",
+          balanceCategory: p.balanceCategory || "Even Balance",
+        };
+        setCategory(loaded.category);
+        setCondition(loaded.condition);
+        setTitle(loaded.title);
+        setDescription(loaded.description);
+        setPrice(loaded.price);
+        setStockQuantity(loaded.stockQuantity);
+        setLocation(loaded.location);
+        setDealingMethods(loaded.dealingMethods);
+        setPhoneNumber(loaded.phoneNumber);
+        setWeightCategory(loaded.weightCategory);
+        setFlexibilityCategory(loaded.flexibilityCategory);
+        setBalanceCategory(loaded.balanceCategory);
+        setBaseline(formSnapshot(loaded));
       })
       .catch(() => showToast("Failed to load listing data", "error"))
       .finally(() => setEditLoading(false));
@@ -140,6 +185,67 @@ function SellPageInner() {
       .catch(() => showToast(t("listingFiles.loadFailed"), "error"));
   }, [editId]); // eslint-disable-line react-hooks/exhaustive-deps
 /* this is about when user trying to edit the existing listing, call api, fetch data from postgreSQL to make amendment */
+
+  // Unsaved edits exist once the live form diverges from what was loaded, or
+  // once a photo has been picked (edit mode always starts with none staged).
+  const isDirty =
+    isEditMode &&
+    baseline !== null &&
+    !submitting &&
+    (photos.length > 0 ||
+      formSnapshot({
+        category,
+        condition,
+        title,
+        description,
+        price,
+        stockQuantity,
+        location,
+        dealingMethods,
+        phoneNumber,
+        weightCategory,
+        flexibilityCategory,
+        balanceCategory,
+      }) !== baseline);
+
+  // Hold navigation while edits are unsaved.
+  //
+  // The App Router has no navigation-event hook to cancel from, so in-app moves
+  // are caught at the click instead: every internal link is intercepted here
+  // and re-issued from the dialog if the seller confirms. beforeunload covers
+  // what that cannot — reloads, tab closes and off-site links — where the
+  // browser shows its own generic prompt.
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+
+    const onClickCapture = (e: MouseEvent) => {
+      // Leave modified clicks alone: they open a new tab, so this form stays put.
+      if (e.defaultPrevented || e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const anchor = (e.target as HTMLElement | null)?.closest?.("a");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+      if (anchor.target && anchor.target !== "_self") return;
+      // Same-page anchors and the current URL are not really leaving.
+      if (href === window.location.pathname + window.location.search) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingHref(href);
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onClickCapture, true);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onClickCapture, true);
+    };
+  }, [isDirty]);
 
 /* possible unused / redundance code*/
   const handleSearch = () => {
@@ -321,6 +427,12 @@ function SellPageInner() {
     }
     if (!dealingMethods.length) {
       showToast("Please select at least one dealing method", "error");
+      return;
+    }
+    // A listing with no photo shows a placeholder everywhere it appears, which
+    // buyers skip past. Require one rather than letting it go live blank.
+    if (existingImages.length + photos.length === 0) {
+      showToast("Please add at least one photo of your item", "error");
       return;
     }
     if (!acknowledged) {
@@ -1127,6 +1239,51 @@ function SellPageInner() {
           )}
         </div>
       </div>
+
+      {/* Raised when a navigation was intercepted with edits still unsaved.
+          Confirming re-issues the move that was held. */}
+      {pendingHref && (
+        <div
+          className="fixed inset-0 z-[1200] bg-black/40 flex items-center justify-center px-4"
+          onClick={() => setPendingHref(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="discard-title"
+            className="bg-white border border-[#e8e8e6] rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.2)] w-full max-w-[420px] px-5 py-[18px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="discard-title" className="text-lg font-bold text-[#222] mt-0 mx-0 mb-2">
+              Discard your changes?
+            </h2>
+            <p className="text-[#898781] text-sm mt-0 mx-0 mb-5">
+              This listing has edits you have not saved yet. Leaving this page now
+              loses them.
+            </p>
+            <div className="flex gap-2.5 justify-end flex-wrap">
+              <button
+                type="button"
+                className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]"
+                onClick={() => setPendingHref(null)}
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center px-[18px] py-[7px] rounded-lg bg-[#c62828] text-white border-none text-[13px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[#a91f1f]"
+                onClick={() => {
+                  const href = pendingHref;
+                  setPendingHref(null);
+                  router.push(href);
+                }}
+              >
+                Discard changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
