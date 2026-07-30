@@ -73,6 +73,8 @@ function SellPageInner() {
   const [documentPreviewUrls, setDocumentPreviewUrls] = useState<string[]>([]);
   const [existingFiles, setExistingFiles] = useState<ListingFile[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadedFileCount, setUploadedFileCount] = useState(0);
+  const [editSaved, setEditSaved] = useState(false);
   const [deletingFileId, setDeletingFileId] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -170,6 +172,9 @@ function SellPageInner() {
     setWeightCategory("4U");
     setFlexibilityCategory("Medium Flex");
     setBalanceCategory("Even Balance");
+    setUploadProgress(null);
+    setUploadedFileCount(0);
+    setEditSaved(false);
     if (!isEditMode) setStep(1);
   };
 
@@ -277,9 +282,19 @@ function SellPageInner() {
 	//upload to go backend
   const uploadPendingFiles = async (listingId: number, token: string) => {
     const pendingFiles = [...photos, ...documents];
-    if (!pendingFiles.length) return;
+    if (!pendingFiles.length) return 0;
     setUploadProgress(0);
-    await uploadListingFiles(listingId, pendingFiles, token, setUploadProgress);
+    // Yield one frame so the initial, truthful 0% state is painted before a
+    // fast local upload completes.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const uploaded = await uploadListingFiles(
+      listingId,
+      pendingFiles,
+      token,
+      setUploadProgress,
+    );
+    setUploadedFileCount(uploaded.length);
+    return uploaded.length;
   };
 
   const handleSubmit = async () => {
@@ -326,6 +341,8 @@ function SellPageInner() {
 
 	//edit existing listing
     try {
+      setEditSaved(false);
+      setUploadedFileCount(0);
       if (isEditMode) {
         /* ── UPDATE ── */
         const res = await fetch(
@@ -359,7 +376,7 @@ function SellPageInner() {
         }
         await uploadPendingFiles(Number(editId), token);
         showToast("Ad updated successfully", "success");
-        router.push("/profile/my-ads");
+        setEditSaved(true);
       } else {
         /* ── CREATE new listing ── */
         const res = await fetch("/api/v1/products", {
@@ -395,13 +412,13 @@ function SellPageInner() {
         setStep(3);
       }
     } catch (err) {
+      setUploadProgress(null);
       showToast(
         err instanceof Error ? err.message : "Something went wrong",
         "error",
       );
     } finally {
       setSubmitting(false);
-      setUploadProgress(null);
     }
   };
   //progress bar
@@ -1010,7 +1027,9 @@ function SellPageInner() {
                     <span>
                       {uploadProgress < 100
                         ? t("listingFiles.uploading")
-                        : t("listingFiles.processing")}
+                        : submitting
+                          ? t("listingFiles.processing")
+                          : t("listingFiles.uploadComplete")}
                     </span>
                     <span>{uploadProgress}%</span>
                   </div>
@@ -1020,6 +1039,26 @@ function SellPageInner() {
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
+                </div>
+              )}
+
+              {editSaved && (
+                <div className="bg-[#ecfdf5] border border-[#86efac] rounded-lg p-5 flex items-center justify-between gap-4 max-[600px]:items-start max-[600px]:flex-col" role="status">
+                  <div>
+                    <p className="m-0 font-bold text-[#166534]">✓ {t("listingFiles.changesSaved")}</p>
+                    <p className="m-0 mt-1 text-sm text-[#166534]">
+                      {uploadedFileCount > 0
+                        ? t("listingFiles.filesUploaded", { count: uploadedFileCount })
+                        : t("listingFiles.noNewFiles")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="bg-[#166534] text-white border-none rounded-md px-4 py-2 text-sm font-semibold cursor-pointer"
+                    onClick={() => router.push("/profile/my-ads")}
+                  >
+                    {t("listingFiles.viewMyAds")}
+                  </button>
                 </div>
               )}
 
@@ -1059,6 +1098,14 @@ function SellPageInner() {
                 <p className="text-base text-[#666] mt-0 mx-0 mb-8">
                   Your ad has been posted and will be visible to buyers shortly.
                 </p>
+                {uploadedFileCount > 0 && (
+                  <div className="w-full max-w-[520px] bg-[#ecfdf5] border border-[#86efac] rounded-lg px-5 py-4 text-left mb-8">
+                    <p className="m-0 font-bold text-[#166534]">✓ {t("listingFiles.uploadComplete")}</p>
+                    <p className="m-0 mt-1 text-sm text-[#166534]">
+                      {t("listingFiles.filesUploaded", { count: uploadedFileCount })}
+                    </p>
+                  </div>
+                )}
                 <div className="flex gap-4 flex-wrap justify-center">
                   <button
                     className="bg-[#2563eb] text-white border-none rounded-md px-8 py-3 text-sm font-bold cursor-pointer tracking-[0.5px] transition-colors duration-150 hover:bg-[#1d4ed8] disabled:bg-[#93c5fd] disabled:cursor-not-allowed"
