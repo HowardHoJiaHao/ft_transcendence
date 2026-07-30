@@ -72,6 +72,12 @@ func TestCreateOrdersRejectsUnsafeRequestsBeforeStartingTransaction(t *testing.T
 			authUserID: 42,
 			wantStatus: http.StatusBadRequest,
 		},
+		{
+			name:       "unsupported payment method",
+			body:       `{"items":[{"listingId":1,"quantity":1}],"paymentMethod":"card"}`,
+			authUserID: 42,
+			wantStatus: http.StatusBadRequest,
+		},
 	}
 
 	for _, test := range tests {
@@ -97,7 +103,7 @@ func TestCreateOrdersRejectsUnsafeRequestsBeforeStartingTransaction(t *testing.T
 	}
 }
 
-func TestCreateOrdersLocksStockCommitsAndMarksSold(t *testing.T) {
+func TestCreateOrdersDefaultsToMeetupLocksStockCommitsAndMarksSold(t *testing.T) {
 	gormDB, mock := newTestGormDB(t)
 	now := time.Now()
 
@@ -312,12 +318,12 @@ func TestGetOrderByIDForbidsUnrelatedUser(t *testing.T) {
 	gormDB, mock := newTestGormDB(t)
 	now := time.Now()
 
-	mock.ExpectQuery("SELECT id, buyer_id, seller_id, listing_id").
+	mock.ExpectQuery("SELECT o.id, o.buyer_id, o.seller_id, o.listing_id").
 		WithArgs(99).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "buyer_id", "seller_id", "listing_id", "quantity",
-			"total_price", "status", "payment_method", "created_at", "updated_at",
-		}).AddRow(99, 7, 8, 10, 1, 50.0, "pending", "meetup", now, now))
+			"total_price", "status", "payment_method", "created_at", "updated_at", "payment_status",
+		}).AddRow(99, 7, 8, 10, 1, 50.0, "pending", "meetup", now, now, nil))
 
 	e := echo.New()
 	request := httptest.NewRequest(http.MethodGet, "/orders/99", nil)
@@ -357,6 +363,69 @@ func TestCompleteOrderScopesUpdateToAuthenticatedSeller(t *testing.T) {
 	}
 	if recorder.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusConflict)
+	}
+	expectNoOutstandingSQL(t, mock)
+}
+
+func TestCompleteOrderRequiresPaidStripePayment(t *testing.T) {
+	tests := []struct {
+		name       string
+		affected   int64
+		wantStatus int
+	}{
+		{name: "unpaid", affected: 0, wantStatus: http.StatusConflict},
+		{name: "paid", affected: 1, wantStatus: http.StatusOK},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gormDB, mock := newTestGormDB(t)
+			mock.ExpectExec("payments.status = 'paid'").
+				WithArgs(99, 42).
+				WillReturnResult(sqlmock.NewResult(0, test.affected))
+
+			e := echo.New()
+			request := httptest.NewRequest(http.MethodPut, "/orders/99/complete", nil)
+			recorder := httptest.NewRecorder()
+			context := e.NewContext(request, recorder)
+			context.SetPath("/orders/:id/complete")
+			context.SetParamNames("id")
+			context.SetParamValues("99")
+			context.Set("userId", 42)
+
+			if err := completeOrder(context, gormDB); err != nil {
+				t.Fatalf("completeOrder() error = %v", err)
+			}
+			if recorder.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s",
+					recorder.Code, test.wantStatus, recorder.Body.String())
+			}
+			expectNoOutstandingSQL(t, mock)
+		})
+	}
+}
+
+func TestSellerPendingOrdersExcludeUnpaidStripeOrders(t *testing.T) {
+	gormDB, mock := newTestGormDB(t)
+	mock.ExpectQuery("COALESCE\\(o.payment_method, ''\\) <> 'stripe' OR p.status = 'paid'").
+		WithArgs(7, "pending").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "buyer_id", "seller_id", "listing_id", "quantity", "total_price",
+			"status", "payment_method", "created_at", "updated_at", "title", "image",
+			"category", "price", "seller_name", "buyer_username", "buyer_email",
+			"payment_status",
+		}))
+
+	e := echo.New()
+	request := httptest.NewRequest(http.MethodGet, "/seller/orders?status=pending", nil)
+	recorder := httptest.NewRecorder()
+	context := e.NewContext(request, recorder)
+	context.Set("userId", 7)
+
+	if err := getSellerOrders(context, gormDB); err != nil {
+		t.Fatalf("getSellerOrders() error = %v", err)
+	}
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 	}
 	expectNoOutstandingSQL(t, mock)
 }

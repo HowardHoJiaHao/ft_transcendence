@@ -114,8 +114,11 @@ before introducing or relying on any additional public API-base variable.
 Infisical CLI, the repository `.infisical.json`, and a local
 `.env.infisical-auth` containing `INFISICAL_TOKEN`. Startup is non-interactive
 and does not require a host-installed Infisical CLI, a saved browser session,
-or `sudo`. Read-only lifecycle commands such as `make ps` and `make logs` do
-not require Infisical. Never restore a known database-password fallback.
+or `sudo`. `make setup` is the full demo path: it requires complete Stripe
+configuration, verifies the CLI signing secret, and starts persistent webhook
+forwarding. `make up` remains the core/first-time Stripe bootstrap path.
+Read-only lifecycle commands such as `make ps` and `make logs` do not require
+Infisical. Never restore a known database-password fallback.
 
 ### MVP Admin Access
 

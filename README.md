@@ -65,6 +65,11 @@ DEEPSEEK_API_KEY
 OPENROUTER_API_KEY
 ```
 
+The full demo startup also requires the six Stripe values documented under
+[Stripe Connect sandbox checkout](#stripe-connect-sandbox-checkout). Use
+`make up` instead when bootstrapping the Stripe webhook secret for the first
+time.
+
 Requirements:
 
 - `JWT_SECRET` must contain at least 32 characters.
@@ -81,7 +86,9 @@ make setup
 ```
 
 `make setup` checks Docker and Compose, exports fresh `dev` secrets through the
-Dockerized CLI, validates them, and starts the complete stack. The generated
+Dockerized CLI, validates the complete Stripe demo configuration, confirms that
+the Stripe CLI signing secret matches `STRIPE_WEBHOOK_SECRET`, and starts the
+complete stack with persistent webhook forwarding. The generated
 `.env.infisical` file has mode `600` and is removed as soon as Compose finishes
 creating and starting the containers.
 
@@ -117,10 +124,12 @@ all local database data is intentional.
 
 ```text
 make help             Show all supported commands
-make setup            Build and start the full Infisical + WAF stack
-make up               Start the stack with Infisical secrets
+make setup            Build the full demo stack and start Stripe forwarding
+make up               Start the core stack for first-time Stripe bootstrap
 make restart          Recreate containers with freshly retrieved secrets
 make check-secrets    Fetch and validate required secrets
+make check-stripe-secrets Validate the complete Stripe demo configuration
+make stripe-listen    Run the foreground Stripe listener for initial bootstrap
 make infisical-auth-init  Create the local token file
 make infisical-auth-check Validate the local token file
 make infisical-auth-clear Delete only the local token file
@@ -129,6 +138,7 @@ make down             Stop containers without requiring Infisical
 make ps               Show container status and published ports
 make logs             Follow all logs
 make logs-waf         Follow ModSecurity and CRS audit output
+make logs-stripe      Follow the persistent Stripe webhook listener
 make logs-backend     Follow Go backend logs
 make logs-frontend    Follow Next.js logs
 make logs-db          Follow PostgreSQL logs
@@ -140,6 +150,107 @@ make db-migrate       Apply db/init.sql
 
 `make clean` and `make reset` delete the PostgreSQL volume and all local
 database data.
+
+## Stripe Connect sandbox checkout
+
+The core application and Meet up / COD checkout can still run without Stripe by
+using `make up`. The demo-oriented `make setup` requires Stripe configuration
+and starts the pinned Stripe CLI listener alongside the application. The
+sandbox flow supports one configured seller, MYR card payments, Stripe-hosted
+Checkout, Connect destination charges, and a 10% application fee.
+
+Store these values in the Infisical `dev` environment at path `/`:
+
+```text
+STRIPE_SECRET_KEY
+STRIPE_TEST_CONNECTED_ACCOUNT_ID
+STRIPE_TEST_SELLER_EMAIL
+STRIPE_WEBHOOK_SECRET
+STRIPE_SUCCESS_URL
+STRIPE_CANCEL_URL
+```
+
+Use a test key beginning with `sk_test_`. The connected account ID begins with
+`acct_`. Choose the stable email address of the marketplace demo seller with:
+
+```bash
+make db-connect
+```
+
+```sql
+SELECT username, email
+FROM users
+ORDER BY email;
+```
+
+Set `STRIPE_TEST_SELLER_EMAIL` to that address. Checkout compares the configured
+address with the listing seller's database email after trimming whitespace and
+without case sensitivity, so it remains stable when a fresh PostgreSQL volume
+assigns different numeric user IDs.
+
+Recommended local return URLs are:
+
+```text
+STRIPE_SUCCESS_URL=https://localhost:8443/cart?checkout=stripe-return&session_id={CHECKOUT_SESSION_ID}
+STRIPE_CANCEL_URL=https://localhost:8443/cart?checkout=stripe-cancelled
+```
+
+If `WAF_HTTPS_PORT` is customized, use that port in both URLs.
+
+The first local webhook setup has a deliberate two-stage bootstrap:
+
+1. Start the core stack with `make up`, which does not require a webhook secret.
+2. Run `make stripe-listen`.
+3. Copy the displayed `whsec_...` value into Infisical as
+   `STRIPE_WEBHOOK_SECRET`.
+4. Run `make setup`.
+5. Validate all values at any time with `make check-stripe-secrets`.
+
+During normal demo startup, `make setup` first uses
+`stripe listen --print-secret` to ensure the listener and backend share the
+same signing secret. It then starts the pinned listener as a persistent Compose
+service on the internal network. Follow it with `make logs-stripe`.
+
+`make stripe-listen` remains the foreground bootstrap command used to obtain
+the initial `whsec_...` value. Both listener modes forward only the required
+events to `http://backend:8080/api/v1/webhooks/stripe`; neither publishes the
+backend port nor persists the API key.
+
+Use Stripe's sandbox card:
+
+```text
+4242 4242 4242 4242
+Any future expiry
+Any three-digit CVC
+```
+
+After payment, verify the destination charge, 10% application fee, and
+connected-account transfer in the Stripe test dashboard. Inspect local state
+with:
+
+```bash
+make db-connect
+```
+
+```sql
+SELECT id, status, amount_minor, platform_fee_minor,
+       stripe_checkout_session_id, stripe_payment_intent_id, stock_released
+FROM payments
+ORDER BY id DESC;
+
+SELECT id, payment_id, status, payment_method
+FROM orders
+ORDER BY id DESC;
+```
+
+The verified webhook, not the browser return URL, marks a payment paid. A
+declined card leaves stock reserved so the buyer can retry in the same Checkout
+Session. An expired Session cancels its pending orders and restores stock
+exactly once.
+
+Current limitations: test mode only, one configured seller, one seller per
+Stripe cart, MYR cards only, no dynamic onboarding, and no refund initiation or
+refund webhook synchronization.
 
 ## WAF demonstration
 
