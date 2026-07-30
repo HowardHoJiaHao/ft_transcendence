@@ -3,9 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header/Header';
-import ShopTabs from '@/components/ShopTabs/ShopTabs';
 import ShopHeader from '@/components/ShopTabs/ShopHeader';
-import { useShopCounts } from '@/components/ShopTabs/useShopCounts';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast/ToastContext';
 
@@ -285,7 +283,6 @@ export default function DeveloperApiPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { showToast } = useToast();
-  const shopCounts = useShopCounts(); // tallies for the shared My Shop header/tabs
 
   const [keys, setKeys] = useState<APIKeyInfo[]>([]);
   const [logs, setLogs] = useState<APIRequestLog[]>([]);
@@ -465,20 +462,11 @@ export default function DeveloperApiPage() {
       <Header />
 
       <div className="max-w-[1180px] mx-auto pt-7 px-8 pb-16 max-[640px]:pt-5 max-[640px]:px-4 max-[640px]:pb-12">
-        <ShopHeader counts={shopCounts} />
+        {/* This page is not part of the listing workflow, so it carries neither
+            the My Shop tab row nor Post an Ad — ShopHeader titles it instead. */}
+        <ShopHeader current="developer-api" />
 
         <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] overflow-hidden">
-          {/* Shared My Shop row — keeps the seller's navigation visible here. */}
-          <ShopTabs current="developer-api" counts={shopCounts ?? undefined} />
-
-          <div className="px-5 pt-[18px]">
-            <h2 className="text-xl font-bold text-[#222] mt-0 mx-0 mb-1.5">🔑 Developer API</h2>
-            <p className="text-[#898781] text-sm mt-0 mx-0 mb-0">
-              Generate secret keys, read the API documentation, and audit every request
-              made with your keys.
-            </p>
-          </div>
-
           <div className="flex gap-2.5 px-5 py-4 border-b border-[#eee] flex-wrap">
             <button
               className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'keys' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}

@@ -40,16 +40,22 @@ interface Ad {
 }
 
 // A pending order enriched with listing and buyer info (GET /api/v1/seller/orders).
+// The backend's EnrichedOrder returns more than the list row shows; the extra
+// fields below feed the order details dialog.
 interface SellerOrder {
   id: number;
+  buyerId: number;
   listingId: number;
   quantity: number;
   totalPrice: number;
   status: string;
   paymentMethod: string;
   createdAt: string;
+  updatedAt: string;
   listingTitle: string;
   listingImage: string;
+  listingCategory: string;
+  listingPrice: number;
   buyerUsername: string;
   buyerEmail: string;
 }
@@ -151,6 +157,20 @@ function MyAdsPageInner() {
   const [pendingLoading, setPendingLoading] = useState(false);
   const [completingOrderId, setCompletingOrderId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+
+  // Deleting a listing is irreversible, so it is confirmed in a dialog that
+  // names the ad rather than a native confirm() the browser can suppress.
+  const [pendingDelete, setPendingDelete] = useState<Ad | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  // Listing currently being archived or republished, so its row can show progress.
+  const [statusChangingId, setStatusChangingId] = useState<number | null>(null);
+  // Archive/republish both move a listing in or out of the marketplace, so both
+  // are confirmed first. Holds the ad and the status it would move to.
+  const [pendingStatusChange, setPendingStatusChange] = useState<
+    { ad: Ad; status: 'active' | 'archived' } | null
+  >(null);
+  // The order whose details dialog is open.
+  const [orderDetails, setOrderDetails] = useState<SellerOrder | null>(null);
 
   // Analytics data — fetched lazily the first time the Analytics tab opens;
   // analyticsLoaded doubles as the cache flag (reset after an order completes).
@@ -509,10 +529,13 @@ function MyAdsPageInner() {
     page * ADS_PER_PAGE,
   );
 
-  // Delete a listing (after confirm) and drop it from whichever tab list held it.
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this ad? This cannot be undone.')) return;
+  // Delete the ad held in pendingDelete and drop it from whichever tab list had
+  // it. Only ever reached from the confirmation dialog below.
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const id = pendingDelete.id;
     const token = localStorage.getItem('token') || '';
+    setDeleting(true);
     try {
       const res = await fetch(`${API_BASE}/api/v1/products/${id}`, {
         method: 'DELETE',
@@ -523,12 +546,75 @@ function MyAdsPageInner() {
         setSoldAds((prev) => prev.filter((a) => a.id !== id));
         setArchivedAds((prev) => prev.filter((a) => a.id !== id));
         showToast('Ad deleted successfully', 'success');
+        setPendingDelete(null);
       } else {
         const data = await res.json().catch(() => ({})) as { error?: string };
         showToast(data.error || 'Failed to delete ad', 'error');
       }
     } catch {
       showToast('Network error', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Move a listing between active and archived.
+  //
+  // PUT /products/:id replaces the whole listing rather than patching it, and
+  // the Ad rows here only carry what the list needs (no description, category,
+  // condition, phone or racket specs). So this reads the full product back
+  // first and returns it unchanged apart from status — sending an Ad directly
+  // would blank every field the list does not happen to show.
+  const handleSetStatus = async (ad: Ad, status: 'active' | 'archived') => {
+    const token = localStorage.getItem('token') || '';
+    setStatusChangingId(ad.id);
+    try {
+      const currentRes = await fetch(`${API_BASE}/api/v1/products/${ad.id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!currentRes.ok) throw new Error('Failed to load the listing');
+      const current = await currentRes.json();
+
+      const res = await fetch(`${API_BASE}/api/v1/products/${ad.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          category: current.category,
+          condition: current.condition,
+          dealingMethod: current.dealingMethod,
+          phoneNumber: current.phoneNumber,
+          title: current.title,
+          description: current.description,
+          weightCategory: current.weightCategory,
+          flexibilityCategory: current.flexibilityCategory,
+          balanceCategory: current.balanceCategory,
+          price: current.price,
+          originalPrice: current.originalPrice,
+          location: current.location,
+          stockQuantity: current.stockQuantity,
+          status,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error || 'Failed to update the listing');
+      }
+      // The backend downgrades a republish to "sold" when stock is 0, so read
+      // the result rather than assuming the status we asked for.
+      const updated = await res.json().catch(() => null) as { status?: string } | null;
+      await refreshSellerData();
+      setPendingStatusChange(null);
+      if (status === 'archived') {
+        showToast('Ad archived', 'success');
+      } else if (updated?.status === 'sold') {
+        showToast('Republished as Sold — this listing has no stock left', 'success');
+      } else {
+        showToast('Ad republished', 'success');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Network error', 'error');
+    } finally {
+      setStatusChangingId(null);
     }
   };
 
@@ -1277,17 +1363,34 @@ function MyAdsPageInner() {
                         Ordered {formatDate(order.createdAt)} · Qty {order.quantity} · {order.paymentMethod || 'meetup'}
                       </p>
                     </div>
+                    {/* Same shape as the listing rows: status, age, actions. */}
                     <div className="ml-auto flex flex-col items-end gap-1.5 shrink-0 min-w-[130px]">
                       <span className="inline-block px-3 py-[3px] rounded-xl text-xs font-bold capitalize bg-[#fff8e1] text-[#8d6e00]">
                         Pending
                       </span>
-                      <button
-                        className="border-none rounded-md bg-[#111] text-white cursor-pointer text-[13px] font-bold px-3.5 py-[9px] whitespace-nowrap hover:bg-[#333] disabled:bg-[#a3a3a3] disabled:cursor-not-allowed"
-                        onClick={() => handleCompleteOrder(order.id)}
-                        disabled={completingOrderId === order.id}
-                      >
-                        {completingOrderId === order.id ? 'Saving…' : 'Mark as Delivered'}
-                      </button>
+                      {/* Age of the order, not the listing — how long the buyer
+                          has been waiting on this seller. */}
+                      <span className="text-xs text-[#898781]">
+                        {daysSince(order.createdAt)} days waiting
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="bg-none border-none text-sm text-[#2563eb] cursor-pointer font-medium p-0 hover:underline disabled:text-[#a3a3a3] disabled:cursor-not-allowed disabled:no-underline"
+                          onClick={() => handleCompleteOrder(order.id)}
+                          disabled={completingOrderId === order.id}
+                          type="button"
+                        >
+                          {completingOrderId === order.id ? 'Saving…' : 'Delivered'}
+                        </button>
+                        <span className="text-[#ccc] text-sm">|</span>
+                        <button
+                          className="bg-none border-none text-sm text-[#2563eb] cursor-pointer font-medium p-0 hover:underline"
+                          onClick={() => setOrderDetails(order)}
+                          type="button"
+                        >
+                          View Details
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1354,20 +1457,58 @@ function MyAdsPageInner() {
                   <span className="text-xs text-[#898781]">
                     {daysSince(ad.createdAt)} days listed
                   </span>
+                  {/* Actions differ per tab. Sold is terminal — the listing is a
+                      record of a completed sale that revenue is derived from,
+                      so it offers nothing: editing would rewrite history,
+                      deleting would destroy it, and archiving would misfile a
+                      sale as something the seller withdrew. */}
                   <div className="flex items-center gap-2">
-                    <Link
-                      href={`/sell?editId=${ad.id}`}
-                      className="text-sm text-[#2563eb] no-underline font-medium hover:underline"
-                    >
-                      Edit
-                    </Link>
-                    <span className="text-[#ccc] text-sm">|</span>
-                    <button
-                      className="bg-none border-none text-sm text-[#2563eb] cursor-pointer font-medium p-0 hover:underline"
-                      onClick={() => handleDelete(ad.id)}
-                    >
-                      Delete
-                    </button>
+                    {ad.status === 'sold' ? null : ad.status === 'archived' ? (
+                      <>
+                        <button
+                          className="bg-none border-none text-sm text-[#2563eb] cursor-pointer font-medium p-0 hover:underline disabled:text-[#a3a3a3] disabled:cursor-not-allowed disabled:no-underline"
+                          onClick={() => setPendingStatusChange({ ad, status: 'active' })}
+                          disabled={statusChangingId === ad.id}
+                          type="button"
+                        >
+                          {statusChangingId === ad.id ? 'Republishing…' : 'Republish'}
+                        </button>
+                        <span className="text-[#ccc] text-sm">|</span>
+                        <button
+                          className="bg-none border-none text-sm text-[#2563eb] cursor-pointer font-medium p-0 hover:underline"
+                          onClick={() => setPendingDelete(ad)}
+                          type="button"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <Link
+                          href={`/sell?editId=${ad.id}`}
+                          className="text-sm text-[#2563eb] no-underline font-medium hover:underline"
+                        >
+                          Edit
+                        </Link>
+                        <span className="text-[#ccc] text-sm">|</span>
+                        <button
+                          className="bg-none border-none text-sm text-[#2563eb] cursor-pointer font-medium p-0 hover:underline disabled:text-[#a3a3a3] disabled:cursor-not-allowed disabled:no-underline"
+                          onClick={() => setPendingStatusChange({ ad, status: 'archived' })}
+                          disabled={statusChangingId === ad.id}
+                          type="button"
+                        >
+                          {statusChangingId === ad.id ? 'Archiving…' : 'Archive'}
+                        </button>
+                        <span className="text-[#ccc] text-sm">|</span>
+                        <button
+                          className="bg-none border-none text-sm text-[#2563eb] cursor-pointer font-medium p-0 hover:underline"
+                          onClick={() => setPendingDelete(ad)}
+                          type="button"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1404,6 +1545,227 @@ function MyAdsPageInner() {
           )}
         </div>
       </div>
+
+      {/* Deleting an ad cannot be undone, so it is confirmed here. The dialog
+          names the listing so there is no doubt which one is going. */}
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-[1200] bg-black/40 flex items-center justify-center px-4"
+          onClick={() => !deleting && setPendingDelete(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-ad-title"
+            className="bg-white border border-[#e8e8e6] rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.2)] w-full max-w-[420px] px-5 py-[18px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="delete-ad-title" className="text-lg font-bold text-[#222] mt-0 mx-0 mb-2">
+              Delete this ad?
+            </h2>
+            <p className="text-[#333] text-sm mt-0 mx-0 mb-1.5 font-semibold break-words">
+              {pendingDelete.title}
+            </p>
+            <p className="text-[#898781] text-sm mt-0 mx-0 mb-5">
+              This permanently removes the listing and its photos. It cannot be undone.
+            </p>
+            <div className="flex gap-2.5 justify-end flex-wrap">
+              <button
+                type="button"
+                className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888] disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setPendingDelete(null)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center px-[18px] py-[7px] rounded-lg bg-[#c62828] text-white border-none text-[13px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[#a91f1f] disabled:bg-[#a3a3a3] disabled:cursor-not-allowed"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting…' : 'Yes, delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Archiving pulls a listing out of circulation and republishing puts it
+          back, so both are confirmed rather than firing on a single click. */}
+      {pendingStatusChange && (
+        <div
+          className="fixed inset-0 z-[1200] bg-black/40 flex items-center justify-center px-4"
+          onClick={() => statusChangingId === null && setPendingStatusChange(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="status-change-title"
+            className="bg-white border border-[#e8e8e6] rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.2)] w-full max-w-[420px] px-5 py-[18px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="status-change-title" className="text-lg font-bold text-[#222] mt-0 mx-0 mb-2">
+              {pendingStatusChange.status === 'archived' ? 'Archive this ad?' : 'Republish this ad?'}
+            </h2>
+            <p className="text-[#333] text-sm mt-0 mx-0 mb-1.5 font-semibold break-words">
+              {pendingStatusChange.ad.title}
+            </p>
+            <p className="text-[#898781] text-sm mt-0 mx-0 mb-5">
+              {pendingStatusChange.status === 'archived'
+                ? 'It moves to your Archived tab and stops accepting new orders. You can republish it at any time.'
+                : 'It moves back to your Published tab and can be ordered again. If it has no stock left, it returns as Sold instead.'}
+            </p>
+            <div className="flex gap-2.5 justify-end flex-wrap">
+              <button
+                type="button"
+                className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888] disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setPendingStatusChange(null)}
+                disabled={statusChangingId !== null}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center px-[18px] py-[7px] rounded-lg bg-[#111] text-white border-none text-[13px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[#333] disabled:bg-[#a3a3a3] disabled:cursor-not-allowed"
+                onClick={() =>
+                  handleSetStatus(pendingStatusChange.ad, pendingStatusChange.status)
+                }
+                disabled={statusChangingId !== null}
+              >
+                {statusChangingId !== null
+                  ? pendingStatusChange.status === 'archived'
+                    ? 'Archiving…'
+                    : 'Republishing…'
+                  : pendingStatusChange.status === 'archived'
+                    ? 'Yes, archive'
+                    : 'Yes, republish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Everything the seller needs to fulfil one pending order. */}
+      {orderDetails && (
+        <div
+          className="fixed inset-0 z-[1200] bg-black/40 flex items-center justify-center px-4 py-8"
+          onClick={() => setOrderDetails(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="order-details-title"
+            className="bg-white border border-[#e8e8e6] rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.2)] w-full max-w-[520px] max-h-full overflow-y-auto px-5 py-[18px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <h2 id="order-details-title" className="text-lg font-bold text-[#222] m-0">
+                Order #{orderDetails.id}
+              </h2>
+              <button
+                type="button"
+                className="bg-none border-none text-xl leading-none text-[#888] cursor-pointer p-0 hover:text-[#111]"
+                onClick={() => setOrderDetails(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flex gap-3.5 mb-4">
+              <div className="w-[90px] h-[75px] shrink-0 rounded-md overflow-hidden bg-[#f0f0f0]">
+                <img
+                  className="w-full h-full object-cover"
+                  src={orderImgSrc(orderDetails)}
+                  alt={orderDetails.listingTitle}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
+                  }}
+                />
+              </div>
+              <div className="min-w-0">
+                <Link
+                  href={`/products/${orderDetails.listingId}`}
+                  className="block text-[15px] font-semibold text-[#333] no-underline mb-1 hover:text-[#2563eb] hover:underline"
+                >
+                  {orderDetails.listingTitle}
+                </Link>
+                <p className="text-[13px] text-[#888] m-0">{orderDetails.listingCategory}</p>
+              </div>
+            </div>
+
+            <dl className="grid grid-cols-[minmax(110px,auto)_1fr] gap-x-4 gap-y-2.5 text-sm m-0">
+              <dt className="text-[#898781]">Buyer</dt>
+              <dd className="text-[#222] m-0 font-medium break-words">
+                {orderDetails.buyerUsername || '—'}
+              </dd>
+
+              <dt className="text-[#898781]">Contact</dt>
+              <dd className="m-0 break-words">
+                {orderDetails.buyerEmail ? (
+                  <a href={`mailto:${orderDetails.buyerEmail}`} className="text-[#2563eb] no-underline hover:underline">
+                    {orderDetails.buyerEmail}
+                  </a>
+                ) : (
+                  <span className="text-[#898781]">—</span>
+                )}
+              </dd>
+
+              <dt className="text-[#898781]">Ordered</dt>
+              <dd className="text-[#222] m-0">{formatDate(orderDetails.createdAt)}</dd>
+
+              <dt className="text-[#898781]">Quantity</dt>
+              <dd className="text-[#222] m-0">{orderDetails.quantity}</dd>
+
+              <dt className="text-[#898781]">Unit price</dt>
+              <dd className="text-[#222] m-0">RM {orderDetails.listingPrice.toFixed(2)}</dd>
+
+              <dt className="text-[#898781]">Total</dt>
+              <dd className="text-[#111] m-0 font-bold">RM {orderDetails.totalPrice.toFixed(2)}</dd>
+
+              <dt className="text-[#898781]">Payment</dt>
+              <dd className="text-[#222] m-0 capitalize">{orderDetails.paymentMethod || 'meetup'}</dd>
+
+              <dt className="text-[#898781]">Status</dt>
+              <dd className="m-0">
+                <span className="inline-block px-3 py-[3px] rounded-xl text-xs font-bold capitalize bg-[#fff8e1] text-[#8d6e00]">
+                  {orderDetails.status}
+                </span>
+              </dd>
+            </dl>
+
+            {/* Checkout never collects a delivery address, so there is none to
+                show. Saying so beats leaving the seller hunting for it. */}
+            <p className="text-[13px] text-[#898781] bg-[#faf9f7] border border-[#eee] rounded-lg px-3 py-2.5 mt-4 mb-0">
+              No delivery address is recorded — checkout does not collect one. Arrange
+              handover with the buyer using the contact above.
+            </p>
+
+            <div className="flex gap-2.5 justify-end flex-wrap mt-5">
+              <button
+                type="button"
+                className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]"
+                onClick={() => setOrderDetails(null)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center px-[18px] py-[7px] rounded-lg bg-[#111] text-white border-none text-[13px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[#333] disabled:bg-[#a3a3a3] disabled:cursor-not-allowed"
+                onClick={() => {
+                  const id = orderDetails.id;
+                  setOrderDetails(null);
+                  handleCompleteOrder(id);
+                }}
+                disabled={completingOrderId === orderDetails.id}
+              >
+                Mark as Delivered
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
