@@ -43,7 +43,7 @@
   },
   "toast": {
     "listingCreated": "Listing created successfully",
-    "loggedOut": "You have been logged out",
+    "loggedOut": "You have successfully logged out",
     "friendRemoved": "Friend removed",
     "friendRemoveFailed": "Unable to remove friend",
     "conversationDeleted": "Conversation deleted",
