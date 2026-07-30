@@ -7,12 +7,14 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"transcendence/modules/user/auth"
+	"transcendence/modules/user/notifications"
 	"transcendence/myMiddleware"
 )
 
 type Handler struct {
-	Repo    *Repository
-	Service *auth.Service
+	Repo          *Repository
+	Service       *auth.Service
+	Notifications *notifications.Service
 }
 
 func NewHandler(repo *Repository, service *auth.Service) *Handler {
@@ -56,8 +58,17 @@ func (h *Handler) AddFriend(c echo.Context) error {
 
 	log.Printf("in here3\n")                          //debug
 	log.Printf("id: %d, friend id: %d", id, friendId) //debug
-	if err := h.Repo.AddFriend(id, friendId); err != nil {
+	var notificationID int64
+	if h.Notifications != nil {
+		notificationID, err = h.Repo.AddFriendWithNotification(id, friendId, h.Notifications.Repo)
+	} else {
+		err = h.Repo.AddFriend(id, friendId)
+	}
+	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	if h.Notifications != nil {
+		h.Notifications.PublishByID(friendId, notificationID)
 	}
 
 	log.Printf("in here4\n") //debug

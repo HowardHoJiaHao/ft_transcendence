@@ -119,6 +119,9 @@ func (h *Handler) RequestPasswordChange(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User not found"})
 	}
+	if u.OAuthProvider == "google" {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "Google-authenticated accounts cannot change their password"})
+	}
 	withPassword, err := h.repo.GetUserByEmailWithPassword(u.Email)
 	if err != nil || bcrypt.CompareHashAndPassword([]byte(withPassword.PasswordHash), []byte(req.CurrentPassword)) != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Current password is incorrect"})
@@ -145,6 +148,9 @@ func (h *Handler) ConfirmPasswordChange(c echo.Context) error {
 	u, err := h.repo.GetUserByID(userID)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User not found"})
+	}
+	if u.OAuthProvider == "google" {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "Google-authenticated accounts cannot change their password"})
 	}
 	passwordRequest := user.RegisterRequest{Username: u.Username, Password: req.NewPassword}
 	if err := h.service.CheckAndHashNewPassword(&passwordRequest); err != nil {

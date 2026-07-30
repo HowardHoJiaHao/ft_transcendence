@@ -8,13 +8,15 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"transcendence/modules/user/auth"
+	"transcendence/modules/user/notifications"
 	"transcendence/myMiddleware"
 )
 
 type Handler struct {
-	Hub     *Hub
-	Repo    *Repository
-	Service *auth.Service
+	Hub           *Hub
+	Repo          *Repository
+	Service       *auth.Service
+	Notifications *notifications.Service
 }
 
 func NewHandler(hub *Hub, repo *Repository, service *auth.Service) *Handler {
@@ -72,7 +74,7 @@ func (h *Handler) SendMessage(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot send message to yourself"})
 	}
 
-	msg, err := h.Repo.CreateMessage(senderId, req.ReceiverId, req.Content)
+	msg, notificationID, err := h.Repo.CreateMessageWithNotification(senderId, req.ReceiverId, req.Content)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to save message"})
 	}
@@ -88,6 +90,9 @@ func (h *Handler) SendMessage(c echo.Context) error {
 
 	payload, _ := json.Marshal(outbound)
 	h.Hub.SendPrivateMessage(msg.ReceiverId, payload)
+	if h.Notifications != nil {
+		h.Notifications.PublishByID(msg.ReceiverId, notificationID)
+	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "sent",

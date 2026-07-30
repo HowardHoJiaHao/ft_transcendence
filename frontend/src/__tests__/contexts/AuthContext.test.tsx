@@ -10,7 +10,8 @@ const testUser = {
   email: 'alice@example.com',
   firstName: 'Alice',
   lastName: 'Player',
-  status: 'active',
+  role: 'user' as const,
+  accountStatus: 'active' as const,
 };
 
 function AuthHarness() {

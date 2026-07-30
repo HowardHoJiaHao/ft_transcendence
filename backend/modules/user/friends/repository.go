@@ -1,9 +1,11 @@
 package friends
 
 import (
+	"database/sql"
 	"fmt"
 
 	"transcendence/modules/user"
+	"transcendence/modules/user/notifications"
 )
 
 type Repository struct {
@@ -42,22 +44,78 @@ func (r *Repository) GetFriends(userID int) ([]Friend, error) {
 }
 
 func (r *Repository) AddFriend(userId, friendId int) error {
+	_, err := r.AddFriendWithNotification(userId, friendId, nil)
+	return err
+}
+
+// AddFriendWithNotification creates both accepted friendship rows in one
+// transaction and creates a recipient notification only for a genuinely new
+// friendship.
+func (r *Repository) AddFriendWithNotification(
+	userID, friendID int,
+	notificationRepo *notifications.Repository,
+) (int64, error) {
+	if userID == friendID {
+		return 0, fmt.Errorf("cannot add yourself as a friend")
+	}
+
 	//check if friend exists
 	var exists int
-	err := r.DB.QueryRow("SELECT id FROM users WHERE id = $1", friendId).Scan(&exists)
+	err := r.DB.QueryRow(
+		"SELECT id FROM users WHERE id = $1 AND account_status = 'active'",
+		friendID,
+	).Scan(&exists)
 	if err != nil {
-		return fmt.Errorf("friend user does not exist")
+		return 0, fmt.Errorf("friend user does not exist")
 	}
+
+	tx, err := r.DB.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("start friendship transaction: %w", err)
+	}
+	defer tx.Rollback()
 
 	query := `
 		INSERT INTO friendships (user_id1, user_id2, status)
 		VALUES ($1, $2, 'accepted')
-		ON CONFLICT (user_id1, user_id2) DO NOTHING`
+		ON CONFLICT (user_id1, user_id2) DO NOTHING
+		RETURNING id`
 
-	_, err = r.DB.Exec(query, userId, friendId)
-	//bidirectional for simplicity
-	_, err = r.DB.Exec(query, friendId, userId)
-	return err
+	var firstID int
+	firstCreated := true
+	if err := tx.QueryRow(query, userID, friendID).Scan(&firstID); err != nil {
+		if err != sql.ErrNoRows {
+			return 0, fmt.Errorf("create friendship: %w", err)
+		}
+		firstCreated = false
+	}
+
+	var reverseID int
+	if err := tx.QueryRow(query, friendID, userID).Scan(&reverseID); err != nil && err != sql.ErrNoRows {
+		return 0, fmt.Errorf("create reciprocal friendship: %w", err)
+	}
+
+	var notificationID int64
+	if firstCreated && notificationRepo != nil {
+		actorID := userID
+		resourceID := userID
+		notificationID, err = notificationRepo.CreateTx(
+			tx,
+			friendID,
+			&actorID,
+			notifications.TypeFriendAdded,
+			&resourceID,
+			map[string]interface{}{"profileUserId": userID},
+		)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit friendship transaction: %w", err)
+	}
+	return notificationID, nil
 }
 
 func (r *Repository) RemoveFriend(userID, friendID int) error {

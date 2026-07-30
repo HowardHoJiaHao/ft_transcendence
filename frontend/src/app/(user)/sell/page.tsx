@@ -10,6 +10,13 @@ import { useShopCounts } from "@/components/ShopTabs/useShopCounts";
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from "@/components/Toast/ToastContext";
 import { useI18n } from '@/context/LanguageContext';
+import {
+  formatFileSize,
+  listingFileKind,
+  type ListingFile,
+  uploadListingFiles,
+  validateListingFiles,
+} from "@/lib/listingFiles";
 
 // Shared with the bulk importer so its "accepted values" help stays in sync.
 import { CATEGORIES, CONDITIONS, DEALING_METHODS } from "@/lib/productOptions";
@@ -20,11 +27,6 @@ const FLEXIBILITY_CATEGORIES = [
   "High Flexibility",
 ];
 const BALANCE_CATEGORIES = ["Head Heavy", "Even Balance", "Head Light"];
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "";
-const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 
 type Condition = (typeof CONDITIONS)[number]; // treat conditions like this is enum, but string union type
 
@@ -51,6 +53,7 @@ function SellPageInner() {
   // whatever mode was last picked.
   const activeMode = isEditMode ? "single" : mode;
   const fileInputRef = useRef<HTMLInputElement>(null); // create an invisible input box
+  const documentInputRef = useRef<HTMLInputElement>(null);
 
 	/* this block is temporary page state */
 
@@ -66,6 +69,13 @@ function SellPageInner() {
   // Photos
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([]);
+  const [documents, setDocuments] = useState<File[]>([]);
+  const [documentPreviewUrls, setDocumentPreviewUrls] = useState<string[]>([]);
+  const [existingFiles, setExistingFiles] = useState<ListingFile[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadedFileCount, setUploadedFileCount] = useState(0);
+  const [editSaved, setEditSaved] = useState(false);
+  const [deletingFileId, setDeletingFileId] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   // what information does the form remember?
@@ -163,6 +173,17 @@ function SellPageInner() {
       .catch(() => showToast("Failed to load listing data", "error"))
       .finally(() => setEditLoading(false));
   }, [editId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!editId) return;
+    fetch(`/api/v1/products/${editId}/files`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error("failed to load files");
+        return response.json();
+      })
+      .then((data) => setExistingFiles(Array.isArray(data.files) ? data.files : []))
+      .catch(() => showToast(t("listingFiles.loadFailed"), "error"));
+  }, [editId]); // eslint-disable-line react-hooks/exhaustive-deps
 /* this is about when user trying to edit the existing listing, call api, fetch data from postgreSQL to make amendment */
 
   // Unsaved edits exist once the live form diverges from what was loaded, or
@@ -242,6 +263,9 @@ function SellPageInner() {
     photoPreviewUrls.forEach((u) => URL.revokeObjectURL(u));
     setPhotos([]);
     setPhotoPreviewUrls([]);
+    documentPreviewUrls.forEach((u) => URL.revokeObjectURL(u));
+    setDocuments([]);
+    setDocumentPreviewUrls([]);
     setCondition("Second-hand (Used)");
     setTitle("");
     setDescription("");
@@ -254,6 +278,9 @@ function SellPageInner() {
     setWeightCategory("4U");
     setFlexibilityCategory("Medium Flex");
     setBalanceCategory("Even Balance");
+    setUploadProgress(null);
+    setUploadedFileCount(0);
+    setEditSaved(false);
     if (!isEditMode) setStep(1);
   };
 
@@ -265,22 +292,28 @@ function SellPageInner() {
 	stop if no valid files remain
 	create preview url and store them in photoPreviewUrls
   */
+  const existingImages = existingFiles.filter((file) => file.kind === "image");
+  const existingDocuments = existingFiles.filter((file) => file.kind === "document");
+
+  const showValidationErrors = (errors: string[]) => {
+    errors.forEach((error) => showToast(error, "error"));
+  };
+
   const addPhotos = (files: File[]) => {
-    const valid = files.filter((f) => f.type.startsWith("image/"));
-    const uploadable = valid.filter((f) => f.size <= MAX_PHOTO_SIZE);
-    const slots = 6 - photos.length;
-    const newFiles = uploadable.slice(0, slots);
-    if (valid.length !== files.length)
-      showToast("Only image files can be uploaded", "error");
-    if (uploadable.length !== valid.length)
-      showToast("Each photo must be 10MB or smaller", "error");
-    if (uploadable.length > slots)
-      showToast("You can upload up to 6 photos", "error");
-    if (!newFiles.length) return;
-    setPhotos((prev) => [...prev, ...newFiles]); //append new photo
+    const candidates = files.filter((file) => listingFileKind(file) === "image");
+    if (candidates.length !== files.length) {
+      showToast(t("listingFiles.imagesOnly"), "error");
+    }
+    const result = validateListingFiles(candidates, {
+      images: existingImages.length + photos.length,
+      documents: existingDocuments.length + documents.length,
+    });
+    showValidationErrors(result.errors);
+    if (!result.accepted.length) return;
+    setPhotos((prev) => [...prev, ...result.accepted]);
     setPhotoPreviewUrls((prev) => [
       ...prev,
-      ...newFiles.map((f) => URL.createObjectURL(f)), // create previews
+      ...result.accepted.map((f) => URL.createObjectURL(f)),
     ]);
   };
 
@@ -290,6 +323,62 @@ function SellPageInner() {
     setPhotoPreviewUrls((prev) => prev.filter((_, j) => j !== i));
   };
 
+  const addDocuments = (files: File[]) => {
+    const candidates = files.filter((file) => listingFileKind(file) === "document");
+    if (candidates.length !== files.length) {
+      showToast(t("listingFiles.pdfOnly"), "error");
+    }
+    const result = validateListingFiles(candidates, {
+      images: existingImages.length + photos.length,
+      documents: existingDocuments.length + documents.length,
+    });
+    showValidationErrors(result.errors);
+    if (!result.accepted.length) return;
+    setDocuments((prev) => [...prev, ...result.accepted]);
+    setDocumentPreviewUrls((prev) => [
+      ...prev,
+      ...result.accepted.map((file) => URL.createObjectURL(file)),
+    ]);
+  };
+
+  const removeDocument = (index: number) => {
+    URL.revokeObjectURL(documentPreviewUrls[index]);
+    setDocuments((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+    setDocumentPreviewUrls((prev) =>
+      prev.filter((_, itemIndex) => itemIndex !== index),
+    );
+  };
+
+  const deleteExistingFile = async (file: ListingFile) => {
+    if (!editId || !window.confirm(t("listingFiles.deleteConfirm", { name: file.originalName }))) {
+      return;
+    }
+    const token = localStorage.getItem("token") || "";
+    setDeletingFileId(file.id);
+    try {
+      const response = await fetch(
+        `/api/v1/products/${editId}/files/${file.id}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || t("listingFiles.deleteFailed"));
+      }
+      setExistingFiles((prev) => prev.filter((item) => item.id !== file.id));
+      showToast(t("listingFiles.deleted"), "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : t("listingFiles.deleteFailed"),
+        "error",
+      );
+    } finally {
+      setDeletingFileId(null);
+    }
+  };
+
   // meet up vs mailing or dealing
   const toggleDealingMethod = (m: string) =>
     setDealingMethods((prev) =>
@@ -297,21 +386,21 @@ function SellPageInner() {
     );
 
 	//upload to go backend
-  const uploadPhotos = async (listingId: number, token: string) => {
-    if (!photos.length) return;
-    const fd = new FormData(); //this is to create special request body that can hold files
-    photos.forEach((p) => fd.append("images", p)); //add selected photo to fd
-    // const res = await fetch(`${API_BASE}/api/v1/products/${listingId}/images`, { // conflict happen during merging. this is howaikeong code. I am taking mad code which is below
-    //send the files to the backend endpoint for that listing
-	const res = await fetch(`/api/v1/products/${listingId}/images`, { //recheck mad add
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: fd,
-    });
-    if (!res.ok) {
-      const e = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(e.error || "Failed to upload listing photos");
-    }
+  const uploadPendingFiles = async (listingId: number, token: string) => {
+    const pendingFiles = [...photos, ...documents];
+    if (!pendingFiles.length) return 0;
+    setUploadProgress(0);
+    // Yield one frame so the initial, truthful 0% state is painted before a
+    // fast local upload completes.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const uploaded = await uploadListingFiles(
+      listingId,
+      pendingFiles,
+      token,
+      setUploadProgress,
+    );
+    setUploadedFileCount(uploaded.length);
+    return uploaded.length;
   };
 
   const handleSubmit = async () => {
@@ -350,6 +439,7 @@ function SellPageInner() {
     setSubmitting(true);
     const token = localStorage.getItem("token") || "";
     if (!token) {
+      setSubmitting(false);
       showToast("Please login again", "error");
       router.push("/login");
       return;
@@ -357,10 +447,11 @@ function SellPageInner() {
 
 	//edit existing listing
     try {
+      setEditSaved(false);
+      setUploadedFileCount(0);
       if (isEditMode) {
         /* ── UPDATE ── */
         const res = await fetch(
-          // `${API_BASE}/api/v1/products/${editId}`, // conflict happen during merging. this is howaikeong code. I am taking mad code which is below
           `/api/v1/products/${editId}`,
           {
             method: "PUT",
@@ -389,12 +480,11 @@ function SellPageInner() {
           const e = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(e.error || "Failed to update listing");
         }
-        await uploadPhotos(Number(editId), token);
+        await uploadPendingFiles(Number(editId), token);
         showToast("Ad updated successfully", "success");
-        router.push("/profile/my-ads");
+        setEditSaved(true);
       } else {
         /* ── CREATE new listing ── */
-        // const res = await fetch(`${API_BASE}/api/v1/products`, { // conflict happen during merging. this is howaikeong code. I am taking mad code which is below
         const res = await fetch("/api/v1/products", {
           method: "POST",
           headers: {
@@ -423,10 +513,12 @@ function SellPageInner() {
           throw new Error(e.error || "Failed to create listing");
         }
         const created = await res.json();
-        await uploadPhotos(created.id, token);
+        await uploadPendingFiles(created.id, token);
+        showToast(t('toast.listingCreated'), 'success');
         setStep(3);
       }
     } catch (err) {
+      setUploadProgress(null);
       showToast(
         err instanceof Error ? err.message : "Something went wrong",
         "error",
@@ -645,53 +737,170 @@ function SellPageInner() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   multiple
                   style={{ display: "none" }}
-                  onChange={(e) => addPhotos(Array.from(e.target.files || []))}
+                  onChange={(e) => {
+                    addPhotos(Array.from(e.target.files || []));
+                    e.target.value = "";
+                  }}
                 />
 
                 <div className="grid grid-cols-5 gap-2 mb-2 max-[860px]:grid-cols-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
+                  {existingImages.map((file) => (
                     <div
-                      key={i}
-                      className="aspect-square border border-[#ddd] rounded-md overflow-hidden cursor-pointer bg-[#f9f9f9] relative transition-[border-color] duration-150 hover:border-[#aaa]"
-                      onClick={() =>
-                        !photoPreviewUrls[i] && fileInputRef.current?.click()
-                      }
+                      key={`existing-${file.id}`}
+                      className="aspect-square border border-[#ddd] rounded-md overflow-hidden bg-[#f9f9f9] relative"
                     >
-                      {photoPreviewUrls[i] ? (
-                        <div className="w-full h-full relative">
-                          <img
-                            className="w-full h-full object-cover block"
-                            src={photoPreviewUrls[i]}
-                            alt={`photo ${i + 1}`}
-                          />
-                          <button
-                            className="absolute top-[3px] right-[3px] w-5 h-5 rounded-full bg-black/55 text-white border-none cursor-pointer text-base flex items-center justify-center leading-none p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removePhoto(i);
-                            }}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center gap-1">
-                          <span className="text-[22px] opacity-50">📷</span>
-                          {i === 0 && (
-                            <span className="text-[10px] text-[#aaa] text-center px-1">
-                              Add cover photo
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      <img
+                        className="w-full h-full object-cover block"
+                        src={file.contentUrl}
+                        alt={file.originalName}
+                      />
+                      <button
+                        type="button"
+                        disabled={deletingFileId === file.id}
+                        aria-label={t("listingFiles.deleteNamed", { name: file.originalName })}
+                        className="absolute top-[3px] right-[3px] w-5 h-5 rounded-full bg-black/55 text-white border-none cursor-pointer text-base flex items-center justify-center leading-none p-0 disabled:opacity-50"
+                        onClick={() => void deleteExistingFile(file)}
+                      >
+                        ×
+                      </button>
                     </div>
+                  ))}
+                  {photoPreviewUrls.map((previewUrl, i) => (
+                    <div
+                      key={previewUrl}
+                      className="aspect-square border border-[#ddd] rounded-md overflow-hidden bg-[#f9f9f9] relative"
+                    >
+                      <img
+                        className="w-full h-full object-cover block"
+                        src={previewUrl}
+                        alt={photos[i]?.name || `photo ${i + 1}`}
+                      />
+                      <button
+                        type="button"
+                        aria-label={t("listingFiles.removeNamed", { name: photos[i]?.name || "" })}
+                        className="absolute top-[3px] right-[3px] w-5 h-5 rounded-full bg-black/55 text-white border-none cursor-pointer text-base flex items-center justify-center leading-none p-0"
+                        onClick={() => removePhoto(i)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {Array.from({
+                    length: Math.max(0, 6 - existingImages.length - photos.length),
+                  }).map((_, index) => (
+                    <button
+                      type="button"
+                      key={`empty-${index}`}
+                      className="aspect-square border border-[#ddd] rounded-md overflow-hidden cursor-pointer bg-[#f9f9f9] relative transition-[border-color] duration-150 hover:border-[#aaa]"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                        <span className="text-[22px] opacity-50">📷</span>
+                        {existingImages.length + photos.length === 0 && index === 0 && (
+                          <span className="text-[10px] text-[#aaa] text-center px-1">
+                            Add cover photo
+                          </span>
+                        )}
+                      </div>
+                    </button>
                   ))}
                 </div>
                 <p className="text-right text-xs text-[#888] m-0">
-                  {photos.length} of 6 photos uploaded
+                  {existingImages.length + photos.length} of 6 photos
+                </p>
+              </div>
+
+              {/* Optional PDF attachments */}
+              <div className="bg-white rounded-lg p-6 shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
+                <h2 className="text-xl font-bold mt-0 mx-0 mb-2 text-[#222]">
+                  {t("listingFiles.documentsTitle")}
+                </h2>
+                <p className="text-sm text-[#555] mt-0 mx-0 mb-4">
+                  {t("listingFiles.documentsHint")}
+                </p>
+                <button
+                  type="button"
+                  className="border-2 border-dashed border-[#ccc] rounded-lg px-5 py-4 bg-white text-[#555] text-sm cursor-pointer hover:border-[#2563eb] hover:bg-[#f0f7ff]"
+                  onClick={() => documentInputRef.current?.click()}
+                >
+                  📄 {t("listingFiles.choosePdf")}
+                </button>
+                <input
+                  ref={documentInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => {
+                    addDocuments(Array.from(event.target.files || []));
+                    event.target.value = "";
+                  }}
+                />
+
+                <div className="mt-4 flex flex-col gap-2">
+                  {existingDocuments.map((file) => (
+                    <div
+                      key={`existing-document-${file.id}`}
+                      className="flex items-center gap-3 border border-[#ddd] rounded-lg px-4 py-3 bg-[#f8fafc]"
+                    >
+                      <span className="text-2xl">📄</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="m-0 font-semibold text-sm text-[#222] truncate">{file.originalName}</p>
+                        <p className="m-0 mt-0.5 text-xs text-[#888]">{formatFileSize(file.size)}</p>
+                      </div>
+                      <a
+                        href={file.contentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-semibold text-[#2563eb]"
+                      >
+                        {t("listingFiles.preview")}
+                      </a>
+                      <button
+                        type="button"
+                        disabled={deletingFileId === file.id}
+                        className="border-0 bg-transparent text-sm font-semibold text-red-600 cursor-pointer disabled:opacity-50"
+                        onClick={() => void deleteExistingFile(file)}
+                      >
+                        {t("listingFiles.delete")}
+                      </button>
+                    </div>
+                  ))}
+                  {documents.map((file, index) => (
+                    <div
+                      key={documentPreviewUrls[index]}
+                      className="flex items-center gap-3 border border-[#bfdbfe] rounded-lg px-4 py-3 bg-[#eff6ff]"
+                    >
+                      <span className="text-2xl">📄</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="m-0 font-semibold text-sm text-[#222] truncate">{file.name}</p>
+                        <p className="m-0 mt-0.5 text-xs text-[#888]">
+                          {formatFileSize(file.size)} · {t("listingFiles.ready")}
+                        </p>
+                      </div>
+                      <a
+                        href={documentPreviewUrls[index]}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-semibold text-[#2563eb]"
+                      >
+                        {t("listingFiles.preview")}
+                      </a>
+                      <button
+                        type="button"
+                        className="border-0 bg-transparent text-sm font-semibold text-red-600 cursor-pointer"
+                        onClick={() => removeDocument(index)}
+                      >
+                        {t("listingFiles.remove")}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-right text-xs text-[#888] mt-3 mb-0">
+                  {existingDocuments.length + documents.length} of 2 PDF documents
                 </p>
               </div>
 
@@ -914,6 +1123,51 @@ function SellPageInner() {
                 </label>
               </div>
 
+              {uploadProgress !== null && (
+                <div
+                  className="bg-white rounded-lg p-5 shadow-[0_1px_3px_rgba(0,0,0,0.1)]"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="flex justify-between text-sm font-semibold text-[#333] mb-2">
+                    <span>
+                      {uploadProgress < 100
+                        ? t("listingFiles.uploading")
+                        : submitting
+                          ? t("listingFiles.processing")
+                          : t("listingFiles.uploadComplete")}
+                    </span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="h-2 bg-[#e5e7eb] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#2563eb] transition-[width] duration-150"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {editSaved && (
+                <div className="bg-[#ecfdf5] border border-[#86efac] rounded-lg p-5 flex items-center justify-between gap-4 max-[600px]:items-start max-[600px]:flex-col" role="status">
+                  <div>
+                    <p className="m-0 font-bold text-[#166534]">✓ {t("listingFiles.changesSaved")}</p>
+                    <p className="m-0 mt-1 text-sm text-[#166534]">
+                      {uploadedFileCount > 0
+                        ? t("listingFiles.filesUploaded", { count: uploadedFileCount })
+                        : t("listingFiles.noNewFiles")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="bg-[#166534] text-white border-none rounded-md px-4 py-2 text-sm font-semibold cursor-pointer"
+                    onClick={() => router.push("/profile/my-ads")}
+                  >
+                    {t("listingFiles.viewMyAds")}
+                  </button>
+                </div>
+              )}
+
               {/* Submit buttons */}
               <div className="flex justify-end gap-3">
                 <button className="px-7 py-3 border border-[#555] bg-white rounded-md text-sm font-bold cursor-pointer text-[#333] tracking-[0.5px] transition-colors duration-150 enabled:hover:bg-[#f5f5f5] disabled:opacity-50 disabled:cursor-not-allowed" disabled={submitting}>
@@ -950,6 +1204,14 @@ function SellPageInner() {
                 <p className="text-base text-[#666] mt-0 mx-0 mb-8">
                   Your ad has been posted and will be visible to buyers shortly.
                 </p>
+                {uploadedFileCount > 0 && (
+                  <div className="w-full max-w-[520px] bg-[#ecfdf5] border border-[#86efac] rounded-lg px-5 py-4 text-left mb-8">
+                    <p className="m-0 font-bold text-[#166534]">✓ {t("listingFiles.uploadComplete")}</p>
+                    <p className="m-0 mt-1 text-sm text-[#166534]">
+                      {t("listingFiles.filesUploaded", { count: uploadedFileCount })}
+                    </p>
+                  </div>
+                )}
                 <div className="flex gap-4 flex-wrap justify-center">
                   <button
                     className="bg-[#2563eb] text-white border-none rounded-md px-8 py-3 text-sm font-bold cursor-pointer tracking-[0.5px] transition-colors duration-150 hover:bg-[#1d4ed8] disabled:bg-[#93c5fd] disabled:cursor-not-allowed"

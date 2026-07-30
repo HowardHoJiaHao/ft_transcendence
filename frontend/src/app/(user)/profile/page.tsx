@@ -6,6 +6,7 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useToast } from "@/components/Toast/ToastContext";
 import Header from "@/components/Header/Header";
 import { resolveAvatarUrl, PLACEHOLDER_AVATAR } from "@/lib/avatar";
+import { useI18n } from "@/context/LanguageContext";
 
 interface UserProfile {
   id: number;
@@ -17,6 +18,7 @@ interface UserProfile {
   gender?: string;
   dateOfBirth?: string;
   avatarUrl?: string;
+  oauthProvider?: string;
 }
 
 // Shared with My Shop / Developer API / Bulk Import so the whole seller area
@@ -38,6 +40,8 @@ const INPUT =
   'flex-1 min-w-0 border border-[#ddd] rounded-lg px-3 py-2 text-sm text-[#222] bg-white transition-colors duration-150 focus:border-[#2a78d6] focus:outline-none max-[640px]:w-full';
 const BTN_SECONDARY =
   'shrink-0 border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]';
+const BTN_DISABLED =
+  'shrink-0 border border-[#ddd] bg-[#f3f3f3] rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#999] cursor-not-allowed';
 const BTN_PRIMARY =
   'inline-flex items-center px-[22px] py-[9px] rounded-[20px] bg-[#111] text-white border-none text-sm font-semibold cursor-pointer transition-colors duration-150 hover:bg-[#333] disabled:bg-[#bbb] disabled:cursor-not-allowed';
 
@@ -49,6 +53,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const { user: ctxUser, loading: authLoading, updateUser } = useRequireAuth('/');
   const { showToast } = useToast();
+  const { t } = useI18n();
   const [user, setUser] = useState<UserProfile | null>(ctxUser ?? null);
   const [loading, setLoading] = useState(!ctxUser);
   const [error, setError] = useState<string | null>(null);
@@ -68,9 +73,6 @@ export default function ProfilePage() {
   const [otpCode, setOtpCode] = useState("");
   const [tempToken, setTempToken] = useState("");
   const [resendCd, setResendCd] = useState(0);
-  const [changeTarget, setChangeTarget] = useState<"email" | "phoneNo" | null>(
-    null,
-  );
 
   useEffect(() => {
     if (resendCd <= 0) return;
@@ -120,8 +122,7 @@ export default function ProfilePage() {
     }
   };
 
-  const startOtpFlow = async (target: "email" | "phoneNo") => {
-    setChangeTarget(target);
+  const startOtpFlow = async () => {
     setOtpCode("");
     const sent = await sendOtp();
     if (sent) setShowOtp(true);
@@ -156,11 +157,7 @@ export default function ProfilePage() {
           setShowOtp(false);
           setOtpCode("");
           showToast("OTP verified", "success");
-          router.push(
-            changeTarget === "email"
-              ? "/profile/change-email"
-              : "/profile/change-phoneNo",
-          );
+          router.push("/profile/change-email");
         }
       } else {
         setOtpCode("");
@@ -176,6 +173,8 @@ export default function ProfilePage() {
     e.preventDefault();
     await handleOtp();
   };
+
+  const isGoogleAuthenticated = user?.oauthProvider === "google";
 
   useEffect(() => {
     const fetchMe = async () => {
@@ -365,7 +364,7 @@ export default function ProfilePage() {
             <div className="bg-[#eff6ff] border border-[#bfdbfe] rounded-[10px] px-4 py-3 mb-4">
               <p className="text-[13px] text-[#1c5cab] m-0">
                 Verifying in order to change your{" "}
-                <strong>{changeTarget === "email" ? "email address" : "phone number"}</strong>.
+                <strong>email address</strong>.
               </p>
             </div>
 
@@ -455,7 +454,12 @@ export default function ProfilePage() {
           <div className={ROW}>
             <div className={LABEL}>Email</div>
             <div className={VALUE}>{user.email}</div>
-            <button className={BTN_SECONDARY} onClick={() => startOtpFlow("email")}>
+            <button
+              className={isGoogleAuthenticated ? BTN_DISABLED : BTN_SECONDARY}
+              disabled={isGoogleAuthenticated}
+              title={isGoogleAuthenticated ? t("profile.googleManaged") : undefined}
+              onClick={isGoogleAuthenticated ? undefined : startOtpFlow}
+            >
               Change
             </button>
           </div>
@@ -463,7 +467,10 @@ export default function ProfilePage() {
           <div className={ROW}>
             <div className={LABEL}>Phone number</div>
             <div className={user.phoneNo ? VALUE : MUTED}>{user.phoneNo || "Not set"}</div>
-            <button className={BTN_SECONDARY} onClick={() => startOtpFlow("phoneNo")}>
+            <button
+              className={BTN_SECONDARY}
+              onClick={() => router.push("/profile/change-phoneNo")}
+            >
               Change
             </button>
           </div>
@@ -472,15 +479,17 @@ export default function ProfilePage() {
             <div className={LABEL}>Password</div>
             <div className={`${VALUE} tracking-[0.2em]`}>••••••••</div>
             <button
-              className={BTN_SECONDARY}
-              onClick={() => router.push("/profile/change-password")}
+              className={isGoogleAuthenticated ? BTN_DISABLED : BTN_SECONDARY}
+              disabled={isGoogleAuthenticated}
+              title={isGoogleAuthenticated ? t("profile.googleManaged") : undefined}
+              onClick={isGoogleAuthenticated ? undefined : () => router.push("/profile/change-password")}
             >
               Change
             </button>
           </div>
 
           <p className="text-xs text-[#898781] mt-3.5 mb-0">
-            Changing your email or phone number sends a one-time code first.
+            {isGoogleAuthenticated ? t("profile.googleSecurityHint") : t("profile.emailOtpHint")}
           </p>
         </div>
 

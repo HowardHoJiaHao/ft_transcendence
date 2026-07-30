@@ -191,7 +191,9 @@ jobs:
                'orders',
                'friendships',
                'messages',
+               'notifications',
                'reviews',
+               'listing_reviews',
                'api_keys',
                'api_request_logs',
                'analytics_events',
@@ -200,9 +202,11 @@ jobs:
 
           assert_sql_true \
             "required cross-feature columns" \
-            "SELECT count(*) = 17
+            "SELECT count(*) = 27
              FROM (VALUES
                ('users', 'account_status'),
+               ('users', 'role'),
+               ('users', 'deleted_at'),
                ('users', 'oauth_id'),
                ('users', 'requires_2fa'),
                ('listings', 'seller_id'),
@@ -212,6 +216,14 @@ jobs:
                ('orders', 'seller_id'),
                ('orders', 'quantity'),
                ('orders', 'status'),
+               ('notifications', 'user_id'),
+               ('notifications', 'notification_type'),
+               ('notifications', 'data'),
+               ('notifications', 'read_at'),
+               ('listing_reviews', 'listing_id'),
+               ('listing_reviews', 'reviewer_id'),
+               ('listing_reviews', 'order_id'),
+               ('listing_reviews', 'rating'),
                ('api_keys', 'key_hash'),
                ('api_keys', 'rate_limit'),
                ('analytics_events', 'listing_id'),
@@ -232,6 +244,10 @@ jobs:
                'idx_users_oauth_identity',
                'idx_api_request_logs_key',
                'idx_messages_sender_receiver',
+               'idx_notifications_user_order',
+               'idx_notifications_user_unread',
+               'idx_notifications_unread_message_group',
+               'idx_listing_reviews_listing_newest',
                'idx_knowledge_chunks_active',
                'idx_knowledge_chunks_search'
              ]) AS required(index_name);"
@@ -371,6 +387,7 @@ jobs:
           grep --quiet "go_gc_duration_seconds" <<<"$metrics_body"
 
           assert_status "401" "http://127.0.0.1:8080/api/v1/orders"
+          assert_status "401" "http://127.0.0.1:8080/api/v1/notifications"
           assert_status "401" "http://127.0.0.1:8080/api/v1/admin/summary"
           assert_status "401" "http://127.0.0.1:8080/api/public/v1/products"
 
@@ -479,6 +496,7 @@ jobs:
           assert_status "200" "$https_base/api/v1/status"
           assert_status "200" "$https_base/api/v1/products"
           assert_status "401" "$https_base/api/v1/orders"
+          assert_status "401" "$https_base/api/v1/notifications"
           assert_status "401" "$https_base/api/public/v1/products"
           assert_status "403" "$https_base/api/v1/products?id=1%27%20OR%201%3D1%2D%2D"
           assert_status "403" "$https_base/?q=%3Cscript%3Ealert%281%29%3C%2Fscript%3E"

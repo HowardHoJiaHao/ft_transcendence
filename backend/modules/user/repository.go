@@ -18,6 +18,25 @@ func NewRepository(db *sql.DB, GormDB *gorm.DB) *Repository {
 	return &Repository{DB: db, GormDB: GormDB}
 }
 
+func prepareUserForResponse(user *User) {
+	if user.AccountStatus != "deleted" {
+		return
+	}
+	user.Username = "Deleted user"
+	user.Email = ""
+	user.FirstName = ""
+	user.LastName = ""
+	user.PhoneNo = nil
+	user.DateOfBirth = nil
+	user.Gender = nil
+	user.AvatarURL = nil
+	user.AvatarMime = nil
+	user.AvatarData = nil
+	user.HasAvatarBin = false
+	user.Bio = ""
+	user.OAuthProvider = ""
+}
+
 func (r *Repository) CreateUser(req RegisterRequest) (int64, error) {
 	avatar := "https://ui-avatars.com/api/?name=" + req.FirstName + "+" + req.LastName
 	var id int64
@@ -38,9 +57,9 @@ func (r *Repository) GetUserByEmailWithPassword(email string) (*User, error) {
 	// var dob sql.NullTime
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, password_hash, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, account_status, oauth_id, oauth_provider, created_at FROM users WHERE email = $1",
+		"SELECT id, username, email, password_hash, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE email = $1",
 		email,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
 
 	if err != nil {
 		fmt.Printf("\nFailed to fetch user and password using email\n")
@@ -64,6 +83,7 @@ func (r *Repository) GetUserByEmailWithPassword(email string) (*User, error) {
 	if oauthProvider.Valid {
 		user.OAuthProvider = oauthProvider.String
 	}
+	prepareUserForResponse(&user)
 	// user.IsOnline = true // For demo
 	return &user, nil
 }
@@ -75,9 +95,9 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, account_status, oauth_id, oauth_provider, created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE id = $1",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
 
 	if err != nil {
 		fmt.Printf("Scan error\n")
@@ -101,6 +121,7 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 	if oauthProvider.Valid {
 		user.OAuthProvider = oauthProvider.String
 	}
+	prepareUserForResponse(&user)
 	user.IsOnline = true // For demo
 	return &user, nil
 }
@@ -112,9 +133,9 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, account_status, oauth_id, oauth_provider, created_at FROM users WHERE email = $1",
+		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE email = $1",
 		email,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
 
 	if err != nil {
 		return nil, err
@@ -137,6 +158,7 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 	if oauthProvider.Valid {
 		user.OAuthProvider = oauthProvider.String
 	}
+	prepareUserForResponse(&user)
 	user.IsOnline = true // For demo
 	//user.Requires2FA = true // For demo
 	return &user, nil

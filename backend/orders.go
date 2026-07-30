@@ -8,6 +8,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
+	"transcendence/modules/user/notifications"
 )
 
 type Order struct {
@@ -50,6 +51,19 @@ type CreateOrdersResponse struct {
 }
 
 func createOrders(c echo.Context, gormDB *gorm.DB) error {
+	return createOrdersWithNotifications(c, gormDB, nil)
+}
+
+type pendingNotification struct {
+	userID         int
+	notificationID int64
+}
+
+func createOrdersWithNotifications(
+	c echo.Context,
+	gormDB *gorm.DB,
+	notificationService *notifications.Service,
+) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
@@ -95,6 +109,7 @@ func createOrders(c echo.Context, gormDB *gorm.DB) error {
 
 	createdOrders := []Order{}
 	var checkoutTotal float64
+	pendingNotifications := []pendingNotification{}
 
 	for _, item := range req.Items {
 		var sellerID int
@@ -160,6 +175,40 @@ func createOrders(c echo.Context, gormDB *gorm.DB) error {
 			return c.JSON(500, map[string]string{"error": "Failed to update listing stock"})
 		}
 
+		if notificationService != nil {
+			var listingTitle string
+			if err = tx.QueryRow(
+				`SELECT title FROM listings WHERE id = $1`,
+				item.ListingID,
+			).Scan(&listingTitle); err != nil {
+				log.Printf("Error reading listing title for notification: %v", err)
+				return c.JSON(500, map[string]string{"error": "Failed to create order notification"})
+			}
+			actorID := buyerID
+			resourceID := order.ID
+			notificationID, createErr := notificationService.Repo.CreateTx(
+				tx,
+				sellerID,
+				&actorID,
+				notifications.TypeOrderNew,
+				&resourceID,
+				map[string]interface{}{
+					"orderId":      order.ID,
+					"listingId":    item.ListingID,
+					"listingTitle": listingTitle,
+					"quantity":     item.Quantity,
+				},
+			)
+			if createErr != nil {
+				log.Printf("Error creating order notification: %v", createErr)
+				return c.JSON(500, map[string]string{"error": "Failed to create order notification"})
+			}
+			pendingNotifications = append(pendingNotifications, pendingNotification{
+				userID:         sellerID,
+				notificationID: notificationID,
+			})
+		}
+
 		checkoutTotal += totalPrice
 		createdOrders = append(createdOrders, order)
 	}
@@ -167,6 +216,9 @@ func createOrders(c echo.Context, gormDB *gorm.DB) error {
 	if err = tx.Commit(); err != nil {
 		log.Printf("Error committing checkout: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to complete checkout"})
+	}
+	for _, pending := range pendingNotifications {
+		notificationService.PublishByID(pending.userID, pending.notificationID)
 	}
 
 	return c.JSON(201, CreateOrdersResponse{
@@ -265,7 +317,8 @@ func getSellerOrders(c echo.Context, gormDB *gorm.DB) error {
 			o.status, o.payment_method, o.created_at, o.updated_at,
 			COALESCE(l.title, ''), COALESCE(l.image, ''), COALESCE(l.category, 'Others'),
 			COALESCE(l.price, 0), COALESCE(l.seller_name, ''),
-			COALESCE(u.username, ''), COALESCE(u.email, '')
+				CASE WHEN u.deleted_at IS NOT NULL THEN 'Deleted user' ELSE COALESCE(u.username, '') END,
+				CASE WHEN u.deleted_at IS NOT NULL THEN '' ELSE COALESCE(u.email, '') END
 		FROM orders o
 		JOIN listings l ON l.id = o.listing_id
 		JOIN users u ON u.id = o.buyer_id
@@ -306,6 +359,86 @@ func getSellerOrders(c echo.Context, gormDB *gorm.DB) error {
 }
 
 func completeOrder(c echo.Context, gormDB *gorm.DB) error {
+	return completeOrderWithNotifications(c, gormDB, nil)
+}
+
+func completeOrderWithNotifications(
+	c echo.Context,
+	gormDB *gorm.DB,
+	notificationService *notifications.Service,
+) error {
+	if notificationService == nil {
+		return completeOrderWithoutNotifications(c, gormDB)
+	}
+
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Database connection error"})
+	}
+
+	sellerID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(401, map[string]string{"error": "Unauthorized"})
+	}
+
+	orderID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "Invalid order ID"})
+	}
+
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed to start order update"})
+	}
+	defer tx.Rollback()
+
+	var buyerID int
+	var listingID int
+	err = tx.QueryRow(`
+		UPDATE orders
+		SET status = 'completed', updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1 AND seller_id = $2 AND status = 'pending'
+		RETURNING buyer_id, listing_id`,
+		orderID, sellerID,
+	).Scan(&buyerID, &listingID)
+	if err == sql.ErrNoRows {
+		return c.JSON(409, map[string]string{"error": "Order is not pending or you do not own it"})
+	}
+	if err != nil {
+		log.Printf("Error completing order: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
+	}
+
+	var listingTitle string
+	if err := tx.QueryRow(`SELECT title FROM listings WHERE id = $1`, listingID).Scan(&listingTitle); err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed to create order notification"})
+	}
+	actorID := sellerID
+	resourceID := orderID
+	notificationID, err := notificationService.Repo.CreateTx(
+		tx,
+		buyerID,
+		&actorID,
+		notifications.TypeOrderCompleted,
+		&resourceID,
+		map[string]interface{}{
+			"orderId":      orderID,
+			"listingId":    listingID,
+			"listingTitle": listingTitle,
+		},
+	)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed to create order notification"})
+	}
+	if err := tx.Commit(); err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
+	}
+	notificationService.PublishByID(buyerID, notificationID)
+
+	return c.JSON(200, map[string]string{"message": "Order marked as delivered"})
+}
+
+func completeOrderWithoutNotifications(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})

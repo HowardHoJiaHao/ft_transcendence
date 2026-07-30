@@ -2,10 +2,14 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/components/Toast/ToastContext';
+import { useI18n } from '@/context/LanguageContext';
 
 export default function ChangePhoneNoPage()
 {
 	const router = useRouter();
+	const { showToast } = useToast();
+	const { t } = useI18n();
 	const [newPhoneNo, setNewPhoneNo] = useState('');
 	const [loading, setLoading] = useState(false);
 	const [msg, setMsg] = useState('');
@@ -37,15 +41,19 @@ export default function ChangePhoneNoPage()
 
 			if (!res.ok)
 			{
-				setMsg(data.error ?? 'Failed to update PhoneNo');
+				const message = data.error ?? t('toast.phoneUpdateFailed');
+				setMsg(message);
+				showToast(message, 'error');
 				return ;
 			}
-			setMsg('PhoneNo updated successfully')
+			setMsg(t('toast.phoneUpdated'));
+			showToast(t('toast.phoneUpdated'), 'success');
 			setTimeout(() => router.push('/profile'), 800);
 		}
 		catch
 		{
-			setMsg('Network error')
+			setMsg(t('toast.networkError'));
+			showToast(t('toast.networkError'), 'error');
 		}
 		finally
 		{

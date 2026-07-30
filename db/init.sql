@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS users (
     bio TEXT,
     is_verified BOOLEAN DEFAULT FALSE,
     requires_2fa BOOLEAN DEFAULT FALSE,
-    account_status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (account_status IN ('active', 'suspended')),
+    role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'moderator', 'admin')),
+    account_status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (account_status IN ('active', 'suspended', 'deleted')),
+    deleted_at TIMESTAMP,
     oauth_id VARCHAR(255),
     oauth_provider VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -92,6 +94,24 @@ CREATE TABLE IF NOT EXISTS listing_images (
     )
 );
 
+-- Generic files attached to marketplace listings. Content is stored outside
+-- the public static directory; this table contains only safe metadata and the
+-- generated storage name used by the controlled file-serving endpoint.
+CREATE TABLE IF NOT EXISTS listing_files (
+    id BIGSERIAL PRIMARY KEY,
+    listing_id INT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+    original_name VARCHAR(255) NOT NULL,
+    storage_name VARCHAR(255) NOT NULL UNIQUE,
+    file_kind VARCHAR(20) NOT NULL CHECK (file_kind IN ('image', 'document')),
+    mime_type VARCHAR(100) NOT NULL,
+    size_bytes BIGINT NOT NULL CHECK (size_bytes > 0),
+    display_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_listing_files_listing_order
+ON listing_files(listing_id, file_kind, display_order, id);
+
 -- Create messages table
 CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY,
@@ -134,6 +154,23 @@ CREATE TABLE IF NOT EXISTS orders (
     FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
 );
+
+-- Product-specific reviews are intentionally separate from the older
+-- seller-review table above. A completed buyer can review a listing once.
+CREATE TABLE IF NOT EXISTS listing_reviews (
+    id BIGSERIAL PRIMARY KEY,
+    listing_id INT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+    reviewer_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    order_id INT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
+    rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment TEXT NOT NULL CHECK (char_length(btrim(comment)) BETWEEN 1 AND 1000),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT listing_reviews_listing_reviewer_unique UNIQUE (listing_id, reviewer_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_listing_reviews_listing_newest
+ON listing_reviews(listing_id, created_at DESC, id DESC);
 
 -- Create API keys table for authentication
 CREATE TABLE IF NOT EXISTS api_keys (
@@ -201,6 +238,36 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver ON messages(sender_id, receiver_id);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_id, is_read);
+
+-- Durable in-app notifications. Dynamic display text is rendered by the
+-- frontend from notification_type + data so it can follow the selected locale.
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGSERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    actor_id INT,
+    notification_type VARCHAR(40) NOT NULL CONSTRAINT notifications_type_check CHECK (
+        notification_type IN ('message', 'friend_added', 'order_new', 'order_completed', 'review_added')
+    ),
+    resource_id INT,
+    data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    read_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_order
+ON notifications(user_id, updated_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+ON notifications(user_id, updated_at DESC, id DESC)
+WHERE read_at IS NULL;
+
+-- Repeated unread messages from one sender update a single notification row.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_unread_message_group
+ON notifications(user_id, actor_id, notification_type)
+WHERE read_at IS NULL AND notification_type = 'message';
 
 -- Seed sample users
 INSERT INTO users (username, email, password_hash, first_name, last_name, avatar_url, is_verified) VALUES
