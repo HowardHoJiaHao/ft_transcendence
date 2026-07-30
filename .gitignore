@@ -39,5 +39,6 @@ Thumbs.db
 node_modules/
 
 static/avatars/
+storage/
 backups/
 monitoring/alertmanager/logs/

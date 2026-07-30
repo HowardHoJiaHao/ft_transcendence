@@ -268,6 +268,28 @@
     "daysListedCol": "上架天数",
     "stale": "滞销"
   },
+  "listingFiles": {
+    "loadFailed": "无法加载商品文件。",
+    "imagesOnly": "PDF 文件请使用下方的文件区域。照片必须为 JPEG、PNG 或 WebP。",
+    "pdfOnly": "此处只能添加 PDF 文件。",
+    "documentsTitle": "购买证明与规格（可选）",
+    "documentsHint": "最多添加两份 PDF 收据、保修页或产品规格。上传前请删除个人及付款资料。",
+    "choosePdf": "选择 PDF 文件",
+    "preview": "预览",
+    "download": "下载",
+    "delete": "删除",
+    "remove": "移除",
+    "ready": "等待上传",
+    "uploading": "正在上传文件…",
+    "processing": "正在安全处理文件…",
+    "deleteConfirm": "确定删除 {name}？此操作无法撤销。",
+    "deleteFailed": "文件删除失败。",
+    "deleted": "文件已删除。",
+    "deleteNamed": "删除 {name}",
+    "removeNamed": "移除 {name}",
+    "publicTitle": "购买证明与规格",
+    "publicHint": "卖家提供的可选文件。购买前请自行查看。"
+  },
   "sell": {
     "modeSingle": "单个商品",
     "modeSingleHint": "填写表单并上传照片",

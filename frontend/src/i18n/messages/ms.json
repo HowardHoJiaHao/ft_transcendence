@@ -268,6 +268,28 @@
     "daysListedCol": "Hari Disenaraikan",
     "stale": "lama"
   },
+  "listingFiles": {
+    "loadFailed": "Gagal memuatkan fail penyenaraian.",
+    "imagesOnly": "Gunakan bahagian dokumen di bawah untuk fail PDF. Foto mestilah JPEG, PNG atau WebP.",
+    "pdfOnly": "Hanya dokumen PDF boleh ditambah di sini.",
+    "documentsTitle": "Bukti & spesifikasi (pilihan)",
+    "documentsHint": "Tambah sehingga dua resit PDF, halaman waranti atau helaian spesifikasi produk. Padamkan butiran peribadi dan pembayaran sebelum memuat naik.",
+    "choosePdf": "Pilih dokumen PDF",
+    "preview": "Pratonton",
+    "download": "Muat turun",
+    "delete": "Padam",
+    "remove": "Buang",
+    "ready": "Sedia untuk dimuat naik",
+    "uploading": "Memuat naik fail…",
+    "processing": "Memproses fail dengan selamat…",
+    "deleteConfirm": "Padam {name}? Tindakan ini tidak boleh dibuat asal.",
+    "deleteFailed": "Gagal memadam fail.",
+    "deleted": "Fail dipadam.",
+    "deleteNamed": "Padam {name}",
+    "removeNamed": "Buang {name}",
+    "publicTitle": "Bukti & spesifikasi",
+    "publicHint": "Dokumen pilihan yang diberikan oleh penjual. Semak sebelum membuat pembelian."
+  },
   "sell": {
     "modeSingle": "Satu produk",
     "modeSingleHint": "Isi borang, tambah gambar",

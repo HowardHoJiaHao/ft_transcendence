@@ -94,6 +94,24 @@ CREATE TABLE IF NOT EXISTS listing_images (
     )
 );
 
+-- Generic files attached to marketplace listings. Content is stored outside
+-- the public static directory; this table contains only safe metadata and the
+-- generated storage name used by the controlled file-serving endpoint.
+CREATE TABLE IF NOT EXISTS listing_files (
+    id BIGSERIAL PRIMARY KEY,
+    listing_id INT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+    original_name VARCHAR(255) NOT NULL,
+    storage_name VARCHAR(255) NOT NULL UNIQUE,
+    file_kind VARCHAR(20) NOT NULL CHECK (file_kind IN ('image', 'document')),
+    mime_type VARCHAR(100) NOT NULL,
+    size_bytes BIGINT NOT NULL CHECK (size_bytes > 0),
+    display_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_listing_files_listing_order
+ON listing_files(listing_id, file_kind, display_order, id);
+
 -- Create messages table
 CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY,

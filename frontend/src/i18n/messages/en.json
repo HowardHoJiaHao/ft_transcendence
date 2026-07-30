@@ -268,6 +268,28 @@
     "daysListedCol": "Days Listed",
     "stale": "stale"
   },
+  "listingFiles": {
+    "loadFailed": "Failed to load listing files.",
+    "imagesOnly": "Use the document section below for PDF files. Photos must be JPEG, PNG or WebP.",
+    "pdfOnly": "Only PDF documents can be added here.",
+    "documentsTitle": "Proof & specifications (optional)",
+    "documentsHint": "Add up to two PDF receipts, warranty pages or product specification sheets. Remove personal and payment details before uploading.",
+    "choosePdf": "Choose PDF documents",
+    "preview": "Preview",
+    "download": "Download",
+    "delete": "Delete",
+    "remove": "Remove",
+    "ready": "Ready to upload",
+    "uploading": "Uploading files…",
+    "processing": "Processing files securely…",
+    "deleteConfirm": "Delete {name}? This cannot be undone.",
+    "deleteFailed": "Failed to delete the file.",
+    "deleted": "File deleted.",
+    "deleteNamed": "Delete {name}",
+    "removeNamed": "Remove {name}",
+    "publicTitle": "Proof & specifications",
+    "publicHint": "Optional documents supplied by the seller. Review them before making a purchase."
+  },
   "sell": {
     "modeSingle": "One product",
     "modeSingleHint": "Fill in the form, add photos",

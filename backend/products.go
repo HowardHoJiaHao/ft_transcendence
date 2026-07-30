@@ -475,6 +475,12 @@ func deleteProduct(c echo.Context, gormDB *gorm.DB) error {
 		log.Printf("Error deleting product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to delete product"})
 	}
+	if err := removeListingFileDirectory(id); err != nil {
+		log.Printf("Product %d deleted but attachment cleanup failed: %v", id, err)
+	}
+	if err := clearStoredListingImages(id); err != nil {
+		log.Printf("Product %d deleted but legacy image cleanup failed: %v", id, err)
+	}
 	return c.JSON(200, map[string]string{"message": "Product deleted"})
 }
 

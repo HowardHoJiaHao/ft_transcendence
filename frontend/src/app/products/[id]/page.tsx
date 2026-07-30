@@ -10,6 +10,7 @@ import { useI18n } from '@/context/LanguageContext';
 import OnlineStatus from '@/components/OnlineStatus';
 import ChatModal from '@/app/(user)/chat/ChatModal'
 import Header from '@/components/Header/Header'
+import { formatFileSize, type ListingFile } from '@/lib/listingFiles';
 
 interface Product {
 	id: number;
@@ -81,6 +82,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 
 	const [product, setProduct] = useState<Product | null>(null);
 	const [imageUrls, setImageUrls] = useState<string[]>([]);
+	const [listingDocuments, setListingDocuments] = useState<ListingFile[]>([]);
 	const [imageIndex, setImageIndex] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -220,16 +222,35 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 					return;
 				const data = await res.json();
 				if (Array.isArray(data.imageUrls) && data.imageUrls.length > 0) {
-					setImageUrls(data.imageUrls);
+					setImageUrls(previous => previous.length > 0 ? previous : data.imageUrls);
 					setImageIndex(0);
 				}
 			} catch (err) {
 				return;
 			}
 		};
+		const fetchFiles = async () => {
+			try {
+				const response = await fetch(`${apiBaseUrl}/api/v1/products/${productId}/files`);
+				if (!response.ok) return;
+				const data = await response.json();
+				const files: ListingFile[] = Array.isArray(data.files) ? data.files : [];
+				const images = files
+					.filter(file => file.kind === 'image')
+					.map(file => file.contentUrl);
+				if (images.length > 0) {
+					setImageUrls(images);
+					setImageIndex(0);
+				}
+				setListingDocuments(files.filter(file => file.kind === 'document'));
+			} catch {
+				return;
+			}
+		};
 		if(!isNaN(productId)) {
 			fetchProduct();
 			fetchImages();
+			fetchFiles();
 		}
 	}, [productId, apiBaseUrl]);
 
@@ -436,6 +457,53 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 					</div>
 				</div>
 			</div>
+
+			{listingDocuments.length > 0 && (
+				<section
+					className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex flex-col w-[90%] max-w-[1138px] h-auto my-6 mx-auto gap-3"
+					aria-labelledby="listing-documents-heading"
+				>
+					<div>
+						<h2 id="listing-documents-heading" className="m-0 text-xl text-[var(--dark)]">
+							{t('listingFiles.publicTitle')}
+						</h2>
+						<p className="m-0 mt-1 text-sm text-[var(--secondary)]">
+							{t('listingFiles.publicHint')}
+						</p>
+					</div>
+					{listingDocuments.map(document => (
+						<div
+							key={document.id}
+							className="flex items-center gap-3 border border-[#e2e8f0] bg-[#f8fafc] rounded-lg px-4 py-3"
+						>
+							<span className="text-2xl" aria-hidden="true">📄</span>
+							<div className="min-w-0 flex-1">
+								<p className="m-0 text-sm font-semibold text-[var(--dark)] truncate">
+									{document.originalName}
+								</p>
+								<p className="m-0 mt-0.5 text-xs text-[var(--secondary)]">
+									PDF · {formatFileSize(document.size)}
+								</p>
+							</div>
+							<a
+								href={document.contentUrl}
+								target="_blank"
+								rel="noreferrer"
+								className="text-[var(--primary)] text-sm font-semibold no-underline hover:underline"
+							>
+								{t('listingFiles.preview')}
+							</a>
+							<a
+								href={`${document.contentUrl}?download=1`}
+								download={document.originalName}
+								className="text-[var(--primary)] text-sm font-semibold no-underline hover:underline"
+							>
+								{t('listingFiles.download')}
+							</a>
+						</div>
+					))}
+				</section>
+			)}
 
 			<section className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex flex-col w-[90%] max-w-[1138px] h-auto my-6 mx-auto gap-5 break-words" aria-labelledby="product-reviews-heading">
 				<div className="flex items-start justify-between gap-4 max-[600px]:flex-col">
