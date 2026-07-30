@@ -65,10 +65,9 @@ DEEPSEEK_API_KEY
 OPENROUTER_API_KEY
 ```
 
-The full demo startup also requires the six Stripe values documented under
-[Stripe Connect sandbox checkout](#stripe-connect-sandbox-checkout). Use
-`make up` instead when bootstrapping the Stripe webhook secret for the first
-time.
+The full demo startup also requires the five persistent Stripe values
+documented under
+[Stripe Connect sandbox checkout](#stripe-connect-sandbox-checkout).
 
 Requirements:
 
@@ -86,11 +85,11 @@ make setup
 ```
 
 `make setup` checks Docker and Compose, exports fresh `dev` secrets through the
-Dockerized CLI, validates the complete Stripe demo configuration, confirms that
-the Stripe CLI signing secret matches `STRIPE_WEBHOOK_SECRET`, and starts the
-complete stack with persistent webhook forwarding. The generated
-`.env.infisical` file has mode `600` and is removed as soon as Compose finishes
-creating and starting the containers.
+Dockerized CLI, validates the five persistent Stripe values, starts the actual
+persistent Stripe listener, extracts its signing secret without displaying it,
+injects that value into the backend, and starts the complete stack. The
+generated `.env.infisical` file has mode `600` and is removed as soon as
+Compose finishes creating and starting the containers.
 
 To require the optional Brevo credential as part of startup validation:
 
@@ -125,11 +124,11 @@ all local database data is intentional.
 ```text
 make help             Show all supported commands
 make setup            Build the full demo stack and start Stripe forwarding
-make up               Start the core stack for first-time Stripe bootstrap
-make restart          Recreate containers with freshly retrieved secrets
+make up               Start the full stack and Stripe forwarding
+make restart          Rebuild the full stack and Stripe forwarding
 make check-secrets    Fetch and validate required secrets
 make check-stripe-secrets Validate the complete Stripe demo configuration
-make stripe-listen    Run the foreground Stripe listener for initial bootstrap
+make test-stripe-setup Test listener parsing and temporary-file cleanup
 make infisical-auth-init  Create the local token file
 make infisical-auth-check Validate the local token file
 make infisical-auth-clear Delete only the local token file
@@ -153,11 +152,10 @@ database data.
 
 ## Stripe Connect sandbox checkout
 
-The core application and Meet up / COD checkout can still run without Stripe by
-using `make up`. The demo-oriented `make setup` requires Stripe configuration
-and starts the pinned Stripe CLI listener alongside the application. The
-sandbox flow supports one configured seller, MYR card payments, Stripe-hosted
-Checkout, Connect destination charges, and a 10% application fee.
+`make setup`, `make up`, and `make restart` all start the pinned Stripe CLI
+listener alongside the application. The sandbox flow supports one configured
+seller, MYR card payments, Stripe-hosted Checkout, Connect destination charges,
+and a 10% application fee.
 
 Store these values in the Infisical `dev` environment at path `/`:
 
@@ -165,10 +163,13 @@ Store these values in the Infisical `dev` environment at path `/`:
 STRIPE_SECRET_KEY
 STRIPE_TEST_CONNECTED_ACCOUNT_ID
 STRIPE_TEST_SELLER_EMAIL
-STRIPE_WEBHOOK_SECRET
 STRIPE_SUCCESS_URL
 STRIPE_CANCEL_URL
 ```
+
+Do not store `STRIPE_WEBHOOK_SECRET` in Infisical for this local workflow. It is
+generated from the actual listener container on every startup and exists only
+in the protected temporary environment file used to create the backend.
 
 Use a test key beginning with `sk_test_`. The connected account ID begins with
 `acct_`. Choose the stable email address of the marketplace demo seller with:
@@ -197,24 +198,25 @@ STRIPE_CANCEL_URL=https://localhost:8443/cart?checkout=stripe-cancelled
 
 If `WAF_HTTPS_PORT` is customized, use that port in both URLs.
 
-The first local webhook setup has a deliberate two-stage bootstrap:
+The fresh-machine workflow is:
 
-1. Start the core stack with `make up`, which does not require a webhook secret.
-2. Run `make stripe-listen`.
-3. Copy the displayed `whsec_...` value into Infisical as
-   `STRIPE_WEBHOOK_SECRET`.
-4. Run `make setup`.
-5. Validate all values at any time with `make check-stripe-secrets`.
+```bash
+make setup
+make logs-stripe
+make down
+```
 
-During normal demo startup, `make setup` first uses
-`stripe listen --print-secret` to ensure the listener and backend share the
-same signing secret. It then starts the pinned listener as a persistent Compose
-service on the internal network. Follow it with `make logs-stripe`.
+Run `make logs-stripe` in a second terminal when you want to watch forwarding.
+Setup waits for the actual detached listener's readiness output, parses its
+`whsec_` value without printing it, adds it only to the mode-600 temporary
+environment file, and recreates the backend with that exact value. It then
+checks that the same listener container is still running and that the backend
+container received the identical secret.
 
-`make stripe-listen` remains the foreground bootstrap command used to obtain
-the initial `whsec_...` value. Both listener modes forward only the required
-events to `http://backend:8080/api/v1/webhooks/stripe`; neither publishes the
-backend port nor persists the API key.
+The listener forwards only the required events to
+`http://backend:8080/api/v1/webhooks/stripe`; it does not publish the backend
+port or persist the API key. `make logs-stripe` redacts the generated signing
+secret before displaying listener output.
 
 Use Stripe's sandbox card:
 

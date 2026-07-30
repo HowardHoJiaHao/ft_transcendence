@@ -1,4 +1,4 @@
-.PHONY: help check-docker check-curl check-tools check-infisical-project check-secrets check-stripe-secrets stripe-listen build up down restart logs logs-waf logs-stripe logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check test-waf infisical-auth-init infisical-auth-check infisical-auth-clear setup setup-backend setup-frontend build-up
+.PHONY: help check-docker check-curl check-tools check-infisical-project check-secrets check-stripe-secrets test-stripe-setup build up down restart logs logs-waf logs-stripe logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check test-waf infisical-auth-init infisical-auth-check infisical-auth-clear setup setup-backend setup-frontend build-up
 
 INFISICAL_ENV ?= dev
 INFISICAL_PATH ?= /
@@ -17,8 +17,8 @@ help:
 	@echo "Transcendence Marketplace - Available Commands"
 	@echo "=============================================="
 	@echo "make setup            - Build and start the full stack plus Stripe webhook forwarding"
-	@echo "make up               - Start the core stack; also used for first-time Stripe bootstrap"
-	@echo "make restart          - Rebuild and recreate the stack with fresh secrets"
+	@echo "make up               - Start the full stack plus Stripe webhook forwarding"
+	@echo "make restart          - Rebuild the full stack plus Stripe webhook forwarding"
 	@echo "make build            - Build local application images (no secrets required)"
 	@echo "make down             - Stop local containers (no Infisical access required)"
 	@echo "make logs             - Follow all container logs"
@@ -32,7 +32,7 @@ help:
 	@echo "make test-waf         - Run normal, redirect, SQLi, and XSS checks"
 	@echo "make check-secrets    - Fetch and validate the Infisical dev secrets"
 	@echo "make check-stripe-secrets - Validate Stripe sandbox configuration and demo seller email"
-	@echo "make stripe-listen    - Forward Stripe sandbox webhooks to the backend"
+	@echo "make test-stripe-setup - Test listener secret parsing and cleanup"
 	@echo "make infisical-auth-init  - Create the local Infisical token file"
 	@echo "make infisical-auth-check - Validate the local Infisical token file"
 	@echo "make infisical-auth-clear - Delete only the local Infisical token file"
@@ -65,16 +65,9 @@ check-secrets: check-tools check-infisical-project
 check-stripe-secrets:
 	@$(MAKE) --no-print-directory check-secrets REQUIRE_STRIPE=1
 
-stripe-listen: check-tools check-infisical-project
-	@$(INFISICAL_SETTINGS) REQUIRE_BREVO="0" REQUIRE_STRIPE="0" REQUIRE_STRIPE_CLI="1" ./scripts/with-infisical-env.sh \
-		docker compose --env-file .env.infisical --profile stripe run --rm stripe-cli \
-		listen \
-		--events checkout.session.completed,checkout.session.expired,payment_intent.payment_failed \
-		--forward-to http://backend:8080/api/v1/webhooks/stripe
-
 setup: check-tools check-infisical-project
 	@$(INFISICAL_SETTINGS) REQUIRE_BREVO="$(REQUIRE_BREVO)" REQUIRE_STRIPE="1" REQUIRE_STRIPE_CLI="0" ./scripts/with-infisical-env.sh \
-		./scripts/setup-stripe-demo.sh
+		./scripts/setup-stripe-demo.sh setup
 	@echo ""
 	@echo "✅ Full project and Stripe webhook setup complete."
 	@echo "Application: https://localhost:$${WAF_HTTPS_PORT:-8443}"
@@ -84,10 +77,12 @@ setup: check-tools check-infisical-project
 	@echo "WAF test:    make test-waf"
 
 up: check-tools check-infisical-project
-	@$(WITH_INFISICAL) docker compose --env-file .env.infisical up -d --wait --wait-timeout 180
+	@$(INFISICAL_SETTINGS) REQUIRE_BREVO="$(REQUIRE_BREVO)" REQUIRE_STRIPE="1" REQUIRE_STRIPE_CLI="0" ./scripts/with-infisical-env.sh \
+		./scripts/setup-stripe-demo.sh up
 
 restart: check-tools check-infisical-project
-	@$(WITH_INFISICAL) docker compose --env-file .env.infisical up -d --build --force-recreate --wait --wait-timeout 180
+	@$(INFISICAL_SETTINGS) REQUIRE_BREVO="$(REQUIRE_BREVO)" REQUIRE_STRIPE="1" REQUIRE_STRIPE_CLI="0" ./scripts/with-infisical-env.sh \
+		./scripts/setup-stripe-demo.sh restart
 
 build: check-docker
 	$(COMPOSE) build
@@ -95,16 +90,21 @@ build: check-docker
 build-up: setup
 
 down: check-docker
-	$(COMPOSE) down
+	$(COMPOSE) --profile stripe down
 
 logs: check-docker
-	$(COMPOSE) logs -f
+	@$(COMPOSE) --profile stripe logs -f | \
+		awk '{ gsub(/whsec_[[:alnum:]]+/, "whsec_[REDACTED]"); print; fflush(); }'
 
 logs-waf: check-docker
 	$(COMPOSE) logs -f waf
 
 logs-stripe: check-docker
-	$(COMPOSE) --profile stripe logs -f stripe-cli
+	@$(COMPOSE) --profile stripe logs -f stripe-cli | \
+		awk '{ gsub(/whsec_[[:alnum:]]+/, "whsec_[REDACTED]"); print; fflush(); }'
+
+test-stripe-setup:
+	@sh scripts/tests/setup-stripe-demo-test.sh
 
 logs-backend: check-docker
 	$(COMPOSE) logs -f backend
