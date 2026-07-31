@@ -452,10 +452,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 				  	<Link href={`/user/${product.sellerId}`} className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed">View Shop</Link>
 				</div>
 			  </div>
-
-			  <div className="flex-[0_0_40%]">
-				<p>-Shop Analytics by Howard/Fadhlul-</p>
-			  </div>
 			</div>
 
 			<div className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex flex-col w-[90%] max-w-[1138px] h-auto min-h-[450px] my-6 mx-auto gap-[30px] break-words leading-[1.6]">
