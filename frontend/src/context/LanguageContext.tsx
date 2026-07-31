@@ -202,9 +202,7 @@ export function useI18n(): LanguageContextValue {
  *     onChange={(e) => setLang(e.target.value as Locale)}
  *   (also __tests__/contexts/LanguageContext.test.tsx:14)
  *
- * t — 4 files, ~130 calls:
- *   app/(user)/profile/my-ads/page.tsx         (87 calls — most translated page)
- *   app/(user)/profile/my-ads/import/page.tsx  (35 calls)
- *   components/Header/Header.tsx               ( 6 calls)
- *   app/(user)/sell/page.tsx                   ( 2 calls)
+ * t — used across the user-facing pages and components. Rather than listing
+ *   them here (the list goes stale fast), find them with:
+ *     grep -rl "useI18n" frontend/src
  * ------------------------------------------------------------------------- */

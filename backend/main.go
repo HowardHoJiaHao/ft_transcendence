@@ -111,6 +111,7 @@ func main() {
 	protected.PUT("/orders/:id/complete", func(c echo.Context) error {
 		return completeOrderWithNotifications(c, gormDB, notificationService)
 	})
+	protected.PUT("/orders/:id/cancel", func(c echo.Context) error { return cancelOrder(c, gormDB) })
 	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) }) //howai AI maybe. merge residue 21 june
 
 	// Seller dashboard routes

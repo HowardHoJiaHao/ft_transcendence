@@ -283,13 +283,28 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const remainingStock = Math.max(0, availableStock - cartQuantity);
 	const isAvailable = product.status === 'active' && availableStock > 0;
 	const isOwnListing = currentUser?.id === product.sellerId;
-	const canAddToCart = isAvailable && !isOwnListing && remainingStock > 0;
+	// Shown beside the photo. Racket-only fields are dropped for categories that
+	// do not have them, so shoes and bags are not padded with blank rows.
+	const specs = [
+		{ label: 'Category', value: product.category },
+		{ label: 'Condition', value: product.condition },
+		{ label: 'Weight', value: product.weightCategory },
+		{ label: 'Flexibility', value: product.flexibilityCategory },
+		{ label: 'Balance', value: product.balanceCategory },
+		{ label: 'Dealing method', value: product.dealingMethod },
+		{ label: 'Location', value: product.location },
+		{ label: 'Contact', value: product.phoneNumber },
+	].filter((spec) => spec.value && spec.value.trim() !== '');
+	// A listing is one indivisible lot, so it is either already in the cart or
+	// can be added whole -- there is no partial quantity to choose.
+	const alreadyInCart = cartQuantity > 0;
+	const canAddToCart = isAvailable && !isOwnListing && !alreadyInCart;
 	const handleAddToCart = () => {
 		if (!canAddToCart) {
-			showToast(isOwnListing ? 'You cannot buy your own listing' : remainingStock <= 0 ? 'All available stock is already in your cart' : 'This listing is not available', 'error');
+			showToast(isOwnListing ? 'You cannot buy your own listing' : alreadyInCart ? 'This listing is already in your cart' : 'This listing is not available', 'error');
 			return;
 		}
-		addToCart({id: product.id, title: product.title, price: product.price, image: product.image}, Math.min(quantity, remainingStock));
+		addToCart({id: product.id, title: product.title, price: product.price, image: product.image}, availableStock);
 		showToast('Added to cart', 'success');
 	};
 	const reviewEligibilityMessage = () => {
@@ -371,26 +386,47 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 
 		  	  <div className="flex-[0_0_50%]">
 			    <div className="text-[40px] font-bold text-[var(--dark)] mb-2.5">{product.title}</div>
-		  	    <div className="uppercase text-[var(--secondary)] tracking-[1px] text-xs mb-2.5"> Weight: {product.weightCategory}</div>
-				<div className="uppercase text-[var(--secondary)] tracking-[1px] text-xs mb-2.5"> Flexibility: {product.flexibilityCategory}</div>
-				<div className="uppercase text-[var(--secondary)] tracking-[1px] text-xs mb-2.5"> Balance: {product.balanceCategory}</div>
-		  	    <p className="text-muted">{product.reviews} sold</p>
-				<p className="text-muted">
-				  {isAvailable ? `${availableStock} in stock` : 'Unavailable'}
-				  {cartQuantity > 0 && isAvailable ? ` (${cartQuantity} in cart)` : ''}
+		  	    {/* reviews is the review count, not a sales figure -- it used to
+			        be labelled "sold", which was simply the wrong number. */}
+		  	    <p className="text-muted">
+				  {product.reviews === 1 ? '1 review' : `${product.reviews} reviews`}
 				</p>
-		  	    <p className="text-2xl font-bold text-[var(--primary)] mb-5">${product.price.toFixed(2)} 
+				{/* The whole listing is bought at once, so this is what you get,
+				    not a pool to draw from. */}
+				<p className="text-muted">
+				  {!isAvailable ? 'Unavailable' : `Quantity: ${availableStock}`}
+				  {alreadyInCart && isAvailable ? ' · in your cart' : ''}
+				</p>
+		  	    <p className="text-2xl font-bold text-[var(--primary)] mb-5">${product.price.toFixed(2)}
 				  {product.originalPrice && (
                     <span className="line-through text-[var(--secondary)] ml-2"> ${product.originalPrice.toFixed(2)} </span> )}
 				</p>
-                <div className="quantitySelector">
-                  <button className="quantityBtn" onClick={() => setQuantity(prev => Math.max(1, prev - 1))} disabled={quantity <= 1}>-</button>
-                  <span className="quantityDisplay">{quantity}</span>
-                  <button className="quantityBtn" onClick={() => setQuantity(prev => Math.min(remainingStock, prev + 1))} disabled={!canAddToCart || quantity >= remainingStock}> + </button>
-                </div>
-                <button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed" onClick={handleAddToCart} disabled={!canAddToCart}>
-                  {isOwnListing ? 'Your Listing' : remainingStock <= 0 && isAvailable ? 'All Stock In Cart' : isAvailable ? '🛒 Add to Cart' : 'Unavailable'}
-                </button>
+
+				{/* The details a buyer decides on, kept beside the photo instead
+				    of only in the About card further down the page. */}
+				<dl className="grid grid-cols-2 gap-x-5 gap-y-3 mb-6 pt-4 border-t border-[#eee] m-0">
+					{specs.map(({ label, value }) => (
+						<div key={label} className="flex flex-col gap-1">
+							<dt className="text-[11px] tracking-[1px] uppercase text-[var(--secondary)]">{label}</dt>
+							<dd className="text-sm text-[var(--dark)] font-semibold m-0 break-words">{value || 'N/A'}</dd>
+						</div>
+					))}
+				</dl>
+
+				{/* Own listing: buying is impossible, so the slot the cart button
+				    occupies is given to the action that is actually useful. */}
+				{isOwnListing ? (
+					<Link
+						href={`/sell?editId=${product.id}`}
+						className="inline-flex items-center bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline"
+					>
+						✏️ Edit Product Details
+					</Link>
+				) : (
+					<button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed" onClick={handleAddToCart} disabled={!canAddToCart}>
+					  {!isAvailable ? 'Unavailable' : alreadyInCart ? 'Already In Cart' : availableStock > 1 ? `🛒 Buy All ${availableStock}` : '🛒 Add to Cart'}
+					</button>
+				)}
               </div>
 		    </div>
 
@@ -423,30 +459,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 			</div>
 
 			<div className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex flex-col w-[90%] max-w-[1138px] h-auto min-h-[450px] my-6 mx-auto gap-[30px] break-words leading-[1.6]">
+				{/* Specs now sit beside the photo; this card carries the prose. */}
 				<h3>About this item</h3>
 				<p className="text-[var(--secondary)] leading-[1.6] mb-[25px]">{product.description || 'No description provided.'}</p>
-				<div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-x-6 gap-y-4">
-					<div className="flex flex-col gap-1.5">
-						<span className="text-xs tracking-[1px] uppercase text-[var(--secondary)]">Category</span>
-						<span className="text-sm text-[var(--dark)] font-semibold">{product.category || 'N/A'}</span>
-					</div>
-					<div className="flex flex-col gap-1.5">
-						<span className="text-xs tracking-[1px] uppercase text-[var(--secondary)]">Condition</span>
-						<span className="text-sm text-[var(--dark)] font-semibold">{product.condition || 'N/A'}</span>
-					</div>
-					<div className="flex flex-col gap-1.5">
-						<span className="text-xs tracking-[1px] uppercase text-[var(--secondary)]">Dealing method</span>
-						<span className="text-sm text-[var(--dark)] font-semibold">{product.dealingMethod || 'N/A'}</span>
-					</div>
-					<div className="flex flex-col gap-1.5">
-						<span className="text-xs tracking-[1px] uppercase text-[var(--secondary)]">Location</span>
-						<span className="text-sm text-[var(--dark)] font-semibold">{product.location || 'N/A'}</span>
-					</div>
-					<div className="flex flex-col gap-1.5">
-						<span className="text-xs tracking-[1px] uppercase text-[var(--secondary)]">Contact</span>
-						<span className="text-sm text-[var(--dark)] font-semibold">{product.phoneNumber || 'N/A'}</span>
-					</div>
-				</div>
 			</div>
 
 			{listingDocuments.length > 0 && (

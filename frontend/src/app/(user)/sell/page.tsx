@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header/Header";
 import ShopTabs from "@/components/ShopTabs/ShopTabs";
 import ShopHeader from "@/components/ShopTabs/ShopHeader";
+import ListingImage from "@/components/ListingImage/ListingImage";
 import BulkImport from "@/components/BulkImport/BulkImport";
 import { useShopCounts } from "@/components/ShopTabs/useShopCounts";
 import { useAuth } from '@/context/AuthContext';
@@ -85,7 +86,13 @@ function SellPageInner() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [originalPrice, setOriginalPrice] = useState("");
   const [stockQuantity, setStockQuantity] = useState("1");
+  // A listing whose photo predates listing_files keeps it on listings.image
+  // with no file row. Held here so the seller can still see what is published.
+  const [legacyImage, setLegacyImage] = useState("");
+  // The listing's current status, preserved across an edit.
+  const [loadedStatus, setLoadedStatus] = useState("");
   const [location, setLocation] = useState("");
   const [dealingMethods, setDealingMethods] = useState<string[]>([]);
   const [weightCategory, setWeightCategory] = useState("4U");
@@ -114,6 +121,7 @@ function SellPageInner() {
     title: string;
     description: string;
     price: string;
+    originalPrice: string;
     stockQuantity: string;
     location: string;
     dealingMethods: string[];
@@ -146,6 +154,7 @@ function SellPageInner() {
           title: p.title || "",
           description: p.description || "",
           price: p.price?.toString() || "",
+          originalPrice: p.originalPrice != null ? p.originalPrice.toString() : "",
           stockQuantity: (p.stockQuantity ?? 1).toString(),
           location: p.location || "",
           dealingMethods: p.dealingMethod
@@ -161,7 +170,10 @@ function SellPageInner() {
         setTitle(loaded.title);
         setDescription(loaded.description);
         setPrice(loaded.price);
+        setOriginalPrice(loaded.originalPrice);
         setStockQuantity(loaded.stockQuantity);
+        setLegacyImage(typeof p.image === "string" ? p.image : "");
+        setLoadedStatus(typeof p.status === "string" ? p.status : "active");
         setLocation(loaded.location);
         setDealingMethods(loaded.dealingMethods);
         setPhoneNumber(loaded.phoneNumber);
@@ -170,7 +182,7 @@ function SellPageInner() {
         setBalanceCategory(loaded.balanceCategory);
         setBaseline(formSnapshot(loaded));
       })
-      .catch(() => showToast("Failed to load listing data", "error"))
+      .catch(() => showToast(t("sell.loadFailed"), "error"))
       .finally(() => setEditLoading(false));
   }, [editId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -199,6 +211,7 @@ function SellPageInner() {
         title,
         description,
         price,
+        originalPrice,
         stockQuantity,
         location,
         dealingMethods,
@@ -293,6 +306,10 @@ function SellPageInner() {
 	create preview url and store them in photoPreviewUrls
   */
   const existingImages = existingFiles.filter((file) => file.kind === "image");
+  // Most listings predate listing_files and carry their photo only on
+  // listings.image, so the edit form showed an empty photo grid for them.
+  // Surfaced read-only: there is no file record behind it to delete.
+  const showLegacyImage = isEditMode && existingImages.length === 0 && legacyImage !== "";
   const existingDocuments = existingFiles.filter((file) => file.kind === "document");
 
   const showValidationErrors = (errors: string[]) => {
@@ -407,36 +424,44 @@ function SellPageInner() {
     
 	/* validation */
 	if (!user) {
-      showToast("Please login first", "error");
+      showToast(t("sell.loginFirst"), "error");
       router.push("/login");
       return;
     }
     if (!title.trim()) {
-      showToast("Ad title is required", "error");
+      showToast(t("sell.titleRequired"), "error");
       return;
     }
     const parsedPrice = parseFloat(price);
     if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
-      showToast("Please enter a valid price", "error");
+      showToast(t("sell.priceInvalid"), "error");
+      return;
+    }
+    // Optional. Empty means "no discount", which the backend stores as NULL.
+    const parsedOriginalPrice = originalPrice.trim()
+      ? Number.parseFloat(originalPrice)
+      : null;
+    if (parsedOriginalPrice !== null && (!Number.isFinite(parsedOriginalPrice) || parsedOriginalPrice <= 0)) {
+      showToast(t("sell.originalPriceInvalid"), "error");
       return;
     }
     const parsedStockQuantity = Number.parseInt(stockQuantity, 10);
     if (!Number.isInteger(parsedStockQuantity) || parsedStockQuantity < 1) {
-      showToast("Please enter a valid stock quantity", "error");
+      showToast(t("sell.stockInvalid"), "error");
       return;
     }
     if (!dealingMethods.length) {
-      showToast("Please select at least one dealing method", "error");
+      showToast(t("sell.dealingMethodRequired"), "error");
       return;
     }
     // A listing with no photo shows a placeholder everywhere it appears, which
     // buyers skip past. Require one rather than letting it go live blank.
-    if (existingImages.length + photos.length === 0) {
-      showToast("Please add at least one photo of your item", "error");
+    if (existingImages.length + photos.length + (showLegacyImage ? 1 : 0) === 0) {
+      showToast(t("sell.photoRequired"), "error");
       return;
     }
     if (!acknowledged) {
-      showToast("Please confirm the acknowledgement", "error");
+      showToast(t("sell.acknowledgeRequired"), "error");
       return;
     }
 	/* validation */
@@ -446,7 +471,7 @@ function SellPageInner() {
     const token = localStorage.getItem("token") || "";
     if (!token) {
       setSubmitting(false);
-      showToast("Please login again", "error");
+      showToast(t("sell.loginAgain"), "error");
       router.push("/login");
       return;
     }
@@ -473,21 +498,25 @@ function SellPageInner() {
               title: title.trim(),
               description: description.trim(),
               price: parsedPrice,
+              originalPrice: parsedOriginalPrice,
               stockQuantity: parsedStockQuantity,
               location: location.trim() || "Malaysia",
               weightCategory,
               flexibilityCategory,
               balanceCategory,
-              status: "active",
+              // Keep whatever the listing already is. This was hardcoded to
+              // "active", so editing a sold or archived listing silently put
+              // it back on sale.
+              status: loadedStatus || "active",
             }),
           },
         );
         if (!res.ok) {
           const e = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(e.error || "Failed to update listing");
+          throw new Error(e.error || t("sell.updateFailed"));
         }
         await uploadPendingFiles(Number(editId), token);
-        showToast("Ad updated successfully", "success");
+        showToast(t("sell.updated"), "success");
         setEditSaved(true);
       } else {
         /* ── CREATE new listing ── */
@@ -505,6 +534,7 @@ function SellPageInner() {
             title: title.trim(),
             description: description.trim(),
             price: parsedPrice,
+            originalPrice: parsedOriginalPrice,
             stockQuantity: parsedStockQuantity,
             location: location.trim() || "Malaysia",
             weightCategory,
@@ -516,7 +546,7 @@ function SellPageInner() {
         });
         if (!res.ok) {
           const e = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(e.error || "Failed to create listing");
+          throw new Error(e.error || t("sell.createFailed"));
         }
         const created = await res.json();
         await uploadPendingFiles(created.id, token);
@@ -526,7 +556,7 @@ function SellPageInner() {
     } catch (err) {
       setUploadProgress(null);
       showToast(
-        err instanceof Error ? err.message : "Something went wrong",
+        err instanceof Error ? err.message : t("sell.genericError"),
         "error",
       );
     } finally {
@@ -540,7 +570,7 @@ function SellPageInner() {
     return (
       <main className="min-h-screen bg-[#f0f0f0]">
         <Header/>
-        <div className="p-12 text-center text-[#666] text-base">Loading listing data…</div>
+        <div className="p-12 text-center text-[#666] text-base">{t("sell.loadingListing")}</div>
       </main>
     );
   }
@@ -561,8 +591,8 @@ function SellPageInner() {
         {/* ── SIDEBAR ── */}
         <aside className="w-[260px] shrink-0 max-[860px]:w-full">
           <div className="bg-white rounded-lg p-5 shadow-[0_1px_3px_rgba(0,0,0,0.1)] sticky top-6 max-[860px]:static">
-            <h2 className="text-lg font-bold m-0 text-[#222]">Post An Ad</h2>
-            <p className="text-xs text-[#888] mt-1 mx-0 mb-3">Sell Your Stuff</p>
+            <h2 className="text-lg font-bold m-0 text-[#222]">{t("sell.heading")}</h2>
+            <p className="text-xs text-[#888] mt-1 mx-0 mb-3">{t("sell.tagline")}</p>
 
             {/* Mode chooser. Hidden while editing — that always targets one ad. */}
             {!isEditMode && (
@@ -623,27 +653,27 @@ function SellPageInner() {
                 <span className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0 transition-[background-color,color] duration-300">
                   {step > 1 || isEditMode ? "✓" : "1"}
                 </span>
-                <span>Basic Information</span>
+                <span>{t("sell.stepBasic")}</span>
               </li>
               <li
                 className={`flex items-center gap-2.5 text-sm ${step > 2 ? "text-[#22c55e] font-semibold [&>span:first-child]:bg-[#22c55e] [&>span:first-child]:text-white" : step === 2 ? "text-[#222] font-semibold [&>span:first-child]:bg-[#222] [&>span:first-child]:text-white" : "text-[#aaa] font-medium [&>span:first-child]:bg-[#e0e0e0] [&>span:first-child]:text-[#888]"}`}
               >
                 <span className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0 transition-[background-color,color] duration-300">2</span>
-                <span>Ad Details</span>
+                <span>{t("sell.stepDetails")}</span>
               </li>
               {step === 2 && (
                 <ul className="list-none mt-1 mx-0 mb-0 pt-0 pr-0 pb-0 pl-[38px] flex flex-col gap-2">
-                  <li className="text-[13px] text-[#555]">Photos</li>
-                  <li className="text-[13px] text-[#555]">Details &amp; Pricing</li>
-                  <li className="text-[13px] text-[#555]">Contact</li>
-                  <li className="text-[13px] text-[#555]">Acknowledgment</li>
+                  <li className="text-[13px] text-[#555]">{t("sell.stepPhotos")}</li>
+                  <li className="text-[13px] text-[#555]">{t("sell.stepPricing")}</li>
+                  <li className="text-[13px] text-[#555]">{t("sell.stepContact")}</li>
+                  <li className="text-[13px] text-[#555]">{t("sell.stepAcknowledgment")}</li>
                 </ul>
               )}
               <li
                 className={`flex items-center gap-2.5 text-sm ${step === 3 ? "text-[#22c55e] font-semibold [&>span:first-child]:bg-[#22c55e] [&>span:first-child]:text-white" : "text-[#aaa] font-medium [&>span:first-child]:bg-[#e0e0e0] [&>span:first-child]:text-[#888]"}`}
               >
                 <span className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0 transition-[background-color,color] duration-300">{step === 3 ? "✓" : "3"}</span>
-                <span>Ad Successfully Submitted</span>
+                <span>{t("sell.stepSubmitted")}</span>
               </li>
             </ul>
             </>
@@ -670,12 +700,12 @@ function SellPageInner() {
           <div className="flex justify-between items-center min-h-6">
             {step === 2 && !isEditMode && (
               <button className="bg-none border-none text-[#22c55e] font-bold cursor-pointer text-sm p-0 tracking-[0.3px] hover:underline" onClick={() => setStep(1)}>
-                ← BACK
+                {t("sell.back")}
               </button>
             )}
             {step !== 3 && (
               <button className="bg-none border-none text-[#22c55e] font-bold cursor-pointer text-sm p-0 ml-auto tracking-[0.3px] hover:underline" onClick={handleClearAll}>
-                CLEAR ALL
+                {t("sell.clearAll")}
               </button>
             )}
           </div>
@@ -683,7 +713,7 @@ function SellPageInner() {
           {/* ── STEP 1: Category ── */}
           {step === 1 && (
             <div className="bg-white rounded-lg p-6 shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
-              <h2 className="text-xl font-bold mt-0 mx-0 mb-2 text-[#222]">What Would You Like to Post?</h2>
+              <h2 className="text-xl font-bold mt-0 mx-0 mb-2 text-[#222]">{t("sell.categoryTitle")}</h2>
               <div className="border border-[#e0e0e0] rounded-lg overflow-hidden my-4 mx-0">
                 {CATEGORIES.map((cat) => (
                   <button
@@ -701,13 +731,13 @@ function SellPageInner() {
                   className="bg-[#2563eb] text-white border-none rounded-md px-8 py-3 text-sm font-bold cursor-pointer tracking-[0.5px] transition-colors duration-150 hover:bg-[#1d4ed8] disabled:bg-[#93c5fd] disabled:cursor-not-allowed"
                   onClick={() => {
                     if (!category) {
-                      showToast("Please select a category", "error");
+                      showToast(t("sell.categoryRequired"), "error");
                       return;
                     }
                     setStep(2);
                   }}
                 >
-                  CONTINUE
+                  {t("sell.continue")}
                 </button>
               </div>
             </div>
@@ -718,10 +748,9 @@ function SellPageInner() {
             <>
               {/* Photos */}
               <div className="bg-white rounded-lg p-6 shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
-                <h2 className="text-xl font-bold mt-0 mx-0 mb-2 text-[#222]">Photos for Your Ad</h2>
+                <h2 className="text-xl font-bold mt-0 mx-0 mb-2 text-[#222]">{t("sell.photosTitle")}</h2>
                 <p className="text-sm text-[#22c55e] mt-0 mx-0 mb-1">
-                  Capture as much detail in your photographs to attract more
-                  potential buyers.
+                  {t("sell.photosHint")}
                 </p>
 
                 <div
@@ -738,7 +767,7 @@ function SellPageInner() {
                     addPhotos(Array.from(e.dataTransfer.files));
                   }}
                 >
-                  ↓ Drop your files here to upload
+                  {t("sell.dropFiles")}
                 </div>
                 <input
                   ref={fileInputRef}
@@ -774,6 +803,18 @@ function SellPageInner() {
                       </button>
                     </div>
                   ))}
+                  {showLegacyImage && (
+                    <div className="aspect-square border border-[#ddd] rounded-md overflow-hidden bg-[#f9f9f9] relative">
+                      <ListingImage
+                        className="w-full h-full object-cover block"
+                        src={legacyImage}
+                        alt={t("sell.currentPhotoAlt")}
+                      />
+                      <span className="absolute bottom-0 inset-x-0 bg-black/55 text-white text-[10px] text-center py-0.5">
+                        {t("sell.currentPhoto")}
+                      </span>
+                    </div>
+                  )}
                   {photoPreviewUrls.map((previewUrl, i) => (
                     <div
                       key={previewUrl}
@@ -782,7 +823,7 @@ function SellPageInner() {
                       <img
                         className="w-full h-full object-cover block"
                         src={previewUrl}
-                        alt={photos[i]?.name || `photo ${i + 1}`}
+                        alt={photos[i]?.name || t("sell.photoAlt", { index: i + 1 })}
                       />
                       <button
                         type="button"
@@ -795,7 +836,7 @@ function SellPageInner() {
                     </div>
                   ))}
                   {Array.from({
-                    length: Math.max(0, 6 - existingImages.length - photos.length),
+                    length: Math.max(0, 6 - existingImages.length - photos.length - (showLegacyImage ? 1 : 0)),
                   }).map((_, index) => (
                     <button
                       type="button"
@@ -807,7 +848,7 @@ function SellPageInner() {
                         <span className="text-[22px] opacity-50">📷</span>
                         {existingImages.length + photos.length === 0 && index === 0 && (
                           <span className="text-[10px] text-[#aaa] text-center px-1">
-                            Add cover photo
+                            {t("sell.addCoverPhoto")}
                           </span>
                         )}
                       </div>
@@ -815,7 +856,7 @@ function SellPageInner() {
                   ))}
                 </div>
                 <p className="text-right text-xs text-[#888] m-0">
-                  {existingImages.length + photos.length} of 6 photos
+                  {t("sell.photoCount", { count: existingImages.length + photos.length })}
                 </p>
               </div>
 
@@ -906,27 +947,25 @@ function SellPageInner() {
                   ))}
                 </div>
                 <p className="text-right text-xs text-[#888] mt-3 mb-0">
-                  {existingDocuments.length + documents.length} of 2 PDF documents
+                  {t("sell.documentCount", { count: existingDocuments.length + documents.length })}
                 </p>
               </div>
 
               {/* Details & Pricing */}
               <div className="bg-white rounded-lg p-6 shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
                 <h2 className="text-xl font-bold mt-0 mx-0 mb-2 text-[#222]">
-                  Ad Details, Description &amp; Pricing
+                  {t("sell.detailsTitle")}
                 </h2>
                 <p className="text-sm text-[#22c55e] mt-0 mx-0 mb-1">
-                  Complete your ad details, then write a good title &amp;
-                  description about the item you want to post.
+                  {t("sell.detailsHint")}
                 </p>
                 <p className="text-[13px] text-[#f59e0b] mt-0 mx-0 mb-5">
-                  Note: Avoid inserting your personal information in this
-                  section.
+                  {t("sell.detailsWarning")}
                 </p>
 
                 {/* Condition */}
                 <div className="mb-5">
-                  <h3 className="text-[15px] font-semibold mt-0 mx-0 mb-2.5 text-[#222]">Select item condition</h3>
+                  <h3 className="text-[15px] font-semibold mt-0 mx-0 mb-2.5 text-[#222]">{t("sell.conditionTitle")}</h3>
                   <div className="flex gap-2.5 flex-wrap">
                     {CONDITIONS.map((c) => (
                       <button
@@ -944,7 +983,7 @@ function SellPageInner() {
                 <div className="mb-5">
                   <input
                     className="w-full border border-[#ccc] rounded-md px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none transition-[border-color] duration-150 focus:border-[#2563eb]"
-                    placeholder="Ad Title"
+                    placeholder={t("sell.titlePlaceholder")}
                     maxLength={50}
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
@@ -956,16 +995,14 @@ function SellPageInner() {
                 <div className="mb-5">
                   <textarea
                     className="w-full border border-[#ccc] rounded-md px-3.5 py-3 text-[15px] text-[#333] bg-white resize-y min-h-[140px] box-border outline-none transition-[border-color] duration-150 font-[inherit] focus:border-[#2563eb]"
-                    placeholder="Description"
+                    placeholder={t("sell.descriptionPlaceholder")}
                     maxLength={8000}
                     rows={6}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
                   <p className="text-[11px] text-[#aaa] mt-1 mx-0 mb-0 leading-[1.5]">
-                    Describe the goods/services accurately by including the
-                    price, delivery arrangements, methods of payment, etc., if
-                    applicable.
+                    {t("sell.descriptionHint")}
                   </p>
                   <p className="text-right text-xs text-[#888] mt-1 mx-0 mb-0">{description.length}/8000</p>
                 </div>
@@ -977,7 +1014,7 @@ function SellPageInner() {
                     <input
                       type="number"
                       className="w-full border-none rounded-none flex-1 px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none focus:outline-none focus:shadow-none"
-                      placeholder="Price"
+                      placeholder={t("sell.pricePlaceholder")}
                       min="0"
                       step="0.01"
                       value={price}
@@ -986,20 +1023,40 @@ function SellPageInner() {
                   </div>
                 </div>
 
+                {/* Original price. The listing carries one and the product page
+                    shows it struck through, but the form never loaded or sent
+                    it -- so every edit silently cleared it. */}
+                <div className="mb-5">
+                  <div className="flex items-center border border-[#ccc] rounded-md overflow-hidden transition-[border-color] duration-150 focus-within:border-[#2563eb]">
+                    <span className="px-3.5 py-3 bg-[#f5f5f5] border-r border-[#ccc] font-semibold text-[#555] text-[15px] shrink-0">RM</span>
+                    <input
+                      type="number"
+                      className="w-full border-none rounded-none flex-1 px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none focus:outline-none focus:shadow-none"
+                      placeholder={t("sell.originalPricePlaceholder")}
+                      min="0"
+                      step="0.01"
+                      value={originalPrice}
+                      onChange={(e) => setOriginalPrice(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-[11px] text-[#aaa] mt-1 mx-0 mb-0 leading-[1.5]">
+                    {t("sell.originalPriceHint")}
+                  </p>
+                </div>
+
                 {/* Stock */}
                 <div className="mb-5">
                   <input
                     type="number"
                     className="w-full border border-[#ccc] rounded-md px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none transition-[border-color] duration-150 focus:border-[#2563eb]"
-                    placeholder="Stock quantity"
+                    placeholder={t("sell.stockPlaceholder")}
                     min="1"
                     step="1"
                     value={stockQuantity}
                     onChange={(e) => setStockQuantity(e.target.value.replace(/[^\d]/g, ""))}
                   />
                   <p className="text-[11px] text-[#aaa] mt-1 mx-0 mb-0 leading-[1.5]">
-                    Use 1 for a single second-hand item, or more if you have
-                    identical units available.
+                    {t("sell.stockHint")}
                   </p>
                 </div>
 
@@ -1008,7 +1065,7 @@ function SellPageInner() {
                   <div className="flex items-center border border-[#ccc] rounded-md overflow-hidden transition-[border-color] duration-150 focus-within:border-[#2563eb]">
                     <input
                       className="w-full border-none rounded-none flex-1 px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none focus:outline-none focus:shadow-none"
-                      placeholder="Location"
+                      placeholder={t("sell.locationPlaceholder")}
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
                     />
@@ -1019,10 +1076,10 @@ function SellPageInner() {
                 {/* Racket specs (shown only for Rackets category) */}
                 {category === "Rackets" && (
                   <div className="mb-5">
-                    <h3 className="text-[15px] font-semibold mt-0 mx-0 mb-2.5 text-[#222]">Racket Specifications</h3>
+                    <h3 className="text-[15px] font-semibold mt-0 mx-0 mb-2.5 text-[#222]">{t("sell.racketSpecs")}</h3>
                     <div className="grid grid-cols-3 gap-3 max-[860px]:grid-cols-1">
                       <div>
-                        <label className="block text-[13px] text-[#666] mb-1">Weight</label>
+                        <label className="block text-[13px] text-[#666] mb-1">{t("sell.weight")}</label>
                         <select
                           className="w-full border border-[#ccc] rounded-md px-3 py-2.5 text-sm text-[#333] bg-white outline-none transition-[border-color] duration-150 focus:border-[#2563eb]"
                           value={weightCategory}
@@ -1034,7 +1091,7 @@ function SellPageInner() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[13px] text-[#666] mb-1">Flexibility</label>
+                        <label className="block text-[13px] text-[#666] mb-1">{t("sell.flexibility")}</label>
                         <select
                           className="w-full border border-[#ccc] rounded-md px-3 py-2.5 text-sm text-[#333] bg-white outline-none transition-[border-color] duration-150 focus:border-[#2563eb]"
                           value={flexibilityCategory}
@@ -1048,7 +1105,7 @@ function SellPageInner() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[13px] text-[#666] mb-1">Balance</label>
+                        <label className="block text-[13px] text-[#666] mb-1">{t("sell.balance")}</label>
                         <select
                           className="w-full border border-[#ccc] rounded-md px-3 py-2.5 text-sm text-[#333] bg-white outline-none transition-[border-color] duration-150 focus:border-[#2563eb]"
                           value={balanceCategory}
@@ -1067,13 +1124,13 @@ function SellPageInner() {
                 <div className="mb-5">
                   <div className="flex justify-between items-center mb-2.5">
                     <h3 className="text-[15px] font-semibold mt-0 mx-0 mb-2.5 text-[#222]">
-                      What is your dealing method?
+                      {t("sell.dealingMethodTitle")}
                     </h3>
                     <button
                       className="bg-none border-none text-[#22c55e] text-sm font-semibold cursor-pointer p-0"
                       onClick={() => setDealingMethods([...DEALING_METHODS])}
                     >
-                      Select All
+                      {t("sell.selectAll")}
                     </button>
                   </div>
                   <div className="flex gap-2.5 flex-wrap">
@@ -1092,17 +1149,17 @@ function SellPageInner() {
 
               {/* Contact */}
               <div className="bg-white rounded-lg p-6 shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
-                <h2 className="text-xl font-bold mt-0 mx-0 mb-2 text-[#222]">Contact</h2>
+                <h2 className="text-xl font-bold mt-0 mx-0 mb-2 text-[#222]">{t("sell.contactTitle")}</h2>
                 <div className="mb-5">
                   <input
                     className="w-full border border-[#ccc] rounded-md px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none transition-[border-color] duration-150 focus:border-[#2563eb]"
-                    placeholder="Phone Number"
+                    placeholder={t("sell.phonePlaceholder")}
                     maxLength={15}
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                   />
                   <p className="text-[11px] text-[#aaa] mt-1 mx-0 mb-0 leading-[1.5]">
-                    Enter your phone number (e.g. 01212345678)
+                    {t("sell.phoneHint")}
                   </p>
                   <p className="text-right text-xs text-[#888] mt-1 mx-0 mb-0">{phoneNumber.length}/15</p>
                 </div>
@@ -1110,15 +1167,13 @@ function SellPageInner() {
 
               {/* Acknowledgement */}
               <div className="bg-white rounded-lg p-6 shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
-                <h2 className="text-xl font-bold mt-0 mx-0 mb-2 text-[#222]">Acknowledgement</h2>
+                <h2 className="text-xl font-bold mt-0 mx-0 mb-2 text-[#222]">{t("sell.acknowledgementTitle")}</h2>
                 <p className="text-sm text-[#555] mt-0 mx-0 mb-4">
-                  This platform does not allow counterfeit goods to be sold
-                  through the site.
+                  {t("sell.acknowledgementBody")}
                 </p>
                 <label className="flex items-center justify-between gap-4 cursor-pointer py-3 border-t border-[#eee]">
                   <span className="text-[15px] text-[#22c55e] italic flex-1">
-                    I hereby confirm that the goods I&apos;m selling are
-                    original and not counterfeit.
+                    {t("sell.acknowledgementCheck")}
                   </span>
                   <input
                     type="checkbox"
@@ -1177,7 +1232,7 @@ function SellPageInner() {
               {/* Submit buttons */}
               <div className="flex justify-end gap-3">
                 <button className="px-7 py-3 border border-[#555] bg-white rounded-md text-sm font-bold cursor-pointer text-[#333] tracking-[0.5px] transition-colors duration-150 enabled:hover:bg-[#f5f5f5] disabled:opacity-50 disabled:cursor-not-allowed" disabled={submitting}>
-                  PREVIEW AD
+                  {t("sell.previewAd")}
                 </button>
                 <button
                   className="px-7 py-3 bg-[#2563eb] text-white border-none rounded-md text-sm font-bold cursor-pointer tracking-[0.5px] transition-colors duration-150 enabled:hover:bg-[#1d4ed8] disabled:bg-[#93c5fd] disabled:cursor-not-allowed"
@@ -1185,16 +1240,14 @@ function SellPageInner() {
                   onClick={handleSubmit}
                 >
                   {submitting
-                    ? "SUBMITTING…"
+                    ? t("sell.submitting")
                     : isEditMode
-                      ? "SAVE CHANGES"
-                      : "SUBMIT NOW"}
+                      ? t("sell.saveChanges")
+                      : t("sell.submitNow")}
                 </button>
               </div>
               <p className="text-xs text-[#888] text-center leading-[1.6] m-0">
-                By submitting the ad, I confirm that I have read and agreed to
-                the Rules of Advertising, Terms &amp; Conditions of this
-                platform.
+                {t("sell.termsNote")}
               </p>
             </>
           )}
@@ -1205,10 +1258,10 @@ function SellPageInner() {
               <div className="flex flex-col items-center px-5 py-12 text-center">
                 <div className="text-[64px] mb-4">🎉</div>
                 <h2 className="text-[28px] font-bold text-[#222] mt-0 mx-0 mb-2">
-                  Ad Successfully Submitted!
+                  {t("sell.successTitle")}
                 </h2>
                 <p className="text-base text-[#666] mt-0 mx-0 mb-8">
-                  Your ad has been posted and will be visible to buyers shortly.
+                  {t("sell.successBody")}
                 </p>
                 {uploadedFileCount > 0 && (
                   <div className="w-full max-w-[520px] bg-[#ecfdf5] border border-[#86efac] rounded-lg px-5 py-4 text-left mb-8">
@@ -1223,13 +1276,13 @@ function SellPageInner() {
                     className="bg-[#2563eb] text-white border-none rounded-md px-8 py-3 text-sm font-bold cursor-pointer tracking-[0.5px] transition-colors duration-150 hover:bg-[#1d4ed8] disabled:bg-[#93c5fd] disabled:cursor-not-allowed"
                     onClick={() => router.push("/profile/my-ads")}
                   >
-                    VIEW MY ADS
+                    {t("sell.viewMyAds")}
                   </button>
                   <button
                     className="px-7 py-3 border border-[#555] bg-white rounded-md text-sm font-bold cursor-pointer text-[#333] tracking-[0.5px] transition-colors duration-150 enabled:hover:bg-[#f5f5f5] disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleClearAll}
                   >
-                    POST ANOTHER AD
+                    {t("sell.postAnother")}
                   </button>
                 </div>
               </div>
@@ -1255,11 +1308,10 @@ function SellPageInner() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="discard-title" className="text-lg font-bold text-[#222] mt-0 mx-0 mb-2">
-              Discard your changes?
+              {t("sell.discardTitle")}
             </h2>
             <p className="text-[#898781] text-sm mt-0 mx-0 mb-5">
-              This listing has edits you have not saved yet. Leaving this page now
-              loses them.
+              {t("sell.discardBody")}
             </p>
             <div className="flex gap-2.5 justify-end flex-wrap">
               <button
@@ -1267,7 +1319,7 @@ function SellPageInner() {
                 className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]"
                 onClick={() => setPendingHref(null)}
               >
-                Keep editing
+                {t("sell.keepEditing")}
               </button>
               <button
                 type="button"
@@ -1278,7 +1330,7 @@ function SellPageInner() {
                   router.push(href);
                 }}
               >
-                Discard changes
+                {t("sell.discardChanges")}
               </button>
             </div>
           </div>
@@ -1292,9 +1344,16 @@ function SellPageInner() {
    Page export – wraps inner in Suspense
    (required by Next.js for useSearchParams)
 ───────────────────────────────────────── */
+// Its own component so the fallback can read the active language too — the
+// provider lives in the root layout, above this Suspense boundary.
+function SellPageFallback() {
+  const { t } = useI18n();
+  return <div style={{ padding: 24 }}>{t("sell.loading")}</div>;
+}
+
 export default function SellPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
+    <Suspense fallback={<SellPageFallback />}>
       <SellPageInner />
     </Suspense>
   );

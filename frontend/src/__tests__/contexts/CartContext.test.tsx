@@ -36,7 +36,9 @@ function CartHarness() {
 }
 
 describe('CartProvider', () => {
-  it('restores stored items and computes quantity and price totals', async () => {
+  // itemCount counts listings, not units: a lot of 2 is one thing to buy, so
+  // the badge reads 1 while the total still prices all 2.
+  it('restores stored items and computes listing count and price totals', async () => {
     localStorage.setItem('cart', JSON.stringify([{ ...racket, quantity: 2 }]));
     render(
       <CartProvider>
@@ -44,11 +46,13 @@ describe('CartProvider', () => {
       </CartProvider>,
     );
 
-    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'));
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
     expect(screen.getByTestId('total')).toHaveTextContent('200');
   });
 
-  it('merges duplicate products and persists the updated cart', async () => {
+  // A listing is one indivisible lot, so re-adding it replaces the entry
+  // rather than stacking a second copy the seller could never fill.
+  it('replaces a duplicate product instead of stacking quantities', async () => {
     const user = userEvent.setup();
     render(
       <CartProvider>
@@ -59,11 +63,12 @@ describe('CartProvider', () => {
     await user.click(screen.getByRole('button', { name: 'Add one' }));
     await user.click(screen.getByRole('button', { name: 'Add two' }));
 
-    expect(screen.getByTestId('count')).toHaveTextContent('3');
-    expect(screen.getByTestId('total')).toHaveTextContent('300');
+    // One listing in the cart, holding the lot of 2 from the second add.
+    expect(screen.getByTestId('count')).toHaveTextContent('1');
+    expect(screen.getByTestId('total')).toHaveTextContent('200');
     await waitFor(() => {
       expect(JSON.parse(localStorage.getItem('cart') ?? '[]')).toEqual([
-        { ...racket, quantity: 3 },
+        { ...racket, quantity: 2 },
       ]);
     });
   });
@@ -81,7 +86,9 @@ describe('CartProvider', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add one' }));
     await user.click(screen.getByRole('button', { name: 'Set four' }));
-    expect(screen.getByTestId('count')).toHaveTextContent('4');
+    // Still one listing, now holding a lot of four.
+    expect(screen.getByTestId('count')).toHaveTextContent('1');
+    expect(screen.getByTestId('total')).toHaveTextContent('400');
 
     await user.click(screen.getByRole('button', { name: 'Set zero' }));
     expect(screen.getByTestId('items')).toHaveTextContent('[]');

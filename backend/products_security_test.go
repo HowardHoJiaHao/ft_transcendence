@@ -15,11 +15,16 @@ func TestDeleteProductEnforcesOwnership(t *testing.T) {
 	tests := []struct {
 		name        string
 		sellerID    int
+		checkOrders bool
+		orderCount  int
 		allowDelete bool
 		wantStatus  int
 	}{
 		{name: "different seller forbidden", sellerID: 7, wantStatus: http.StatusForbidden},
-		{name: "owner allowed", sellerID: 42, allowDelete: true, wantStatus: http.StatusOK},
+		{name: "owner allowed", sellerID: 42, checkOrders: true, allowDelete: true, wantStatus: http.StatusOK},
+		// Orders are financial history for the buyer too, so a listing that has
+		// any is refused rather than taking the order rows down with it.
+		{name: "listing with orders refused", sellerID: 42, checkOrders: true, orderCount: 3, wantStatus: http.StatusConflict},
 	}
 
 	for _, test := range tests {
@@ -28,6 +33,11 @@ func TestDeleteProductEnforcesOwnership(t *testing.T) {
 			mock.ExpectQuery("SELECT seller_id FROM listings WHERE id").
 				WithArgs(10).
 				WillReturnRows(sqlmock.NewRows([]string{"seller_id"}).AddRow(test.sellerID))
+			if test.checkOrders {
+				mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM orders WHERE listing_id").
+					WithArgs(10).
+					WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(test.orderCount))
+			}
 			if test.allowDelete {
 				mock.ExpectExec("DELETE FROM listings WHERE id").
 					WithArgs(10).

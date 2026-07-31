@@ -54,6 +54,11 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 		return nil, nil, nil, fmt.Errorf("listing reviews migration failed: %w", err)
 	}
 
+	if err := runRelationalIntegrityMigration(rawDB); err != nil {
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("relational integrity migration failed: %w", err)
+	}
+
 	log.Println("Database connected successfully")
 
 	cleanup := func() {
@@ -124,6 +129,31 @@ func runListingsMigration(db *sql.DB) error {
 				ALTER TABLE listings
 				ADD CONSTRAINT listings_stock_quantity_nonnegative
 				CHECK (stock_quantity >= 0);
+			END IF;
+		END $$`,
+		// Listings gained a 'pending' state: checkout reserves the listing and
+		// only a delivered order makes it 'sold'. Existing volumes carry the
+		// old three-value CHECK that Postgres auto-named listings_status_check,
+		// so it is replaced with an explicitly named one that allows the fourth.
+		`DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM pg_constraint
+				WHERE conname = 'listings_status_check'
+				  AND conrelid = 'listings'::regclass
+			) THEN
+				ALTER TABLE listings DROP CONSTRAINT listings_status_check;
+			END IF;
+			IF NOT EXISTS (
+				SELECT 1
+				FROM pg_constraint
+				WHERE conname = 'listings_status_allowed'
+				  AND conrelid = 'listings'::regclass
+			) THEN
+				ALTER TABLE listings
+				ADD CONSTRAINT listings_status_allowed
+				CHECK (status IN ('active', 'pending', 'sold', 'archived'));
 			END IF;
 		END $$`,
 	}
@@ -242,6 +272,102 @@ func runListingReviewsMigration(db *sql.DB) error {
 		}
 	}
 	log.Println("Listing reviews migration completed")
+	return nil
+}
+
+// runRelationalIntegrityMigration brings existing volumes in line with the
+// relationships db/init.sql now declares: orders survive listing deletion, the
+// audit and analytics tables actually reference what they claim to, and the
+// superseded seller-review table is gone.
+func runRelationalIntegrityMigration(db *sql.DB) error {
+	migrations := []string{
+		// An order is financial history for buyer and seller alike. Cascading
+		// from listings let a seller delete a listing and silently erase the
+		// buyer's purchase record along with the revenue it contributed.
+		`DO $$
+		DECLARE
+			constraint_name TEXT;
+		BEGIN
+			SELECT conname INTO constraint_name
+			FROM pg_constraint
+			WHERE conrelid = 'orders'::regclass
+			  AND contype = 'f'
+			  AND confrelid = 'listings'::regclass;
+			IF constraint_name IS NOT NULL AND
+			   (SELECT confdeltype FROM pg_constraint WHERE conname = constraint_name
+			      AND conrelid = 'orders'::regclass) <> 'r' THEN
+				EXECUTE format('ALTER TABLE orders DROP CONSTRAINT %I', constraint_name);
+			END IF;
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint
+				WHERE conname = 'orders_listing_id_restrict'
+				  AND conrelid = 'orders'::regclass
+			) THEN
+				ALTER TABLE orders
+				ADD CONSTRAINT orders_listing_id_restrict
+				FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE RESTRICT;
+			END IF;
+		END $$`,
+
+		// analytics_events.listing_id and the api_request_logs columns were
+		// plain integers, free to hold ids of rows that no longer exist.
+		// Orphans are nulled first, otherwise adding the key would fail.
+		`UPDATE analytics_events SET listing_id = NULL
+		 WHERE listing_id IS NOT NULL
+		   AND listing_id NOT IN (SELECT id FROM listings)`,
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint
+				WHERE conname = 'analytics_events_listing_fk'
+				  AND conrelid = 'analytics_events'::regclass
+			) THEN
+				ALTER TABLE analytics_events
+				ADD CONSTRAINT analytics_events_listing_fk
+				FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL;
+			END IF;
+		END $$`,
+
+		`UPDATE api_request_logs SET api_key_id = NULL
+		 WHERE api_key_id IS NOT NULL
+		   AND api_key_id NOT IN (SELECT id FROM api_keys)`,
+		`UPDATE api_request_logs SET user_id = NULL
+		 WHERE user_id IS NOT NULL
+		   AND user_id NOT IN (SELECT id FROM users)`,
+		// SET NULL, not CASCADE: revoking a key or deleting a user must not
+		// erase the audit trail of what that key already did.
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint
+				WHERE conname = 'api_request_logs_api_key_fk'
+				  AND conrelid = 'api_request_logs'::regclass
+			) THEN
+				ALTER TABLE api_request_logs
+				ADD CONSTRAINT api_request_logs_api_key_fk
+				FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE SET NULL;
+			END IF;
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint
+				WHERE conname = 'api_request_logs_user_fk'
+				  AND conrelid = 'api_request_logs'::regclass
+			) THEN
+				ALTER TABLE api_request_logs
+				ADD CONSTRAINT api_request_logs_user_fk
+				FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+			END IF;
+		END $$`,
+
+		// Superseded by listing_reviews and referenced by no code at all;
+		// leaving it invites someone to write against the wrong table.
+		`DROP TABLE IF EXISTS reviews`,
+	}
+	for _, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("Relational integrity migration completed")
 	return nil
 }
 

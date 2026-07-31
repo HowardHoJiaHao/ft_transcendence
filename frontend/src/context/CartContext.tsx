@@ -72,9 +72,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 			return;
 		}
 		setItems(prev => {
+			// A listing is one indivisible lot, so re-adding it replaces the
+			// entry rather than stacking a second copy the seller cannot fill.
 			const existing = prev.find(i => i.id === product.id);
 			if (existing)
-				return prev.map(i => i.id === product.id ? {...i, quantity: i.quantity + quantity } : i);
+				return prev.map(i => i.id === product.id ? {...i, ...product, quantity } : i);
 			return [...prev, { ...product, quantity}]
 		})
 	}
@@ -99,7 +101,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 	const clearCart = () => setItems([]);
 
 	const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-	const itemCount = items.reduce((sum, i) => sum + i.quantity, 0 );
+	// Each listing is bought as one whole lot, so the badge counts listings, not
+	// units -- a single lot of 6 is one thing to buy, not six.
+	const itemCount = items.length;
 
 	return (
 		<CartContext.Provider value={{

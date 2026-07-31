@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/components/Toast/ToastContext'
+import { useI18n } from '@/context/LanguageContext'
 import Header from '@/components/Header/Header'
+import ListingImage from '@/components/ListingImage/ListingImage'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -33,6 +35,7 @@ export default function CartPage() {
 	const { items, removeFromCart, updateQuantity, clearCart, total } = useCart();
 	const { user } = useAuth();
 	const { showToast } = useToast();
+	const { t } = useI18n();
 	const router = useRouter();
 	const [activeTab, setActiveTab] = useState<'cart' | 'purchases'>('cart');
 	const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -40,23 +43,16 @@ export default function CartPage() {
 	const [orders, setOrders] = useState<PurchaseOrder[]>([]);
 	const [ordersLoading, setOrdersLoading] = useState(false);
 	const [ordersLoaded, setOrdersLoaded] = useState(false);
-	const getImageUrl = (url: string) => {
-		if (!url)
-			return 'https://via.placeholder.com/100';
-		if (url.startsWith('http'))
-			return url;
-		return `/${url}`;
-	};
 	const handleCheckout = async () => {
 		setCheckoutError('');
 		if (!user) {
-			showToast('Please login first', 'error');
+			showToast(t('cart.loginFirst'), 'error');
 			router.push('/login');
 			return;
 		}
 		const token = localStorage.getItem('token');
 		if (!token) {
-			showToast('Please login again', 'error');
+			showToast(t('cart.loginAgain'), 'error');
 			router.push('/login');
 			return;
 		}
@@ -78,29 +74,31 @@ export default function CartPage() {
 			});
 			const data = await res.json().catch(() => ({})) as { error?: string };
 			if (!res.ok) {
-				const message = data.error || 'Checkout failed';
+				const message = data.error || t('cart.checkoutFailed');
 				setCheckoutError(message);
 				showToast(message, 'error');
 				return;
 			}
 			clearCart();
-			showToast('Checkout successful', 'success');
+			showToast(t('cart.checkoutSuccess'), 'success');
 		} catch (err) {
-			setCheckoutError('Network error during checkout');
-			showToast('Network error during checkout', 'error');
+			setCheckoutError(t('cart.checkoutNetworkError'));
+			showToast(t('cart.checkoutNetworkError'), 'error');
 		} finally {
 			setIsCheckingOut(false);
 		}
 	};
 	const statusLabel = (status: string) => {
+		// Mirrors the seller's "Pending Delivery" tab, so both sides of a sale
+		// name the same waiting state identically.
 		if (status === 'pending')
-			return 'Seller preparing';
+			return t('cart.statusPending');
 		if (status === 'completed')
-			return 'Delivered / Completed';
+			return t('cart.statusCompleted');
 		if (status === 'cancelled')
-			return 'Cancelled';
+			return t('cart.statusCancelled');
 		if (status === 'refunded')
-			return 'Refunded';
+			return t('cart.statusRefunded');
 		return status;
 	};
 	const formatDate = (value: string) => {
@@ -128,7 +126,7 @@ export default function CartPage() {
 			.then(async (res) => {
 				if (!res.ok) {
 					const data = await res.json().catch(() => ({})) as { error?: string };
-					throw new Error(data.error || 'Failed to load purchases');
+					throw new Error(data.error || t('cart.loadPurchasesFailed'));
 				}
 				return res.json();
 			})
@@ -136,14 +134,14 @@ export default function CartPage() {
 				setOrders(Array.isArray(data) ? data : []);
 				setOrdersLoaded(true);
 			})
-			.catch((err) => showToast(err instanceof Error ? err.message : 'Failed to load purchases', 'error'))
+			.catch((err) => showToast(err instanceof Error ? err.message : t('cart.loadPurchasesFailed'), 'error'))
 			.finally(() => setOrdersLoading(false));
-	}, [activeTab, ordersLoaded, showToast, user]);
+	}, [activeTab, ordersLoaded, showToast, t, user]);
 
 	const renderEmptyCart = () => (
 		<div className="text-center px-5 py-[100px]">
-			<h2 className="mb-5 text-[#666]">Your cart is empty</h2>
-			<Link href="/" className="btn btn-primary">Continue Shopping</Link>
+			<h2 className="mb-5 text-[#666]">{t('cart.empty')}</h2>
+			<Link href="/" className="btn btn-primary">{t('cart.continueShopping')}</Link>
 		</div>
 	);
 
@@ -151,18 +149,18 @@ export default function CartPage() {
 		if (!user) {
 			return (
 				<div className="text-center px-5 py-[100px]">
-					<h2 className="mb-5 text-[#666]">Please login to view purchases</h2>
-					<Link href="/login" className="btn btn-primary">Login</Link>
+					<h2 className="mb-5 text-[#666]">{t('cart.loginToView')}</h2>
+					<Link href="/login" className="btn btn-primary">{t('cart.login')}</Link>
 				</div>
 			);
 		}
 		if (ordersLoading)
-			return <p className="text-[#666] py-8">Loading purchases...</p>;
+			return <p className="text-[#666] py-8">{t('cart.loadingPurchases')}</p>;
 		if (orders.length === 0) {
 			return (
 				<div className="text-center px-5 py-[100px]">
-					<h2 className="mb-5 text-[#666]">No purchases yet</h2>
-					<Link href="/" className="btn btn-primary">Start Shopping</Link>
+					<h2 className="mb-5 text-[#666]">{t('cart.noPurchases')}</h2>
+					<Link href="/" className="btn btn-primary">{t('cart.startShopping')}</Link>
 				</div>
 			);
 		}
@@ -170,11 +168,11 @@ export default function CartPage() {
 			<div className="flex flex-col gap-4">
 				{orders.map(order => (
 					<div key={order.id} className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] max-[768px]:flex-wrap">
-						<img src={getImageUrl(order.listingImage)} alt={order.listingTitle} className="w-20 h-20 object-cover rounded-lg"/>
+						<ListingImage src={order.listingImage} alt={order.listingTitle} className="w-20 h-20 object-cover rounded-lg"/>
 						<div className="flex-1">
 							<h3 className="text-base mb-1">{order.listingTitle}</h3>
-							<p className="text-[#666] text-[13px] mt-1 mb-0">Seller: {order.sellerName || 'Seller'}</p>
-							<p className="text-[#666] text-[13px] mt-1 mb-0">Ordered {formatDate(order.createdAt)} · Qty {order.quantity}</p>
+							<p className="text-[#666] text-[13px] mt-1 mb-0">{t('cart.seller', { name: order.sellerName || t('cart.sellerFallback') })}</p>
+							<p className="text-[#666] text-[13px] mt-1 mb-0">{t('cart.orderedOn', { date: formatDate(order.createdAt), quantity: order.quantity })}</p>
 						</div>
 						<div className="flex flex-col items-end gap-2 ml-auto min-w-[160px] max-[768px]:items-start max-[768px]:ml-0 max-[768px]:w-full">
 							<span className={`rounded-full inline-block text-xs font-bold px-3 py-[5px] ${STATUS_BADGE_STYLES[order.status] || ''}`}>
@@ -192,13 +190,13 @@ export default function CartPage() {
 		<main>
           <Header />
             <div className="max-w-[1000px] mx-auto p-6">
-			  <h1 className="mb-6 text-[#333]">{activeTab === 'cart' ? `Shopping Cart (${items.length} items)` : 'My Purchases'}</h1>
+			  <h1 className="mb-6 text-[#333]">{activeTab === 'cart' ? t('cart.title', { count: items.length }) : t('cart.purchasesTitle')}</h1>
 			  <div className="flex gap-2 mb-6 border-b border-[#e5e5e5]">
 				<button className={`bg-transparent cursor-pointer text-[15px] font-semibold px-4 py-3 border-0 border-solid border-b-[3px] ${activeTab === 'cart' ? 'text-[#111] border-b-[#111]' : 'text-[#666] border-b-transparent hover:text-[#111]'}`} onClick={() => setActiveTab('cart')}>
-					Cart
+					{t('cart.tabCart')}
 				</button>
 				<button className={`bg-transparent cursor-pointer text-[15px] font-semibold px-4 py-3 border-0 border-solid border-b-[3px] ${activeTab === 'purchases' ? 'text-[#111] border-b-[#111]' : 'text-[#666] border-b-transparent hover:text-[#111]'}`} onClick={() => setActiveTab('purchases')}>
-					My Purchases
+					{t('cart.tabPurchases')}
 				</button>
 			  </div>
 
@@ -207,41 +205,41 @@ export default function CartPage() {
 			    <div className="flex flex-col gap-4">
 				  {items.map(item => (
 					<div key={item.id} className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] max-[768px]:flex-wrap">
-					  <img src={getImageUrl(item.image)} alt={item.title} className="w-20 h-20 object-cover rounded-lg"/>
+					  <ListingImage src={item.image} alt={item.title} className="w-20 h-20 object-cover rounded-lg"/>
 					  <div className="flex-1">
 						<h3 className="text-base mb-1">{item.title}</h3>
 						<p className="text-[#059669] font-bold">RM {item.price.toFixed(2)}</p>
 					  </div>
-					  <div className="quantitySelector">
-						<button className="quantityBtn" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={isCheckingOut}>-</button>
-						<span className="quantityDisplay"> {item.quantity} </span>
-						<button className="quantityBtn "onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={isCheckingOut}>+</button>
-					  </div>
+					  {/* Listings sell as a whole lot, so the quantity is the
+					      listing's own and cannot be adjusted here. */}
+					  <span className="text-[#666] text-sm min-w-20 text-center">
+						{item.quantity > 1 ? t('cart.lotOf', { count: item.quantity }) : t('cart.qtyOne')}
+					  </span>
 					  <p className="font-bold min-w-20 text-right">RM {(item.price * item.quantity).toFixed(2)}</p>
-					  <button className="bg-none border-none text-[#ef4444] cursor-pointer text-lg px-2 py-1 hover:bg-[#fef2f2] hover:rounded disabled:cursor-not-allowed disabled:opacity-50" onClick={() => removeFromCart(item.id)} disabled={isCheckingOut}>✕</button>
+					  <button className="bg-none border-none text-[#ef4444] cursor-pointer text-lg px-2 py-1 hover:bg-[#fef2f2] hover:rounded disabled:cursor-not-allowed disabled:opacity-50" aria-label={t('cart.remove', { title: item.title })} onClick={() => removeFromCart(item.id)} disabled={isCheckingOut}>✕</button>
 					</div>
 				  ))}
 				</div>
 
 				<div className="bg-white p-5 rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] h-fit sticky top-6">
-				  <h3 className="mb-4 pb-3 border-b border-[#eee]">Order Summary</h3>
+				  <h3 className="mb-4 pb-3 border-b border-[#eee]">{t('cart.orderSummary')}</h3>
 				  <div className="flex justify-between mb-3 text-[#666]">
-				    <span>Subtotal</span>
+				    <span>{t('cart.subtotal')}</span>
 					<span>RM {total.toFixed(2)}</span>
 				  </div>
 				  <div className="flex justify-between mb-3 text-[#666]">
-					<span>Shipping</span>
-					<span>Free</span>
+					<span>{t('cart.shipping')}</span>
+					<span>{t('cart.free')}</span>
 				  </div>
 				  <div className="flex justify-between mb-3 text-lg font-bold text-[#333] pt-3 border-t border-[#eee]">
-					<span>Total</span>
+					<span>{t('cart.total')}</span>
 					<span>RM {total.toFixed(2)}</span>
 				  </div>
 				  {checkoutError && <p className="text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] rounded p-2.5 mt-3 mb-0 text-sm">{checkoutError}</p>}
 				  <button className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }} onClick={handleCheckout} disabled={isCheckingOut}>
-					{isCheckingOut ? 'Checking out...' : 'Checkout'}
+					{isCheckingOut ? t('cart.checkingOut') : t('cart.checkout')}
 				  </button>
-				  <button className="btn btn-secondary" style={{ width: '100%', marginTop: '8px' }} onClick={clearCart} disabled={isCheckingOut}>Clear cart</button>
+				  <button className="btn btn-secondary" style={{ width: '100%', marginTop: '8px' }} onClick={clearCart} disabled={isCheckingOut}>{t('cart.clearCart')}</button>
 				</div>
 			  </div>
 			  )}

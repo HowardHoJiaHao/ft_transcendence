@@ -87,9 +87,9 @@ export default function FriendPage()
 		<main>
 		  <Header />
 			<div className="p-5 max-w-[800px] mx-auto">
-			  <h1 className="text-2xl mb-5">Your Friends</h1>
+			  <h1 className="text-2xl mb-5">{t('friends.title')}</h1>
 			  {friendList.length === 0 ? (
-				<div className="text-center text-[#666] text-lg mt-[50px]">No Friends yet.</div>
+				<div className="text-center text-[#666] text-lg mt-[50px]">{t('friends.empty')}</div>
 			  ) : (
 				<ul className="list-none p-0">
 				  {friendList.map((friend) => (
@@ -108,7 +108,7 @@ export default function FriendPage()
 						<div><OnlineStatus userId={friend.id}/></div>
 					  </Link>
 					  <div className="flex items-center gap-2">
-					    <button className="bg-transparent border-none text-[#ff6b6b] cursor-pointer text-base" onClick={(e) => deleteFriend(friend.id, e)} title="Delete friend">x</button>
+					    <button className="bg-transparent border-none text-[#ff6b6b] cursor-pointer text-base" onClick={(e) => deleteFriend(friend.id, e)} title={t('friends.delete')} aria-label={t('friends.delete')}>x</button>
 					  </div>
 					</li>
 				  ))}

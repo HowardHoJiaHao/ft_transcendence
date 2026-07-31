@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -97,7 +98,9 @@ func TestCreateOrdersRejectsUnsafeRequestsBeforeStartingTransaction(t *testing.T
 	}
 }
 
-func TestCreateOrdersLocksStockCommitsAndMarksSold(t *testing.T) {
+// Checkout reserves the listing rather than selling it: 'sold' is reached only
+// when the seller confirms delivery.
+func TestCreateOrdersLocksStockCommitsAndMarksPending(t *testing.T) {
 	gormDB, mock := newTestGormDB(t)
 	now := time.Now()
 
@@ -113,7 +116,7 @@ func TestCreateOrdersLocksStockCommitsAndMarksSold(t *testing.T) {
 			"total_price", "status", "payment_method", "created_at", "updated_at",
 		}).AddRow(1001, 42, 7, 10, 2, 100.0, "pending", "meetup", now, now))
 	mock.ExpectExec("UPDATE listings").
-		WithArgs(0, "sold", 10).
+		WithArgs(0, "pending", 10).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
@@ -157,9 +160,10 @@ func TestCreateOrdersPersistsSellerNotificationBeforeCommit(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "buyer_id", "seller_id", "listing_id", "quantity",
 			"total_price", "status", "payment_method", "created_at", "updated_at",
-		}).AddRow(1001, 42, 7, 10, 1, 50.0, "pending", "meetup", now, now))
+		}).AddRow(1001, 42, 7, 10, 2, 100.0, "pending", "meetup", now, now))
+	// Buying the lot always empties it, so the listing goes straight to sold.
 	mock.ExpectExec("UPDATE listings").
-		WithArgs(1, "active", 10).
+		WithArgs(0, "pending", 10).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery("SELECT title FROM listings").
 		WithArgs(10).
@@ -173,7 +177,7 @@ func TestCreateOrdersPersistsSellerNotificationBeforeCommit(t *testing.T) {
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/orders",
-		bytes.NewBufferString(`{"items":[{"listingId":10,"quantity":1}]}`),
+		bytes.NewBufferString(`{"items":[{"listingId":10,"quantity":2}]}`),
 	)
 	request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	recorder := httptest.NewRecorder()
@@ -200,6 +204,10 @@ func TestCompleteOrderPersistsBuyerNotificationBeforeCommit(t *testing.T) {
 	mock.ExpectQuery("UPDATE orders").
 		WithArgs(55, 7).
 		WillReturnRows(sqlmock.NewRows([]string{"buyer_id", "listing_id"}).AddRow(42, 10))
+	// Delivery is what turns the reserved listing into a sold one.
+	mock.ExpectExec("UPDATE listings").
+		WithArgs(10).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery("SELECT title FROM listings").
 		WithArgs(10).
 		WillReturnRows(sqlmock.NewRows([]string{"title"}).AddRow("Astrox 99"))
@@ -236,6 +244,9 @@ func TestCreateOrdersRejectsOwnListingAndInsufficientStock(t *testing.T) {
 	}{
 		{name: "own listing", sellerID: 42, stock: 5, quantity: 1, wantStatus: http.StatusForbidden},
 		{name: "insufficient stock", sellerID: 7, stock: 1, quantity: 2, wantStatus: http.StatusConflict},
+		// Listings sell as a whole lot: taking only part of one is refused, so
+		// a listing can never sit half-sold and invisible to the Sold tab.
+		{name: "partial lot", sellerID: 7, stock: 5, quantity: 2, wantStatus: http.StatusConflict},
 	}
 
 	for _, test := range tests {
@@ -278,13 +289,13 @@ func TestCreateOrdersRollsBackWhenStockUpdateFails(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"seller_id", "price", "status", "stock_quantity"}).
 			AddRow(7, 50.0, "active", 3))
 	mock.ExpectQuery("INSERT INTO orders").
-		WithArgs(42, 7, 10, 1, 50.0, "meetup").
+		WithArgs(42, 7, 10, 3, 150.0, "meetup").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "buyer_id", "seller_id", "listing_id", "quantity",
 			"total_price", "status", "payment_method", "created_at", "updated_at",
-		}).AddRow(1001, 42, 7, 10, 1, 50.0, "pending", "meetup", now, now))
+		}).AddRow(1001, 42, 7, 10, 3, 150.0, "pending", "meetup", now, now))
 	mock.ExpectExec("UPDATE listings").
-		WithArgs(2, "active", 10).
+		WithArgs(0, "pending", 10).
 		WillReturnError(errors.New("database write failed"))
 	mock.ExpectRollback()
 
@@ -292,7 +303,7 @@ func TestCreateOrdersRollsBackWhenStockUpdateFails(t *testing.T) {
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/orders",
-		bytes.NewBufferString(`{"items":[{"listingId":10,"quantity":1}]}`),
+		bytes.NewBufferString(`{"items":[{"listingId":10,"quantity":3}]}`),
 	)
 	request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	recorder := httptest.NewRecorder()
@@ -339,9 +350,14 @@ func TestGetOrderByIDForbidsUnrelatedUser(t *testing.T) {
 
 func TestCompleteOrderScopesUpdateToAuthenticatedSeller(t *testing.T) {
 	gormDB, mock := newTestGormDB(t)
-	mock.ExpectExec("UPDATE orders").
+	// Completing an order also sells its listing, so the two writes share a
+	// transaction. An order belonging to another seller matches no row, and
+	// the whole thing rolls back.
+	mock.ExpectBegin()
+	mock.ExpectQuery("UPDATE orders").
 		WithArgs(99, 42).
-		WillReturnResult(sqlmock.NewResult(0, 0))
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectRollback()
 
 	e := echo.New()
 	request := httptest.NewRequest(http.MethodPatch, "/orders/99/complete", nil)

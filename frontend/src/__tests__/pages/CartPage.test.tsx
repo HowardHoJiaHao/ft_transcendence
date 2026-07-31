@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LanguageProvider } from '@/context/LanguageContext';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -47,6 +48,14 @@ vi.mock('next/link', () => ({
 
 import CartPage from '@/app/(user)/cart/page';
 
+// The page reads its copy through useI18n, so it needs the real provider —
+// which also keeps these assertions checking the English messages users see.
+const renderCartPage = () => render(
+  <LanguageProvider>
+    <CartPage />
+  </LanguageProvider>,
+);
+
 describe('CartPage checkout', () => {
   beforeEach(() => {
     mocks.push.mockReset();
@@ -66,7 +75,7 @@ describe('CartPage checkout', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const user = userEvent.setup();
-    render(<CartPage />);
+    renderCartPage();
     await user.click(screen.getByRole('button', { name: 'Checkout' }));
 
     expect(mocks.showToast).toHaveBeenCalledWith('Please login first', 'error');
@@ -83,7 +92,7 @@ describe('CartPage checkout', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const user = userEvent.setup();
-    render(<CartPage />);
+    renderCartPage();
     await user.click(screen.getByRole('button', { name: 'Checkout' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
@@ -112,7 +121,7 @@ describe('CartPage checkout', () => {
     }));
 
     const user = userEvent.setup();
-    render(<CartPage />);
+    renderCartPage();
     await user.click(screen.getByRole('button', { name: 'Checkout' }));
 
     expect(await screen.findByText('Insufficient stock for listing')).toBeInTheDocument();

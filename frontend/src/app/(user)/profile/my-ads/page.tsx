@@ -156,6 +156,7 @@ function MyAdsPageInner() {
   const [loading, setLoading] = useState(true);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [completingOrderId, setCompletingOrderId] = useState<number | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
 
   // Deleting a listing is irreversible, so it is confirmed in a dialog that
@@ -615,6 +616,33 @@ function MyAdsPageInner() {
       showToast(err instanceof Error ? err.message : 'Network error', 'error');
     } finally {
       setStatusChangingId(null);
+    }
+  };
+
+  // Cancel a pending order, which puts its listing back on sale. Without this
+  // a sale that falls through would strand the listing in 'pending' forever.
+  const handleCancelOrder = async (orderId: number) => {
+    const token = localStorage.getItem('token') || '';
+    setCancellingOrderId(orderId);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/orders/${orderId}/cancel`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error || 'Failed to cancel order');
+      }
+      setPendingOrders((prev) => prev.filter((order) => order.id !== orderId));
+      setAnalyticsLoaded(false);
+      setItemStats([]);
+      setSummary(null);
+      await refreshSellerData();
+      showToast('Order cancelled and listing relisted', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Network error', 'error');
+    } finally {
+      setCancellingOrderId(null);
     }
   };
 
@@ -1389,6 +1417,15 @@ function MyAdsPageInner() {
                           type="button"
                         >
                           View Details
+                        </button>
+                        <span className="text-[#ccc] text-sm">|</span>
+                        <button
+                          className="bg-none border-none text-sm text-[#c62828] cursor-pointer font-medium p-0 hover:underline disabled:text-[#a3a3a3] disabled:cursor-not-allowed disabled:no-underline"
+                          onClick={() => handleCancelOrder(order.id)}
+                          disabled={cancellingOrderId === order.id}
+                          type="button"
+                        >
+                          {cancellingOrderId === order.id ? 'Cancelling…' : 'Cancel'}
                         </button>
                       </div>
                     </div>

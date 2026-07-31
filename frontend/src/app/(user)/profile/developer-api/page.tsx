@@ -6,6 +6,7 @@ import Header from '@/components/Header/Header';
 import ShopHeader from '@/components/ShopTabs/ShopHeader';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast/ToastContext';
+import { useI18n } from '@/context/LanguageContext';
 
 type APIKeyInfo = {
   id: number;
@@ -283,6 +284,9 @@ export default function DeveloperApiPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { showToast } = useToast();
+  // Only the controls are localised here — the endpoint reference below stays in
+  // English, since it documents literal API paths, fields and JSON payloads.
+  const { t } = useI18n();
 
   const [keys, setKeys] = useState<APIKeyInfo[]>([]);
   const [logs, setLogs] = useState<APIRequestLog[]>([]);
@@ -378,7 +382,7 @@ export default function DeveloperApiPage() {
 
   const handleRevoke = async (id: number) => {
     if (!token) return;
-    if (!confirm('Revoke this API key? It will stop working immediately.')) return;
+    if (!confirm(t('devApi.revokeConfirm'))) return;
     setRevokingId(id);
     try {
       const res = await fetch(buildApiUrl(`/api/v1/api-keys/${id}`), {
@@ -441,7 +445,7 @@ export default function DeveloperApiPage() {
         <div className="flex justify-between items-center mb-1.5 [&_span]:text-[11px] [&_span]:text-[#898781] [&_span]:uppercase [&_span]:tracking-[0.4px] [&_span]:font-bold">
           <span>Example request</span>
           <button className="border border-[#ddd] bg-white rounded-md px-2.5 py-[3px] text-xs font-semibold text-[#444] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]" type="button" onClick={() => copyText(ep.request)}>
-            Copy
+            {t('devApi.copy')}
           </button>
         </div>
         <pre className="m-0 px-3.5 py-3 bg-[#1c1c1a] text-[#e8e6df] rounded-lg overflow-x-auto text-[12.5px] leading-[1.6]">{ep.request}</pre>
@@ -473,21 +477,21 @@ export default function DeveloperApiPage() {
               onClick={() => setActiveTab('keys')}
               type="button"
             >
-              🔐 Create Secret Key
+              {t('devApi.tabKeys')}
             </button>
             <button
               className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'docs' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
               onClick={() => setActiveTab('docs')}
               type="button"
             >
-              📖 API Documentation
+              {t('devApi.tabDocs')}
             </button>
             <button
               className={`px-5 py-2 rounded-[20px] border text-sm cursor-pointer transition-all duration-150 ${activeTab === 'logs' ? 'bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold' : 'bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]'}`}
               onClick={() => setActiveTab('logs')}
               type="button"
             >
-              📋 Request Log
+              {t('devApi.tabLogs')}
             </button>
           </div>
 
@@ -508,7 +512,7 @@ export default function DeveloperApiPage() {
                       placeholder="Key name, e.g. My Inventory Bot"
                     />
                     <button className="border-none rounded-[20px] bg-[#111] text-white text-sm font-semibold px-5 py-[9px] cursor-pointer transition-colors duration-150 hover:bg-[#333] disabled:opacity-55 disabled:cursor-not-allowed" type="submit" disabled={creating}>
-                      {creating ? 'Creating…' : '+ Create key'}
+                      {creating ? t('devApi.creating') : t('devApi.createKey')}
                     </button>
                   </form>
 
@@ -525,7 +529,7 @@ export default function DeveloperApiPage() {
                         type="button"
                         onClick={() => copyText(generatedKey)}
                       >
-                        ⧉ Copy
+                        {t('devApi.copyKey')}
                       </button>
                     </div>
                   )}
@@ -535,7 +539,7 @@ export default function DeveloperApiPage() {
                   <div className="flex justify-between items-center gap-3 mt-0 mx-0 mb-3 max-[640px]:flex-wrap">
                     <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-0">🗝 Your keys</h2>
                     <button className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]" type="button" onClick={refreshKeys}>
-                      ↻ Refresh
+                      {t('devApi.refresh')}
                     </button>
                   </div>
                   {loadingKeys ? (
@@ -580,7 +584,7 @@ export default function DeveloperApiPage() {
                                   disabled={!key.isActive || revokingId === key.id}
                                   onClick={() => handleRevoke(key.id)}
                                 >
-                                  {revokingId === key.id ? 'Revoking…' : 'Revoke'}
+                                  {revokingId === key.id ? t('devApi.revoking') : t('devApi.revoke')}
                                 </button>
                               </td>
                             </tr>
@@ -713,7 +717,7 @@ export default function DeveloperApiPage() {
                 <div className="flex justify-between items-center gap-3 mt-0 mx-0 mb-3 max-[640px]:flex-wrap">
                   <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-0">📋 Request log</h2>
                   <button className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]" type="button" onClick={refreshLogs}>
-                    ↻ Refresh
+                    {t('devApi.refresh')}
                   </button>
                 </div>
                 <p className="text-[#898781] text-[13.5px] leading-[1.55] mt-0 mx-0 mb-3.5">
@@ -769,6 +773,7 @@ export default function DeveloperApiPage() {
                         <button
                           className="w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]"
                           type="button"
+                          aria-label={t('devApi.prevPage')}
                           disabled={clampedLogPage === 1}
                           onClick={() => setLogPage((p) => Math.max(1, p - 1))}
                         >
@@ -779,6 +784,7 @@ export default function DeveloperApiPage() {
                             key={i + 1}
                             className={`w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${clampedLogPage === i + 1 ? 'bg-[#2563eb] text-white border-[#2563eb]' : 'bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]'}`}
                             type="button"
+                            aria-label={t('devApi.goToPage', { page: i + 1 })}
                             onClick={() => setLogPage(i + 1)}
                           >
                             {i + 1}
@@ -787,6 +793,7 @@ export default function DeveloperApiPage() {
                         <button
                           className="w-9 h-9 rounded border cursor-pointer text-sm flex items-center justify-center transition-[border-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-white border-[#ddd] text-[#444] enabled:hover:border-[#888]"
                           type="button"
+                          aria-label={t('devApi.nextPage')}
                           disabled={clampedLogPage === totalLogPages}
                           onClick={() => setLogPage((p) => Math.min(totalLogPages, p + 1))}
                         >

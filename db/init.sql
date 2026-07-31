@@ -67,7 +67,9 @@ CREATE TABLE IF NOT EXISTS listings (
     is_new BOOLEAN DEFAULT FALSE,
     is_featured BOOLEAN DEFAULT FALSE,
     stock_quantity INT NOT NULL DEFAULT 1 CHECK (stock_quantity >= 0),
-    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'sold', 'archived')),
+    -- 'pending' is the window between checkout and the seller confirming
+    -- delivery; only a delivered order makes a listing genuinely 'sold'.
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'pending', 'sold', 'archived')),
     views_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
@@ -124,19 +126,9 @@ CREATE TABLE IF NOT EXISTS messages (
     FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Create reviews table
-CREATE TABLE IF NOT EXISTS reviews (
-    id SERIAL PRIMARY KEY,
-    reviewer_id INT NOT NULL,
-    reviewee_id INT NOT NULL,
-    listing_id INT,
-    rating INT CHECK (rating >= 1 AND rating <= 5),
-    comment TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (reviewee_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL
-);
+-- The former seller-review table lived here. It was superseded by
+-- listing_reviews below and referenced by no code, so it has been removed
+-- rather than left as a second place reviews might be written.
 
 -- Create orders table
 CREATE TABLE IF NOT EXISTS orders (
@@ -152,7 +144,10 @@ CREATE TABLE IF NOT EXISTS orders (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
     FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
+    -- RESTRICT, not CASCADE: an order is financial history for both parties.
+    -- Cascading would let a seller erase a buyer's purchase record, and the
+    -- revenue the seller dashboard reports, just by deleting a listing.
+    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE RESTRICT
 );
 
 -- Product-specific reviews are intentionally separate from the older
@@ -194,7 +189,11 @@ CREATE TABLE IF NOT EXISTS api_request_logs (
     path VARCHAR(255),
     status INT,
     ip_address VARCHAR(64),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- SET NULL rather than CASCADE: revoking a key or deleting a user must not
+    -- erase the audit trail of what that key already did.
+    FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE SET NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_request_logs_key
@@ -208,7 +207,8 @@ CREATE TABLE IF NOT EXISTS analytics_events (
     event_data JSON,
     listing_id INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_analytics_events_listing_id ON analytics_events(listing_id);

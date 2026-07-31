@@ -138,8 +138,15 @@ func createOrdersWithNotifications(
 		if status != "active" {
 			return c.JSON(409, map[string]string{"error": "Listing is not available"})
 		}
-		if stockQuantity < item.Quantity {
-			return c.JSON(409, map[string]string{"error": "Insufficient stock for listing"})
+		// Listings sell as a whole lot: the buyer takes the entire stock or
+		// nothing. A seller wanting to sell smaller amounts splits the lot into
+		// separate listings. This keeps a listing's life binary -- active or
+		// sold -- with no partially-depleted middle state that never surfaces
+		// on the seller's Sold tab.
+		if item.Quantity != stockQuantity {
+			return c.JSON(409, map[string]string{
+				"error": "This listing must be bought in full",
+			})
 		}
 
 		totalPrice := price * float64(item.Quantity)
@@ -160,11 +167,12 @@ func createOrdersWithNotifications(
 			return c.JSON(500, map[string]string{"error": "Failed to create order"})
 		}
 
-		remainingStock := stockQuantity - item.Quantity
-		listingStatus := "active"
-		if remainingStock == 0 {
-			listingStatus = "sold"
-		}
+		// The whole lot is taken, so the listing leaves the marketplace -- but
+		// it is only reserved, not sold. It becomes 'sold' when the seller
+		// confirms delivery, so the Sold tab reflects completed handovers
+		// rather than merely paid-for orders.
+		remainingStock := 0
+		listingStatus := "pending"
 		if _, err = tx.Exec(`
 			UPDATE listings
 			SET stock_quantity = $1, status = $2, updated_at = CURRENT_TIMESTAMP
@@ -409,6 +417,17 @@ func completeOrderWithNotifications(
 		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
 	}
 
+	// Delivery confirmed, so the reserved listing is now genuinely sold.
+	if _, err := tx.Exec(`
+		UPDATE listings
+		SET status = 'sold', updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1 AND status = 'pending'`,
+		listingID,
+	); err != nil {
+		log.Printf("Error marking listing sold: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
+	}
+
 	var listingTitle string
 	if err := tx.QueryRow(`SELECT title FROM listings WHERE id = $1`, listingID).Scan(&listingTitle); err != nil {
 		return c.JSON(500, map[string]string{"error": "Failed to create order notification"})
@@ -454,25 +473,113 @@ func completeOrderWithoutNotifications(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(400, map[string]string{"error": "Invalid order ID"})
 	}
 
-	result, err := sqlDB.Exec(`
+	// Completing an order and selling its listing has to be one unit of work,
+	// or a crash between them leaves a delivered order against a listing still
+	// showing as reserved.
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed to start order update"})
+	}
+	defer tx.Rollback()
+
+	var listingID int
+	err = tx.QueryRow(`
 		UPDATE orders
 		SET status = 'completed', updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1 AND seller_id = $2 AND status = 'pending'`,
+		WHERE id = $1 AND seller_id = $2 AND status = 'pending'
+		RETURNING listing_id`,
 		orderID, sellerID,
-	)
+	).Scan(&listingID)
+	if err == sql.ErrNoRows {
+		return c.JSON(409, map[string]string{"error": "Order is not pending or you do not own it"})
+	}
 	if err != nil {
 		log.Printf("Error completing order: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
 	}
-	affected, err := result.RowsAffected()
-	if err != nil {
+
+	if _, err := tx.Exec(`
+		UPDATE listings
+		SET status = 'sold', updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1 AND status = 'pending'`,
+		listingID,
+	); err != nil {
+		log.Printf("Error marking listing sold: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
 	}
-	if affected == 0 {
-		return c.JSON(409, map[string]string{"error": "Order is not pending or you do not own it"})
+
+	if err := tx.Commit(); err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
 	}
 
 	return c.JSON(200, map[string]string{"message": "Order marked as delivered"})
+}
+
+// cancelOrder releases a pending order and puts its listing back on sale.
+//
+// Without this there is no way out of the reserved state: checkout moves a
+// listing to 'pending' with zero stock, and only delivery moved it on. A sale
+// that falls through would otherwise strand the listing forever -- invisible to
+// buyers, unsellable by its owner.
+//
+// Either party may cancel while the order is still pending; once delivered it
+// is history and stays put.
+func cancelOrder(c echo.Context, gormDB *gorm.DB) error {
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Database connection error"})
+	}
+
+	userID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(401, map[string]string{"error": "Unauthorized"})
+	}
+
+	orderID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "Invalid order ID"})
+	}
+
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed to start order update"})
+	}
+	defer tx.Rollback()
+
+	var listingID int
+	var quantity int
+	err = tx.QueryRow(`
+		UPDATE orders
+		SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1 AND status = 'pending' AND (buyer_id = $2 OR seller_id = $2)
+		RETURNING listing_id, quantity`,
+		orderID, userID,
+	).Scan(&listingID, &quantity)
+	if err == sql.ErrNoRows {
+		return c.JSON(409, map[string]string{"error": "Order is not pending or you are not part of it"})
+	}
+	if err != nil {
+		log.Printf("Error cancelling order: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to cancel order"})
+	}
+
+	// Give the lot back exactly as it was taken, so the listing returns to sale
+	// with the quantity the buyer had reserved.
+	if _, err := tx.Exec(`
+		UPDATE listings
+		SET status = 'active', stock_quantity = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2 AND status = 'pending'`,
+		quantity, listingID,
+	); err != nil {
+		log.Printf("Error restoring listing after cancellation: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to cancel order"})
+	}
+
+	if err := tx.Commit(); err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed to cancel order"})
+	}
+
+	return c.JSON(200, map[string]string{"message": "Order cancelled"})
 }
 
 func getOrderByID(c echo.Context, gormDB *gorm.DB) error {

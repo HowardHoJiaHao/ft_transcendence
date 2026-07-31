@@ -88,7 +88,7 @@ export default function ProfilePage() {
     if (resendCd > 0) return false;
 
     if (!ctxUser?.email.trim()) {
-      showToast("Email is required to resend OTP", "error");
+      showToast(t("profile.emailRequiredForOtp"), "error");
       return false;
     }
 
@@ -102,22 +102,19 @@ export default function ProfilePage() {
       const data = await res.json();
       if (res.ok) {
         if (!data.tempToken) {
-          showToast(
-            "Resend succeeded but no tempToken returned. Please try login again.",
-            "error",
-          );
+          showToast(t("profile.resendNoToken"), "error");
           return false;
         }
         setTempToken(data.tempToken);
         setResendCd(60);
-        showToast(data.message ?? "OTP resent", "success");
+        showToast(data.message ?? t("profile.otpResent"), "success");
         return true;
       }
-      showToast(data.error ?? "Failed to resend OTP", "error");
+      showToast(data.error ?? t("profile.resendFailed"), "error");
       return false;
     } catch (err) {
       console.error(err);
-      showToast("Network error", "error");
+      showToast(t("profile.networkError"), "error");
       return false;
     }
   };
@@ -132,10 +129,7 @@ export default function ProfilePage() {
   const handleOtp = async () => {
     try {
       if (!tempToken.trim() || !otpCode.trim()) {
-        showToast(
-          "tempToken and otpCode are required. Please request a new OTP and enter the code.",
-          "error",
-        );
+        showToast(t("profile.otpFieldsRequired"), "error");
         return;
       }
       const res = await fetch("/api/v1/auth/verify-otp", {
@@ -156,7 +150,7 @@ export default function ProfilePage() {
         {
           setShowOtp(false);
           setOtpCode("");
-          showToast("OTP verified", "success");
+          showToast(t("profile.otpVerified"), "success");
           router.push("/profile/change-email");
         }
       } else {
@@ -165,7 +159,7 @@ export default function ProfilePage() {
       }
     } catch (err) {
       console.error(err); //prints error in browser dev console
-      showToast("Network error", "error");
+      showToast(t("profile.networkError"), "error");
     }
   };
 
@@ -195,7 +189,7 @@ export default function ProfilePage() {
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to load profile");
+          throw new Error(data.error || t("profile.loadFailed"));
         }
 
         const data = await res.json();
@@ -203,14 +197,14 @@ export default function ProfilePage() {
         setUser(data.user);
       } catch (err) {
         if (err instanceof Error) setError(err.message);
-        else setError("An unexpected error occured");
+        else setError(t("profile.unexpectedError"));
       } finally {
         setLoading(false);
       }
     };
 
     fetchMe();
-  }, [router]);
+  }, [router, t]);
 
   useEffect(() => {
     if (user) {
@@ -239,13 +233,13 @@ export default function ProfilePage() {
 
   const handleChangeAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!user) {
-      showToast("User not loaded", "error");
+      showToast(t("profile.userNotLoaded"), "error");
       return;
     }
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      showToast("File is too large (max 2MB)", "error");
+      showToast(t("profile.fileTooLarge"), "error");
       return;
     }
 
@@ -270,13 +264,13 @@ export default function ProfilePage() {
         setUser((prev) => (prev ? { ...prev, avatarUrl: newAvatarUrl } : null));
         // Update auth context so avatar reflects everywhere in the app
         updateUser({ avatarUrl: newAvatarUrl });
-        showToast("Avatar updated succesfully", "success");
+        showToast(t("profile.avatarUpdated"), "success");
       } else {
-        showToast("Failed to upload avatar", "error");
+        showToast(t("profile.avatarUploadFailed"), "error");
       }
     } catch (err) {
       console.error(err);
-      showToast("Error uploading file", "error");
+      showToast(t("profile.avatarUploadError"), "error");
     }
   };
 
@@ -298,14 +292,14 @@ export default function ProfilePage() {
         body: JSON.stringify(updatedInputData),
       });
       if (res.ok) {
-        showToast("Profile successfully updated", "success");
+        showToast(t("profile.profileUpdated"), "success");
         const updated = await res.json();
         setUser(updated);
       } else {
-        showToast("Failed to update profile", "error");
+        showToast(t("profile.profileUpdateFailed"), "error");
       }
     } catch (err) {
-      showToast("Connection error. is the server running?", "error");
+      showToast(t("profile.connectionError"), "error");
     }
   };
   if (authLoading || loading)
@@ -313,7 +307,7 @@ export default function ProfilePage() {
       <main className={PAGE}>
         <Header />
         <div className={CONTAINER}>
-          <p className="text-[#898781] text-[15px]">Loading profile…</p>
+          <p className="text-[#898781] text-[15px]">{t("profile.loading")}</p>
         </div>
       </main>
     );
@@ -323,13 +317,13 @@ export default function ProfilePage() {
       <main className={PAGE}>
         <Header />
         <div className={CONTAINER}>
-          <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">👤 My Profile</h1>
+          <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">{t("profile.heading")}</h1>
           <div className={CARD}>
             <p className="bg-[#fdecea] border border-[#f5c6c0] rounded-md text-[#b71c1c] text-sm px-3.5 py-2.5 mt-0 mx-0 mb-4">
               {error}
             </p>
             <button className={BTN_PRIMARY} onClick={() => router.push("/login")}>
-              Go to login
+              {t("profile.goToLogin")}
             </button>
           </div>
         </div>
@@ -352,19 +346,19 @@ export default function ProfilePage() {
             onClick={() => setShowOtp(false)}
             type="button"
           >
-            ← Back
+            {t("profile.back")}
           </button>
 
-          <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">🔐 Verify it&apos;s you</h1>
+          <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">{t("profile.verifyTitle")}</h1>
           <p className="text-[#898781] text-sm mt-[-8px] mx-0 mb-[18px]">
-            We sent a 6-digit code to {user.email}.
+            {t("profile.verifySubtitle", { email: user.email })}
           </p>
 
           <form onSubmit={handleOtpSubmit} className={CARD}>
             <div className="bg-[#eff6ff] border border-[#bfdbfe] rounded-[10px] px-4 py-3 mb-4">
               <p className="text-[13px] text-[#1c5cab] m-0">
-                Verifying in order to change your{" "}
-                <strong>email address</strong>.
+                {t("profile.verifyReasonPrefix")}{" "}
+                <strong>{t("profile.verifyReasonTarget")}</strong>.
               </p>
             </div>
 
@@ -372,7 +366,7 @@ export default function ProfilePage() {
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
-              placeholder="6-digit code"
+              placeholder={t("profile.otpPlaceholder")}
               value={otpCode}
               onChange={(e) => setOtpCode(e.target.value)}
               required
@@ -381,7 +375,7 @@ export default function ProfilePage() {
 
             <div className="flex gap-2.5 items-center mt-4 flex-wrap">
               <button type="submit" className={BTN_PRIMARY}>
-                Verify code
+                {t("profile.verifyCode")}
               </button>
               <button
                 type="button"
@@ -389,7 +383,9 @@ export default function ProfilePage() {
                 onClick={sendOtp}
                 disabled={resendCd > 0}
               >
-                {resendCd > 0 ? `Resend in ${resendCd}s` : "Resend code"}
+                {resendCd > 0
+                  ? t("profile.resendIn", { seconds: resendCd })
+                  : t("profile.resendCode")}
               </button>
             </div>
           </form>
@@ -404,9 +400,9 @@ export default function ProfilePage() {
       <Header />
 
       <div className={CONTAINER}>
-        <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">👤 My Profile</h1>
+        <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">{t("profile.heading")}</h1>
         <p className="text-[#898781] text-sm mt-[-8px] mx-0 mb-[18px]">
-          Manage and protect your account
+          {t("profile.subheading")}
         </p>
 
         {/* ── Identity: avatar + who you are at a glance ── */}
@@ -414,7 +410,7 @@ export default function ProfilePage() {
           <div className="flex gap-5 items-center max-[640px]:flex-col max-[640px]:text-center">
             <img
               src={resolveAvatarUrl(user.avatarUrl)}
-              alt="Profile avatar"
+              alt={t("profile.avatarAlt")}
               className="w-[88px] h-[88px] shrink-0 rounded-full object-cover border border-[#e8e8e6] bg-[#f5f5f3] shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
               onError={(event) => {
                 (event.currentTarget as HTMLImageElement).src = PLACEHOLDER_AVATAR;
@@ -435,24 +431,24 @@ export default function ProfilePage() {
                 onChange={handleChangeAvatar}
               />
               <button type="button" className={`${BTN_SECONDARY} mt-3`} onClick={triggerFileSelect}>
-                📷 Change avatar
+                {t("profile.changeAvatar")}
               </button>
-              <span className="block text-xs text-[#898781] mt-2">JPG or PNG, up to 2 MB.</span>
+              <span className="block text-xs text-[#898781] mt-2">{t("profile.avatarHint")}</span>
             </div>
           </div>
         </div>
 
         {/* ── Account & security: read-only values with their own change flows ── */}
         <div className={CARD}>
-          <h2 className={SECTION_H2}>🔐 Account &amp; security</h2>
+          <h2 className={SECTION_H2}>{t("profile.accountSecurity")}</h2>
 
           <div className={ROW}>
-            <div className={LABEL}>Username</div>
+            <div className={LABEL}>{t("profile.username")}</div>
             <div className={VALUE}>{user.username}</div>
           </div>
 
           <div className={ROW}>
-            <div className={LABEL}>Email</div>
+            <div className={LABEL}>{t("profile.email")}</div>
             <div className={VALUE}>{user.email}</div>
             <button
               className={isGoogleAuthenticated ? BTN_DISABLED : BTN_SECONDARY}
@@ -460,23 +456,23 @@ export default function ProfilePage() {
               title={isGoogleAuthenticated ? t("profile.googleManaged") : undefined}
               onClick={isGoogleAuthenticated ? undefined : startOtpFlow}
             >
-              Change
+              {t("profile.change")}
             </button>
           </div>
 
           <div className={ROW}>
-            <div className={LABEL}>Phone number</div>
-            <div className={user.phoneNo ? VALUE : MUTED}>{user.phoneNo || "Not set"}</div>
+            <div className={LABEL}>{t("profile.phoneNo")}</div>
+            <div className={user.phoneNo ? VALUE : MUTED}>{user.phoneNo || t("profile.notSet")}</div>
             <button
               className={BTN_SECONDARY}
               onClick={() => router.push("/profile/change-phoneNo")}
             >
-              Change
+              {t("profile.change")}
             </button>
           </div>
 
           <div className={ROW}>
-            <div className={LABEL}>Password</div>
+            <div className={LABEL}>{t("profile.password")}</div>
             <div className={`${VALUE} tracking-[0.2em]`}>••••••••</div>
             <button
               className={isGoogleAuthenticated ? BTN_DISABLED : BTN_SECONDARY}
@@ -484,7 +480,7 @@ export default function ProfilePage() {
               title={isGoogleAuthenticated ? t("profile.googleManaged") : undefined}
               onClick={isGoogleAuthenticated ? undefined : () => router.push("/profile/change-password")}
             >
-              Change
+              {t("profile.change")}
             </button>
           </div>
 
@@ -495,38 +491,38 @@ export default function ProfilePage() {
 
         {/* ── Personal details: the only editable-in-place fields ── */}
         <div className={CARD}>
-          <h2 className={SECTION_H2}>📝 Personal details</h2>
+          <h2 className={SECTION_H2}>{t("profile.personalDetails")}</h2>
 
           <div className={ROW}>
             <label className={LABEL} htmlFor="firstName">
-              First name
+              {t("profile.firstName")}
             </label>
             <input
               id="firstName"
               name="firstName"
               value={inputData.firstName}
               onChange={handleChange}
-              placeholder="Your first name"
+              placeholder={t("profile.firstNamePlaceholder")}
               className={INPUT}
             />
           </div>
 
           <div className={ROW}>
             <label className={LABEL} htmlFor="lastName">
-              Last name
+              {t("profile.lastName")}
             </label>
             <input
               id="lastName"
               name="lastName"
               value={inputData.lastName}
               onChange={handleChange}
-              placeholder="Your last name"
+              placeholder={t("profile.lastNamePlaceholder")}
               className={INPUT}
             />
           </div>
 
           <div className={ROW}>
-            <div className={LABEL}>Gender</div>
+            <div className={LABEL}>{t("profile.gender")}</div>
             <div className="flex-1 min-w-0 flex gap-2 items-center flex-wrap">
               <label
                 className={`inline-flex items-center gap-2 px-3.5 py-[7px] rounded-[20px] border text-[13px] cursor-pointer transition-all duration-150 ${inputData.gender === "Male" ? "bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold" : "bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]"}`}
@@ -539,7 +535,7 @@ export default function ProfilePage() {
                   onChange={handleChange}
                   className="accent-[#c2185b]"
                 />
-                Male
+                {t("profile.male")}
               </label>
               <label
                 className={`inline-flex items-center gap-2 px-3.5 py-[7px] rounded-[20px] border text-[13px] cursor-pointer transition-all duration-150 ${inputData.gender === "Female" ? "bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold" : "bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]"}`}
@@ -552,7 +548,7 @@ export default function ProfilePage() {
                   onChange={handleChange}
                   className="accent-[#c2185b]"
                 />
-                Female
+                {t("profile.female")}
               </label>
               <label className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-[20px] border border-[#ccc] bg-white text-[13px] font-medium text-[#444] cursor-pointer transition-all duration-150 hover:border-[#888]">
                 <input
@@ -561,11 +557,11 @@ export default function ProfilePage() {
                   value="PreferNotToTell"
                   checked={false}
                   onChange={() => {
-                    showToast("Please choose your gender! 🏳️‍🌈", "success");
+                    showToast(t("profile.chooseGender"), "success");
                   }}
                   className="accent-[#c2185b]"
                 />
-                Prefer not to tell
+                {t("profile.preferNotToTell")}
               </label>
               {inputData.gender && (
                 <button
@@ -573,7 +569,7 @@ export default function ProfilePage() {
                   className="text-[13px] font-semibold text-[#2563eb] bg-transparent border-none cursor-pointer px-1.5 py-1 hover:underline"
                   onClick={() => setInputData((prev) => ({ ...prev, gender: "" }))}
                 >
-                  Clear
+                  {t("profile.clear")}
                 </button>
               )}
             </div>
@@ -581,7 +577,7 @@ export default function ProfilePage() {
 
           <div className={ROW}>
             <label className={LABEL} htmlFor="dateOfBirth">
-              Date of birth
+              {t("profile.dateOfBirth")}
             </label>
             <div className="flex-1 min-w-0 flex gap-3 items-center flex-wrap">
               <input
@@ -596,7 +592,9 @@ export default function ProfilePage() {
               />
               {user.dateOfBirth && (
                 <span className="text-[13px] text-[#898781]">
-                  currently {new Date(user.dateOfBirth).toLocaleDateString()}
+                  {t("profile.currently", {
+                    date: new Date(user.dateOfBirth).toLocaleDateString(),
+                  })}
                 </span>
               )}
             </div>
@@ -604,10 +602,10 @@ export default function ProfilePage() {
 
           <div className="mt-5 pt-4 border-t border-[#eee] flex items-center gap-3 flex-wrap">
             <button className={BTN_PRIMARY} onClick={handleSave}>
-              Save changes
+              {t("profile.saveChanges")}
             </button>
             <span className="text-xs text-[#898781]">
-              Only the fields in this section are saved by this button.
+              {t("profile.saveHint")}
             </span>
           </div>
         </div>
