@@ -7,7 +7,8 @@ REQUIRE_BREVO ?= 0
 DB_USER ?= transcendence
 DB_NAME ?= transcendence
 
-COMPOSE := docker compose
+WITH_DOCKER_LOG_PATHS := ./scripts/with-docker-log-paths.sh
+COMPOSE := $(WITH_DOCKER_LOG_PATHS) docker compose
 WITH_INFISICAL := INFISICAL_CLI_IMAGE="$(INFISICAL_CLI_IMAGE)" INFISICAL_ENV="$(INFISICAL_ENV)" INFISICAL_PATH="$(INFISICAL_PATH)" REQUIRE_BREVO="$(REQUIRE_BREVO)" ./scripts/with-infisical-env.sh
 
 help:
@@ -57,7 +58,7 @@ check-secrets: check-tools check-infisical-project
 	@$(WITH_INFISICAL) true
 
 setup: check-tools check-infisical-project
-	@$(WITH_INFISICAL) docker compose --env-file .env.infisical up -d --build --force-recreate --wait --wait-timeout 180
+	@$(WITH_INFISICAL) $(WITH_DOCKER_LOG_PATHS) docker compose --env-file .env.infisical up -d --build --force-recreate --wait --wait-timeout 180
 	@echo ""
 	@echo "✅ Full project setup complete."
 	@echo "Application: https://localhost:$${WAF_HTTPS_PORT:-8443}"
@@ -66,10 +67,10 @@ setup: check-tools check-infisical-project
 	@echo "WAF test:    make test-waf"
 
 up: check-tools check-infisical-project
-	@$(WITH_INFISICAL) docker compose --env-file .env.infisical up -d --wait --wait-timeout 180
+	@$(WITH_INFISICAL) $(WITH_DOCKER_LOG_PATHS) docker compose --env-file .env.infisical up -d --wait --wait-timeout 180
 
 restart: check-tools check-infisical-project
-	@$(WITH_INFISICAL) docker compose --env-file .env.infisical up -d --build --force-recreate --wait --wait-timeout 180
+	@$(WITH_INFISICAL) $(WITH_DOCKER_LOG_PATHS) docker compose --env-file .env.infisical up -d --build --force-recreate --wait --wait-timeout 180
 
 build: check-docker
 	$(COMPOSE) build
@@ -149,7 +150,7 @@ clean: check-docker
 
 reset: check-tools check-infisical-project
 	@echo "⚠️  Removing containers and the PostgreSQL data volume. This deletes local database data."
-	@$(WITH_INFISICAL) sh -c 'docker compose --env-file .env.infisical down -v --rmi local && docker compose --env-file .env.infisical up -d --build --wait --wait-timeout 180'
+	@$(WITH_INFISICAL) $(WITH_DOCKER_LOG_PATHS) sh -c 'docker compose --env-file .env.infisical down -v --rmi local && docker compose --env-file .env.infisical up -d --build --wait --wait-timeout 180'
 
 # Legacy aliases now use the secure full-stack workflow so they cannot start a
 # dependency chain without the required injected secrets.
