@@ -85,6 +85,16 @@ func main() {
 	notificationHandler := notifications.NewHandler(notificationService)
 	chatRepo.Notifications = notificationRepo
 	chatHub.Notifications = notificationService
+	stripeConfig := loadStripeConfigFromEnv()
+	stripePayments := newStripePaymentService(
+		rawDB,
+		stripeConfig,
+		newRealStripeCheckoutClient(stripeConfig.SecretKey),
+	)
+	stripeWebhooks := newStripeWebhookService(rawDB, stripeConfig, notificationService)
+	v1.POST("/webhooks/stripe", func(c echo.Context) error {
+		return handleStripeWebhook(c, stripeWebhooks)
+	})
 	go chatHub.Run()
 	chatHandler := chat.NewHandler(chatHub, chatRepo, authService)
 	chatHandler.Notifications = notificationService
@@ -105,7 +115,7 @@ func main() {
 	})
 
 	protected.POST("/orders", func(c echo.Context) error {
-		return createOrdersWithNotifications(c, gormDB, notificationService)
+		return createOrdersWithServices(c, gormDB, notificationService, stripePayments)
 	})
 	protected.GET("/orders", func(c echo.Context) error { return getOrders(c, gormDB) }) // howai AI maybe. merge residue 21 june
 	protected.PUT("/orders/:id/complete", func(c echo.Context) error {
@@ -113,6 +123,12 @@ func main() {
 	})
 	protected.PUT("/orders/:id/cancel", func(c echo.Context) error { return cancelOrder(c, gormDB) })
 	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) }) //howai AI maybe. merge residue 21 june
+	protected.GET("/orders/:id/recommendation-survey", func(c echo.Context) error {
+		return getRecommendationSurvey(c, gormDB)
+	})
+	protected.POST("/orders/:id/recommendation-survey", func(c echo.Context) error {
+		return createRecommendationSurvey(c, gormDB)
+	})
 
 	// Seller dashboard routes
 	protected.GET("/seller/orders", func(c echo.Context) error { return getSellerOrders(c, gormDB) })

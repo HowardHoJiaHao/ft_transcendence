@@ -49,6 +49,11 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 		return nil, nil, nil, fmt.Errorf("notifications migration failed: %w", err)
 	}
 
+	if err := runPaymentsMigration(rawDB); err != nil {
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("payments migration failed: %w", err)
+	}
+
 	if err := runListingReviewsMigration(rawDB); err != nil {
 		_ = rawDB.Close()
 		return nil, nil, nil, fmt.Errorf("listing reviews migration failed: %w", err)
@@ -59,6 +64,11 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 		return nil, nil, nil, fmt.Errorf("relational integrity migration failed: %w", err)
 	}
 
+	if err := runMLTrainingMigration(rawDB); err != nil {
+		_ = rawDB.Close()
+		return nil, nil, nil, fmt.Errorf("ML training migration failed: %w", err)
+	}
+
 	log.Println("Database connected successfully")
 
 	cleanup := func() {
@@ -67,6 +77,76 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 	}
 
 	return rawDB, ormDB, cleanup, nil
+}
+
+func runPaymentsMigration(db *sql.DB) error {
+	migrations := []string{
+		`CREATE TABLE IF NOT EXISTS payments (
+			id BIGSERIAL PRIMARY KEY,
+			checkout_request_id UUID NOT NULL,
+			stripe_idempotency_key VARCHAR(255) NOT NULL,
+			buyer_id INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+			seller_id INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+			provider VARCHAR(20) NOT NULL,
+			currency CHAR(3) NOT NULL,
+			amount_minor BIGINT NOT NULL,
+			platform_fee_minor BIGINT NOT NULL,
+			status VARCHAR(20) NOT NULL,
+			stripe_checkout_session_id TEXT,
+			stripe_checkout_url TEXT,
+			stripe_payment_intent_id TEXT,
+			session_expires_at TIMESTAMP,
+			stock_released BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT payments_checkout_request_unique UNIQUE (checkout_request_id),
+			CONSTRAINT payments_stripe_idempotency_unique UNIQUE (stripe_idempotency_key),
+			CONSTRAINT payments_provider_check CHECK (provider = 'stripe'),
+			CONSTRAINT payments_currency_check CHECK (currency = 'myr'),
+			CONSTRAINT payments_amount_check CHECK (amount_minor > 0),
+			CONSTRAINT payments_fee_check CHECK (
+				platform_fee_minor >= 0 AND platform_fee_minor <= amount_minor
+			),
+			CONSTRAINT payments_status_check CHECK (
+				status IN ('initializing', 'pending', 'paid', 'failed', 'cancelled', 'expired', 'refunded')
+			)
+		)`,
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_id BIGINT`,
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint WHERE conname = 'orders_payment_id_fkey'
+			) THEN
+				ALTER TABLE orders
+					ADD CONSTRAINT orders_payment_id_fkey
+					FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE RESTRICT;
+			END IF;
+		END $$`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_payment_id ON orders(payment_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_payments_buyer_created
+			ON payments(buyer_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_payments_seller_status_created
+			ON payments(seller_id, status, created_at DESC)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_stripe_session_unique
+			ON payments(stripe_checkout_session_id)
+			WHERE stripe_checkout_session_id IS NOT NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_stripe_intent_unique
+			ON payments(stripe_payment_intent_id)
+			WHERE stripe_payment_intent_id IS NOT NULL`,
+		`CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+			stripe_event_id TEXT PRIMARY KEY,
+			event_type TEXT NOT NULL,
+			stripe_object_id TEXT,
+			processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+	}
+	for _, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("Payments migration completed")
+	return nil
 }
 
 func runUsersMigration(db *sql.DB) error {
@@ -368,6 +448,83 @@ func runRelationalIntegrityMigration(db *sql.DB) error {
 		}
 	}
 	log.Println("Relational integrity migration completed")
+	return nil
+}
+
+func runMLTrainingMigration(db *sql.DB) error {
+	migrations := []string{
+		`CREATE TABLE IF NOT EXISTS recommendation_training_feedback (
+			id BIGSERIAL PRIMARY KEY,
+			order_id INT NOT NULL UNIQUE REFERENCES orders(id) ON DELETE CASCADE,
+			buyer_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			age_group VARCHAR(32) NOT NULL CHECK (
+				age_group IN ('under_13', '13-17', '18-25', '26-35', '36-45', '46_plus')
+			),
+			gender VARCHAR(32) NOT NULL CHECK (
+				gender IN ('male', 'female', 'prefer_not_to_say')
+			),
+			experience_level VARCHAR(32) NOT NULL CHECK (
+				experience_level IN (
+					'less_than_6_months', '6_months_1_year', '1-3_years',
+					'3-5_years', 'more_than_5_years'
+				)
+			),
+			play_style VARCHAR(32) NOT NULL CHECK (
+				play_style IN ('attacking', 'defensive', 'balanced', 'not_sure')
+			),
+			budget_range VARCHAR(32) NOT NULL CHECK (
+				budget_range IN ('under_200', '200-400', '400-700', '700_plus')
+			),
+			weight_category VARCHAR(32) NOT NULL CHECK (
+				weight_category IN ('1U', '2U', '3U', '4U', '5U', '6U', '7U', '8U')
+			),
+			flexibility_category VARCHAR(32) NOT NULL CHECK (
+				flexibility_category IN ('Stiff Shaft', 'Medium Flex', 'High Flexibility')
+			),
+			balance_category VARCHAR(32) NOT NULL CHECK (
+				balance_category IN ('Head Heavy', 'Even Balance', 'Head Light')
+			),
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_recommendation_feedback_newest
+			ON recommendation_training_feedback(created_at DESC, id DESC)`,
+		`CREATE TABLE IF NOT EXISTS ml_training_runs (
+			id BIGSERIAL PRIMARY KEY,
+			requested_by INT REFERENCES users(id) ON DELETE SET NULL,
+			requested_by_role VARCHAR(20) NOT NULL CHECK (
+				requested_by_role IN ('moderator', 'admin')
+			),
+			status VARCHAR(20) NOT NULL DEFAULT 'queued' CHECK (
+				status IN ('queued', 'running', 'succeeded', 'failed')
+			),
+			progress SMALLINT NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
+			stage VARCHAR(100) NOT NULL DEFAULT 'Queued',
+			synthetic_rows INT NOT NULL DEFAULT 0 CHECK (synthetic_rows >= 0),
+			survey_rows INT NOT NULL DEFAULT 0 CHECK (survey_rows >= 0),
+			total_rows INT NOT NULL DEFAULT 0 CHECK (total_rows >= 0),
+			model_version VARCHAR(100),
+			metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
+			dataset_sha256 CHAR(64),
+			artifact_sha256 CHAR(64),
+			error_message VARCHAR(500),
+			is_active BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			started_at TIMESTAMPTZ,
+			finished_at TIMESTAMPTZ
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ml_training_runs_one_in_progress
+			ON ml_training_runs ((1)) WHERE status IN ('queued', 'running')`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ml_training_runs_one_active
+			ON ml_training_runs ((1)) WHERE is_active`,
+		`CREATE INDEX IF NOT EXISTS idx_ml_training_runs_newest
+			ON ml_training_runs(created_at DESC, id DESC)`,
+	}
+	for _, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+	log.Println("ML training migration completed")
 	return nil
 }
 

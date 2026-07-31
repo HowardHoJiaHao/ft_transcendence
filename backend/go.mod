@@ -11,6 +11,7 @@ require (
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/labstack/echo/v4 v4.11.3
 	github.com/prometheus/client_golang v1.20.5
+	github.com/stripe/stripe-go/v85 v85.2.0
 	golang.org/x/crypto v0.24.0
 	golang.org/x/oauth2 v0.21.0
 	gorm.io/driver/postgres v1.5.11
@@ -39,7 +40,6 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	golang.org/x/net v0.26.0 // indirect
-	golang.org/x/oauth2 v0.21.0 // indirect
 	golang.org/x/sync v0.9.0 // indirect
 	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/text v0.20.0 // indirect

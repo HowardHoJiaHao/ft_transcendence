@@ -1,6 +1,6 @@
 import json
 import os
-from functools import lru_cache
+import threading
 from typing import Any, Dict, List, Optional
 
 try:
@@ -14,7 +14,10 @@ except ImportError:  # pragma: no cover - installed by the service image
     pd = None
 
 
-MODEL_DIR = os.path.join(os.path.dirname(__file__), "ml_models")
+MODEL_DIR = os.getenv(
+    "RACKET_RECOMMENDER_MODEL_DIR",
+    os.path.join(os.path.dirname(__file__), "ml_models"),
+)
 MODEL_PATH = os.getenv(
     "RACKET_RECOMMENDER_MODEL_PATH",
     os.path.join(MODEL_DIR, "racket_recommender.joblib"),
@@ -128,8 +131,8 @@ def validate_profile(profile: Dict[str, Any]) -> Dict[str, str]:
     return clean_profile
 
 
-@lru_cache(maxsize=1)
 def load_model_metadata() -> Dict[str, Any]:
+    _, metadata_path, _ = _resolve_active_paths()
     metadata: Dict[str, Any] = {
         "model_name": "racket_recommender",
         "version": "unknown",
@@ -137,7 +140,7 @@ def load_model_metadata() -> Dict[str, Any]:
         "confidence_calibrated": False,
     }
     try:
-        with open(MODEL_METADATA_PATH, "r", encoding="utf-8") as handle:
+        with open(metadata_path, "r", encoding="utf-8") as handle:
             loaded = json.load(handle)
         if isinstance(loaded, dict):
             metadata.update(loaded)
@@ -146,8 +149,80 @@ def load_model_metadata() -> Dict[str, Any]:
     return metadata
 
 
-@lru_cache(maxsize=1)
 def load_model():
+    return _model_manager.load()
+
+
+def clear_model_cache() -> None:
+    _model_manager.clear()
+
+
+def _resolve_active_paths():
+    manifest_path = os.path.join(MODEL_DIR, "active.json")
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        model_path = _safe_model_path(manifest["model_path"])
+        metadata_path = _safe_model_path(manifest["metadata_path"])
+        cache_key = (
+            str(manifest.get("version", "unknown")),
+            model_path,
+            os.path.getmtime(manifest_path),
+        )
+        return model_path, metadata_path, cache_key
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        cache_key = (
+            "legacy",
+            MODEL_PATH,
+            os.path.getmtime(MODEL_PATH) if os.path.exists(MODEL_PATH) else None,
+        )
+        return MODEL_PATH, MODEL_METADATA_PATH, cache_key
+
+
+def _safe_model_path(relative_path: str) -> str:
+    root = os.path.realpath(MODEL_DIR)
+    candidate = os.path.realpath(os.path.join(root, str(relative_path)))
+    if os.path.commonpath([root, candidate]) != root:
+        raise ValueError("Model manifest path escapes the model directory")
+    return candidate
+
+
+class _ModelManager:
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._cache_key = None
+        self._model = None
+
+    def clear(self) -> None:
+        with self._lock:
+            self._cache_key = None
+            self._model = None
+
+    def load(self):
+        model_path, _, cache_key = _resolve_active_paths()
+        with self._lock:
+            if self._model is not None and self._cache_key == cache_key:
+                return self._model
+            if joblib is None:
+                raise ModelUnavailableError("joblib is not installed")
+            if not os.path.exists(model_path):
+                raise ModelUnavailableError("Recommendation model artifact is missing")
+            try:
+                candidate = joblib.load(model_path)
+            except Exception as exc:
+                raise ModelUnavailableError(
+                    "Recommendation model could not be loaded"
+                ) from exc
+            self._model = candidate
+            self._cache_key = cache_key
+            return self._model
+
+
+_model_manager = _ModelManager()
+
+
+def _legacy_load_model():
+    """Compatibility helper retained for older direct imports."""
     if joblib is None:
         raise ModelUnavailableError("joblib is not installed")
     if not os.path.exists(MODEL_PATH):

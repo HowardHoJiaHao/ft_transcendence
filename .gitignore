@@ -42,3 +42,6 @@ static/avatars/
 storage/
 backups/
 monitoring/alertmanager/logs/
+ai_service/ml_models/active.json
+ai_service/ml_models/.active.json.tmp
+ai_service/ml_models/versions/

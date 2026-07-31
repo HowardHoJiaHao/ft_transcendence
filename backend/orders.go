@@ -20,19 +20,21 @@ type Order struct {
 	TotalPrice    float64   `json:"totalPrice"`
 	Status        string    `json:"status"`
 	PaymentMethod string    `json:"paymentMethod"`
+	PaymentStatus string    `json:"paymentStatus,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 type EnrichedOrder struct {
 	Order
-	ListingTitle    string  `json:"listingTitle"`
-	ListingImage    string  `json:"listingImage"`
-	ListingCategory string  `json:"listingCategory"`
-	ListingPrice    float64 `json:"listingPrice"`
-	SellerName      string  `json:"sellerName,omitempty"`
-	BuyerUsername   string  `json:"buyerUsername,omitempty"`
-	BuyerEmail      string  `json:"buyerEmail,omitempty"`
+	ListingTitle                  string  `json:"listingTitle"`
+	ListingImage                  string  `json:"listingImage"`
+	ListingCategory               string  `json:"listingCategory"`
+	ListingPrice                  float64 `json:"listingPrice"`
+	SellerName                    string  `json:"sellerName,omitempty"`
+	BuyerUsername                 string  `json:"buyerUsername,omitempty"`
+	BuyerEmail                    string  `json:"buyerEmail,omitempty"`
+	RecommendationSurveySubmitted bool    `json:"recommendationSurveySubmitted"`
 }
 
 type CreateOrderItemRequest struct {
@@ -41,17 +43,19 @@ type CreateOrderItemRequest struct {
 }
 
 type CreateOrdersRequest struct {
-	Items         []CreateOrderItemRequest `json:"items"`
-	PaymentMethod string                   `json:"paymentMethod"`
+	Items             []CreateOrderItemRequest `json:"items"`
+	PaymentMethod     string                   `json:"paymentMethod"`
+	CheckoutRequestID string                   `json:"checkoutRequestId,omitempty"`
 }
 
 type CreateOrdersResponse struct {
-	Orders     []Order `json:"orders"`
-	TotalPrice float64 `json:"totalPrice"`
+	Orders      []Order `json:"orders"`
+	TotalPrice  float64 `json:"totalPrice"`
+	CheckoutURL string  `json:"checkoutUrl,omitempty"`
 }
 
 func createOrders(c echo.Context, gormDB *gorm.DB) error {
-	return createOrdersWithNotifications(c, gormDB, nil)
+	return createOrdersWithServices(c, gormDB, nil, nil)
 }
 
 type pendingNotification struct {
@@ -63,6 +67,15 @@ func createOrdersWithNotifications(
 	c echo.Context,
 	gormDB *gorm.DB,
 	notificationService *notifications.Service,
+) error {
+	return createOrdersWithServices(c, gormDB, notificationService, nil)
+}
+
+func createOrdersWithServices(
+	c echo.Context,
+	gormDB *gorm.DB,
+	notificationService *notifications.Service,
+	stripePayments *StripePaymentService,
 ) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -99,6 +112,25 @@ func createOrdersWithNotifications(
 	paymentMethod := req.PaymentMethod
 	if paymentMethod == "" {
 		paymentMethod = "meetup"
+	}
+	if paymentMethod != "meetup" && paymentMethod != "stripe" {
+		return c.JSON(400, map[string]string{"error": "Unsupported payment method"})
+	}
+	if paymentMethod == "stripe" {
+		if stripePayments == nil {
+			return c.JSON(503, map[string]string{"error": "Stripe sandbox checkout is not configured"})
+		}
+		response, checkoutErr := stripePayments.CreateCheckout(
+			c.Request().Context(),
+			buyerID,
+			req.Items,
+			req.CheckoutRequestID,
+		)
+		if checkoutErr != nil {
+			log.Printf("Stripe checkout failed with HTTP status %d", checkoutErr.Status)
+			return c.JSON(checkoutErr.Status, map[string]string{"error": checkoutErr.Message})
+		}
+		return c.JSON(201, response)
 	}
 
 	tx, err := sqlDB.Begin()
@@ -256,9 +288,18 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 			o.id, o.buyer_id, o.seller_id, o.listing_id, o.quantity, o.total_price,
 			o.status, o.payment_method, o.created_at, o.updated_at,
 			COALESCE(l.title, ''), COALESCE(l.image, ''), COALESCE(l.category, 'Others'),
-			COALESCE(l.price, 0), COALESCE(l.seller_name, '')
+			COALESCE(l.price, 0), COALESCE(l.seller_name, ''),
+			EXISTS (
+				SELECT 1 FROM recommendation_training_feedback feedback
+				WHERE feedback.order_id = o.id
+			),
+			CASE
+				WHEN p.status IN ('initializing', 'pending') THEN 'awaiting_payment'
+				ELSE p.status
+			END
 		FROM orders o
 		JOIN listings l ON l.id = o.listing_id
+		LEFT JOIN payments p ON p.id = o.payment_id
 		WHERE o.buyer_id = $1`
 	args := []interface{}{userID}
 	if status != "" {
@@ -278,10 +319,13 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 	for rows.Next() {
 		var o EnrichedOrder
 		var paymentMethod sql.NullString
+		var paymentStatus sql.NullString
 		err := rows.Scan(
 			&o.ID, &o.BuyerID, &o.SellerID, &o.ListingID, &o.Quantity,
 			&o.TotalPrice, &o.Status, &paymentMethod, &o.CreatedAt, &o.UpdatedAt,
 			&o.ListingTitle, &o.ListingImage, &o.ListingCategory, &o.ListingPrice, &o.SellerName,
+			&o.RecommendationSurveySubmitted,
+			&paymentStatus,
 		)
 		if err != nil {
 			log.Printf("Error scanning order: %v", err)
@@ -289,6 +333,9 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 		}
 		if paymentMethod.Valid {
 			o.PaymentMethod = paymentMethod.String
+		}
+		if paymentStatus.Valid {
+			o.PaymentStatus = paymentStatus.String
 		}
 		orders = append(orders, o)
 	}
@@ -326,11 +373,17 @@ func getSellerOrders(c echo.Context, gormDB *gorm.DB) error {
 			COALESCE(l.title, ''), COALESCE(l.image, ''), COALESCE(l.category, 'Others'),
 			COALESCE(l.price, 0), COALESCE(l.seller_name, ''),
 				CASE WHEN u.deleted_at IS NOT NULL THEN 'Deleted user' ELSE COALESCE(u.username, '') END,
-				CASE WHEN u.deleted_at IS NOT NULL THEN '' ELSE COALESCE(u.email, '') END
+				CASE WHEN u.deleted_at IS NOT NULL THEN '' ELSE COALESCE(u.email, '') END,
+				CASE
+					WHEN p.status IN ('initializing', 'pending') THEN 'awaiting_payment'
+					ELSE p.status
+				END
 		FROM orders o
 		JOIN listings l ON l.id = o.listing_id
 		JOIN users u ON u.id = o.buyer_id
+		LEFT JOIN payments p ON p.id = o.payment_id
 		WHERE o.seller_id = $1 AND o.status = $2
+			AND (COALESCE(o.payment_method, '') <> 'stripe' OR p.status = 'paid')
 		ORDER BY o.id DESC`,
 		sellerID, status,
 	)
@@ -344,11 +397,12 @@ func getSellerOrders(c echo.Context, gormDB *gorm.DB) error {
 	for rows.Next() {
 		var o EnrichedOrder
 		var paymentMethod sql.NullString
+		var paymentStatus sql.NullString
 		err := rows.Scan(
 			&o.ID, &o.BuyerID, &o.SellerID, &o.ListingID, &o.Quantity,
 			&o.TotalPrice, &o.Status, &paymentMethod, &o.CreatedAt, &o.UpdatedAt,
 			&o.ListingTitle, &o.ListingImage, &o.ListingCategory, &o.ListingPrice, &o.SellerName,
-			&o.BuyerUsername, &o.BuyerEmail,
+			&o.BuyerUsername, &o.BuyerEmail, &paymentStatus,
 		)
 		if err != nil {
 			log.Printf("Error scanning seller order: %v", err)
@@ -356,6 +410,9 @@ func getSellerOrders(c echo.Context, gormDB *gorm.DB) error {
 		}
 		if paymentMethod.Valid {
 			o.PaymentMethod = paymentMethod.String
+		}
+		if paymentStatus.Valid {
+			o.PaymentStatus = paymentStatus.String
 		}
 		orders = append(orders, o)
 	}
@@ -406,11 +463,18 @@ func completeOrderWithNotifications(
 		UPDATE orders
 		SET status = 'completed', updated_at = CURRENT_TIMESTAMP
 		WHERE id = $1 AND seller_id = $2 AND status = 'pending'
+			AND (
+				COALESCE(payment_method, '') <> 'stripe'
+				OR EXISTS (
+					SELECT 1 FROM payments
+					WHERE payments.id = orders.payment_id AND payments.status = 'paid'
+				)
+			)
 		RETURNING buyer_id, listing_id`,
 		orderID, sellerID,
 	).Scan(&buyerID, &listingID)
 	if err == sql.ErrNoRows {
-		return c.JSON(409, map[string]string{"error": "Order is not pending or you do not own it"})
+		return c.JSON(409, map[string]string{"error": "Order is not pending, Stripe payment is unpaid, or you do not own it"})
 	}
 	if err != nil {
 		log.Printf("Error completing order: %v", err)
@@ -487,6 +551,12 @@ func completeOrderWithoutNotifications(c echo.Context, gormDB *gorm.DB) error {
 		UPDATE orders
 		SET status = 'completed', updated_at = CURRENT_TIMESTAMP
 		WHERE id = $1 AND seller_id = $2 AND status = 'pending'
+			AND (
+				COALESCE(payment_method, '') <> 'stripe'
+				OR EXISTS (
+					SELECT 1 FROM payments
+					WHERE payments.id = orders.payment_id AND payments.status = 'paid'
+			)
 		RETURNING listing_id`,
 		orderID, sellerID,
 	).Scan(&listingID)
@@ -507,7 +577,6 @@ func completeOrderWithoutNotifications(c echo.Context, gormDB *gorm.DB) error {
 		log.Printf("Error marking listing sold: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
 	}
-
 	if err := tx.Commit(); err != nil {
 		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
 	}
@@ -599,15 +668,24 @@ func getOrderByID(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(400, map[string]string{"error": "Invalid order ID"})
 	}
 
-	query := `SELECT id, buyer_id, seller_id, listing_id, quantity, total_price, status, payment_method, created_at, updated_at 
-	          FROM orders 
-	          WHERE id = $1`
+	query := `SELECT
+				o.id, o.buyer_id, o.seller_id, o.listing_id, o.quantity,
+				o.total_price, o.status, o.payment_method, o.created_at, o.updated_at,
+				CASE
+					WHEN p.status IN ('initializing', 'pending') THEN 'awaiting_payment'
+					ELSE p.status
+				END
+			FROM orders o
+			LEFT JOIN payments p ON p.id = o.payment_id
+			WHERE o.id = $1`
 
 	var o Order
 	var paymentMethod sql.NullString
+	var paymentStatus sql.NullString
 	err = sqlDB.QueryRow(query, orderID).Scan(
 		&o.ID, &o.BuyerID, &o.SellerID, &o.ListingID, &o.Quantity,
 		&o.TotalPrice, &o.Status, &paymentMethod, &o.CreatedAt, &o.UpdatedAt,
+		&paymentStatus,
 	)
 
 	if err == sql.ErrNoRows {
@@ -619,6 +697,9 @@ func getOrderByID(c echo.Context, gormDB *gorm.DB) error {
 
 	if paymentMethod.Valid {
 		o.PaymentMethod = paymentMethod.String
+	}
+	if paymentStatus.Valid {
+		o.PaymentStatus = paymentStatus.String
 	}
 
 	// Security: Only the buyer or the seller associated with the order can inspect it

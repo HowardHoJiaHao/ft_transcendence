@@ -25,6 +25,9 @@ profiles and avatars, friends and WebSocket chat, marketplace listings and image
 uploads, cart/orders, seller analytics and fulfillment, bulk CSV listing imports,
 role-based administrator/moderator account controls with anonymized deletion,
 developer API keys, and the RacketBot assistant.
+RacketBot recommendation training can incorporate transaction surveys through
+an administrator/moderator-triggered background retraining job with durable,
+versioned model artifacts.
 Operational coverage includes WAF rules, health and Prometheus endpoints,
 centralized logs, alerting, container metrics, blackbox probes, and scheduled
 database backups.
@@ -51,7 +54,8 @@ Before making changes, inspect the relevant files:
 - AI service entrypoint and request lifecycle: `ai_service/main.py`
 - AI agent, tools, RAG, embeddings, and ML: `ai_service/agent.py`,
   `ai_service/tools.py`, `ai_service/rag.py`, `ai_service/embeddings.py`, and
-  `ai_service/recommender.py`
+  `ai_service/recommender.py`; retraining is in `ai_service/model_training.py`
+  and `ai_service/training.py`
 - Edge routing and security: `nginx/conf/default.conf`,
   `waf/racketbot-before.conf`, and `scripts/test-waf.sh`
 - Monitoring and alerting: `monitoring/prometheus/prometheus.yml`,
@@ -114,8 +118,13 @@ before introducing or relying on any additional public API-base variable.
 Infisical CLI, the repository `.infisical.json`, and a local
 `.env.infisical-auth` containing `INFISICAL_TOKEN`. Startup is non-interactive
 and does not require a host-installed Infisical CLI, a saved browser session,
-or `sudo`. Read-only lifecycle commands such as `make ps` and `make logs` do
-not require Infisical. Never restore a known database-password fallback.
+or `sudo`. `make setup`, `make up`, and `make restart` all start the persistent
+Stripe listener, parse its signing secret without displaying it, inject it into
+the backend through the protected temporary environment file, and remove that
+file afterward. `STRIPE_WEBHOOK_SECRET` is not persistent Infisical
+configuration for the local workflow. Read-only lifecycle commands such as
+`make ps` and `make logs` do not require Infisical. Never restore a known
+database-password fallback.
 
 ### MVP Admin Access
 
@@ -306,6 +315,10 @@ unit test cannot prove.
   model-provided user ID to become an authorization source.
 - Avoid hardcoding API keys or model credentials.
 - AI service depends on PostgreSQL and pgvector.
+- The AI-service lifespan also polls durable `ml_training_runs`, combines the
+  immutable 1,000-row baseline with transaction survey rows, and atomically
+  activates versioned artifacts in the `recommender_models` volume. Keep model
+  activation compatible with concurrent predictions and container restarts.
 
 ## Documentation Notes
 

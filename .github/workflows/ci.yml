@@ -189,11 +189,15 @@ jobs:
                'listings',
                'listing_images',
                'orders',
+               'payments',
+               'stripe_webhook_events',
                'friendships',
                'messages',
                'notifications',
                'reviews',
                'listing_reviews',
+               'recommendation_training_feedback',
+               'ml_training_runs',
                'api_keys',
                'api_request_logs',
                'analytics_events',
@@ -202,7 +206,7 @@ jobs:
 
           assert_sql_true \
             "required cross-feature columns" \
-            "SELECT count(*) = 27
+            "SELECT count(*) = 50
              FROM (VALUES
                ('users', 'account_status'),
                ('users', 'role'),
@@ -216,6 +220,21 @@ jobs:
                ('orders', 'seller_id'),
                ('orders', 'quantity'),
                ('orders', 'status'),
+               ('orders', 'payment_id'),
+               ('payments', 'checkout_request_id'),
+               ('payments', 'stripe_idempotency_key'),
+               ('payments', 'buyer_id'),
+               ('payments', 'seller_id'),
+               ('payments', 'provider'),
+               ('payments', 'currency'),
+               ('payments', 'amount_minor'),
+               ('payments', 'platform_fee_minor'),
+               ('payments', 'status'),
+               ('payments', 'stripe_checkout_session_id'),
+               ('payments', 'stripe_payment_intent_id'),
+               ('payments', 'stock_released'),
+               ('stripe_webhook_events', 'stripe_event_id'),
+               ('stripe_webhook_events', 'event_type'),
                ('notifications', 'user_id'),
                ('notifications', 'notification_type'),
                ('notifications', 'data'),
@@ -224,6 +243,14 @@ jobs:
                ('listing_reviews', 'reviewer_id'),
                ('listing_reviews', 'order_id'),
                ('listing_reviews', 'rating'),
+               ('recommendation_training_feedback', 'order_id'),
+               ('recommendation_training_feedback', 'buyer_id'),
+               ('recommendation_training_feedback', 'age_group'),
+               ('recommendation_training_feedback', 'weight_category'),
+               ('ml_training_runs', 'status'),
+               ('ml_training_runs', 'progress'),
+               ('ml_training_runs', 'model_version'),
+               ('ml_training_runs', 'is_active'),
                ('api_keys', 'key_hash'),
                ('api_keys', 'rate_limit'),
                ('analytics_events', 'listing_id'),
@@ -248,9 +275,32 @@ jobs:
                'idx_notifications_user_unread',
                'idx_notifications_unread_message_group',
                'idx_listing_reviews_listing_newest',
+               'idx_recommendation_feedback_newest',
+               'idx_ml_training_runs_one_in_progress',
+               'idx_ml_training_runs_one_active',
+               'idx_orders_payment_id',
+               'idx_payments_buyer_created',
+               'idx_payments_seller_status_created',
+               'idx_payments_stripe_session_unique',
+               'idx_payments_stripe_intent_unique',
                'idx_knowledge_chunks_active',
                'idx_knowledge_chunks_search'
              ]) AS required(index_name);"
+
+          assert_sql_true \
+            "payment constraints and foreign key" \
+            "SELECT count(*) = 8
+             FROM pg_constraint
+             WHERE conname IN (
+               'payments_checkout_request_unique',
+               'payments_stripe_idempotency_unique',
+               'payments_provider_check',
+               'payments_currency_check',
+               'payments_amount_check',
+               'payments_fee_check',
+               'payments_status_check',
+               'orders_payment_id_fkey'
+             );"
 
           assert_sql_true \
             "vector-backed knowledge columns" \
