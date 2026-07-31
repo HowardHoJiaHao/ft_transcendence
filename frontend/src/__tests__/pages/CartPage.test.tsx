@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   clearCart: vi.fn(),
   removeFromCart: vi.fn(),
   updateQuantity: vi.fn(),
+  assignCheckoutLocation: vi.fn(),
+  createCheckoutRequestId: vi.fn(() => '8f41ea04-716f-4ca2-9cf2-33fd2da0d72f'),
   cart: {
     items: [{ id: 10, title: 'Racket', price: 100, image: '', quantity: 2 }],
     total: 200,
@@ -33,6 +35,54 @@ vi.mock('@/context/AuthContext', () => ({
 vi.mock('@/components/Toast/ToastContext', () => ({
   useToast: () => ({ showToast: mocks.showToast }),
 }));
+vi.mock('@/context/LanguageContext', () => ({
+  useI18n: () => ({
+    t: (key: string, values?: Record<string, string | number>) => {
+      const message = ({
+      'cart.paymentMethod': 'Payment method',
+      'cart.meetupPayment': 'Meet up / COD',
+      'cart.stripePayment': 'Stripe sandbox card payment',
+      'cart.stripeSandboxNotice': 'Test mode only.',
+      'cart.stripeMissingUrl': 'Stripe checkout could not be opened. Your cart was preserved.',
+      'cart.stripeConfirming': 'We are confirming your Stripe payment.',
+      'cart.stripeReceived': 'Payment received.',
+      'cart.stripeCancelled': 'Payment was not confirmed.',
+      'cart.paymentLabel': 'Payment',
+      'cart.paymentAwaiting': 'Awaiting confirmation',
+      'cart.paymentPaid': 'Paid',
+      'cart.paymentFailed': 'Card attempt failed',
+      'cart.paymentExpired': 'Expired',
+      'cart.paymentRefunded': 'Refunded',
+      'mlSurvey.checkoutSuccess': 'Checkout successful',
+      'mlSurvey.checkoutPrompt': 'Your purchase can now add a real row to the ML training dataset.',
+      'mlSurvey.completeForOrder': 'Complete survey for order #{id}',
+      'mlSurvey.complete': 'Complete ML survey',
+      'mlSurvey.submitted': 'ML survey submitted',
+      'mlSurvey.title': 'ML training survey — order #{id}',
+      'mlSurvey.description': 'Choose one option for every field.',
+      'mlSurvey.ageGroup': 'Age group',
+      'mlSurvey.gender': 'Gender',
+      'mlSurvey.experience': 'Experience level',
+      'mlSurvey.playStyle': 'Play style',
+      'mlSurvey.budget': 'Budget range',
+      'mlSurvey.chooseOption': 'Choose an option',
+      'mlSurvey.cancel': 'Cancel',
+      'mlSurvey.submit': 'Add training row',
+      'mlSurvey.submitting': 'Submitting…',
+      'mlSurvey.submitSuccess': 'Training row added',
+      'mlSurvey.submitFailed': 'Failed to submit ML survey',
+    } as Record<string, string>)[key] || key;
+      return Object.entries(values ?? {}).reduce(
+        (result, [name, value]) => result.replace(`{${name}}`, String(value)),
+        message,
+      );
+    },
+  }),
+}));
+vi.mock('@/lib/browserNavigation', () => ({
+  assignCheckoutLocation: mocks.assignCheckoutLocation,
+  createCheckoutRequestId: mocks.createCheckoutRequestId,
+}));
 vi.mock('@/components/Header/Header', () => ({
   default: () => <div data-testid="header" />,
 }));
@@ -46,14 +96,9 @@ vi.mock('next/link', () => ({
 }));
 
 import CartPage from '@/app/(user)/cart/page';
-import { LanguageProvider } from '@/context/LanguageContext';
 
 function renderCartPage() {
-  return render(
-    <LanguageProvider>
-      <CartPage />
-    </LanguageProvider>,
-  );
+  return render(<CartPage />);
 }
 
 describe('CartPage checkout', () => {
@@ -63,9 +108,12 @@ describe('CartPage checkout', () => {
     mocks.clearCart.mockReset();
     mocks.removeFromCart.mockReset();
     mocks.updateQuantity.mockReset();
+    mocks.assignCheckoutLocation.mockReset();
+    mocks.createCheckoutRequestId.mockClear();
     mocks.auth.user = { id: 42, username: 'alice' };
     mocks.cart.items = [{ id: 10, title: 'Racket', price: 100, image: '', quantity: 2 }];
     mocks.cart.total = 200;
+    window.history.replaceState({}, '', '/cart');
     vi.unstubAllGlobals();
   });
 
@@ -183,5 +231,153 @@ describe('CartPage checkout', () => {
       budget_range: '200-400',
     });
     expect(mocks.showToast).toHaveBeenCalledWith('Training row added', 'success');
+  });
+
+  it('selects Stripe, sends only trusted fields, and redirects to Checkout', async () => {
+    localStorage.setItem('token', 'valid-jwt');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ checkoutUrl: 'https://checkout.stripe.com/c/pay/test' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const user = userEvent.setup();
+    render(<CartPage />);
+    await user.click(screen.getByLabelText('Stripe sandbox card payment'));
+    await user.click(screen.getByRole('button', { name: 'Checkout' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(options.body)) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      items: [{ listingId: 10, quantity: 2 }],
+      paymentMethod: 'stripe',
+    });
+    expect(body.checkoutRequestId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(body).not.toHaveProperty('price');
+    expect(body).not.toHaveProperty('total');
+    expect(body).not.toHaveProperty('sellerId');
+    expect(body).not.toHaveProperty('sellerEmail');
+    expect(body).not.toHaveProperty('connectedAccountId');
+    expect(body).not.toHaveProperty('platformFee');
+    expect(mocks.clearCart).toHaveBeenCalledOnce();
+    expect(mocks.assignCheckoutLocation).toHaveBeenCalledWith(
+      'https://checkout.stripe.com/c/pay/test',
+    );
+    expect(mocks.showToast).not.toHaveBeenCalledWith('Checkout successful', 'success');
+  });
+
+  it('preserves the cart when Stripe response has no checkout URL', async () => {
+    localStorage.setItem('token', 'valid-jwt');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    }));
+
+    const user = userEvent.setup();
+    render(<CartPage />);
+    await user.click(screen.getByLabelText('Stripe sandbox card payment'));
+    await user.click(screen.getByRole('button', { name: 'Checkout' }));
+
+    expect(await screen.findByText(
+      'Stripe checkout could not be opened. Your cart was preserved.',
+    )).toBeInTheDocument();
+    expect(mocks.clearCart).not.toHaveBeenCalled();
+    expect(mocks.assignCheckoutLocation).not.toHaveBeenCalled();
+  });
+
+  it('reuses the checkout request UUID after an ambiguous network failure', async () => {
+    localStorage.setItem('token', 'valid-jwt');
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new Error('network unavailable'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ checkoutUrl: 'https://checkout.stripe.com/c/pay/retry' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const user = userEvent.setup();
+    render(<CartPage />);
+    await user.click(screen.getByLabelText('Stripe sandbox card payment'));
+    await user.click(screen.getByRole('button', { name: 'Checkout' }));
+    expect(await screen.findByText('Network error during checkout')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Checkout' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    const firstBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    const retryBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(retryBody.checkoutRequestId).toBe(firstBody.checkoutRequestId);
+    expect(mocks.createCheckoutRequestId).toHaveBeenCalledOnce();
+    expect(mocks.clearCart).toHaveBeenCalledOnce();
+  });
+
+  it('treats the Stripe success URL as informational and reloads purchases', async () => {
+    localStorage.setItem('token', 'valid-jwt');
+    window.history.replaceState({}, '', '/cart?checkout=stripe-return');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([{
+        id: 1,
+        listingId: 10,
+        quantity: 2,
+        totalPrice: 200,
+        status: 'pending',
+        paymentMethod: 'stripe',
+        paymentStatus: 'awaiting_payment',
+        createdAt: new Date().toISOString(),
+        listingTitle: 'Racket',
+        listingImage: '',
+        sellerName: 'seller',
+      }]),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<CartPage />);
+
+    expect(await screen.findByText('We are confirming your Stripe payment.')).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls.every(([, options]) => !options || options.method !== 'POST')).toBe(true);
+    expect(mocks.clearCart).not.toHaveBeenCalled();
+  });
+
+  it('renders the webhook-derived Stripe payment status', async () => {
+    localStorage.setItem('token', 'valid-jwt');
+    window.history.replaceState({}, '', '/cart?checkout=stripe-return');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([{
+        id: 1,
+        listingId: 10,
+        quantity: 2,
+        totalPrice: 200,
+        status: 'pending',
+        paymentMethod: 'stripe',
+        paymentStatus: 'paid',
+        createdAt: new Date().toISOString(),
+        listingTitle: 'Racket',
+        listingImage: '',
+        sellerName: 'seller',
+      }]),
+    }));
+
+    render(<CartPage />);
+
+    expect(await screen.findByText('Payment received.')).toBeInTheDocument();
+    expect(await screen.findByText('Payment: Paid')).toBeInTheDocument();
+  });
+
+  it('does not mark payment paid from the Stripe cancel URL', async () => {
+    window.history.replaceState({}, '', '/cart?checkout=stripe-cancelled');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<CartPage />);
+
+    expect(await screen.findByText('Payment was not confirmed.')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mocks.clearCart).not.toHaveBeenCalled();
   });
 });

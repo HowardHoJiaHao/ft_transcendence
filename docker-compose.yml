@@ -134,6 +134,12 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL}
       FRONTEND_URL: ${FRONTEND_URL:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_TEST_CONNECTED_ACCOUNT_ID: ${STRIPE_TEST_CONNECTED_ACCOUNT_ID:-}
+      STRIPE_TEST_SELLER_EMAIL: ${STRIPE_TEST_SELLER_EMAIL:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-}
+      STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-}
     expose:
       - "8080"
     volumes:
@@ -151,6 +157,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - transcendence-network
+
+  stripe-cli:
+    image: stripe/stripe-cli:v1.44.0
+    profiles:
+      - stripe
+    environment:
+      STRIPE_API_KEY: ${STRIPE_SECRET_KEY:-}
+    command:
+      - listen
+      - --events
+      - checkout.session.completed,checkout.session.expired,payment_intent.payment_failed
+      - --forward-to
+      - http://backend:8080/api/v1/webhooks/stripe
+    restart: unless-stopped
     networks:
       - transcendence-network
 

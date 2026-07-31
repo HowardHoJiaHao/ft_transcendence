@@ -112,6 +112,22 @@
     "peopleLoadError": "Unable to load people.",
     "deleteConversation": "Delete conversation"
   },
+  "cart": {
+    "paymentMethod": "Payment method",
+    "meetupPayment": "Meet up / COD",
+    "stripePayment": "Stripe sandbox card payment",
+    "stripeSandboxNotice": "Test mode only. No real money is charged. Cards only, and every item must belong to the configured demo seller.",
+    "stripeMissingUrl": "Stripe checkout could not be opened. Your cart was preserved.",
+    "stripeConfirming": "We are confirming your Stripe payment. Your purchases will update after the verified webhook arrives.",
+    "stripeReceived": "Payment received. The seller can now prepare your order.",
+    "stripeCancelled": "Payment was not confirmed. Reserved stock remains held until the Stripe Checkout Session expires.",
+    "paymentLabel": "Payment",
+    "paymentAwaiting": "Awaiting confirmation",
+    "paymentPaid": "Paid",
+    "paymentFailed": "Card attempt failed — retry in Stripe",
+    "paymentExpired": "Expired",
+    "paymentRefunded": "Refunded"
+  },
   "common": {
     "loading": "Loading…"
   },

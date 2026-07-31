@@ -112,6 +112,22 @@
     "peopleLoadError": "Tidak dapat memuatkan pengguna.",
     "deleteConversation": "Padam perbualan"
   },
+  "cart": {
+    "paymentMethod": "Kaedah pembayaran",
+    "meetupPayment": "Jumpa terus / COD",
+    "stripePayment": "Pembayaran kad sandbox Stripe",
+    "stripeSandboxNotice": "Mod ujian sahaja. Tiada wang sebenar dicaj. Kad sahaja, dan semua item mesti daripada penjual demo yang dikonfigurasikan.",
+    "stripeMissingUrl": "Pembayaran Stripe tidak dapat dibuka. Troli anda dikekalkan.",
+    "stripeConfirming": "Kami sedang mengesahkan pembayaran Stripe anda. Pembelian akan dikemas kini selepas webhook yang disahkan diterima.",
+    "stripeReceived": "Pembayaran diterima. Penjual kini boleh menyediakan pesanan anda.",
+    "stripeCancelled": "Pembayaran tidak disahkan. Stok yang ditempah kekal dipegang sehingga sesi Stripe Checkout tamat.",
+    "paymentLabel": "Pembayaran",
+    "paymentAwaiting": "Menunggu pengesahan",
+    "paymentPaid": "Dibayar",
+    "paymentFailed": "Percubaan kad gagal — cuba lagi di Stripe",
+    "paymentExpired": "Tamat tempoh",
+    "paymentRefunded": "Dibayar balik"
+  },
   "common": {
     "loading": "Memuatkan…"
   },

@@ -118,8 +118,13 @@ before introducing or relying on any additional public API-base variable.
 Infisical CLI, the repository `.infisical.json`, and a local
 `.env.infisical-auth` containing `INFISICAL_TOKEN`. Startup is non-interactive
 and does not require a host-installed Infisical CLI, a saved browser session,
-or `sudo`. Read-only lifecycle commands such as `make ps` and `make logs` do
-not require Infisical. Never restore a known database-password fallback.
+or `sudo`. `make setup`, `make up`, and `make restart` all start the persistent
+Stripe listener, parse its signing secret without displaying it, inject it into
+the backend through the protected temporary environment file, and remove that
+file afterward. `STRIPE_WEBHOOK_SECRET` is not persistent Infisical
+configuration for the local workflow. Read-only lifecycle commands such as
+`make ps` and `make logs` do not require Infisical. Never restore a known
+database-password fallback.
 
 ### MVP Admin Access
 

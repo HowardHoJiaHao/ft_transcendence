@@ -112,6 +112,22 @@
     "peopleLoadError": "无法加载用户。",
     "deleteConversation": "删除对话"
   },
+  "cart": {
+    "paymentMethod": "付款方式",
+    "meetupPayment": "面交 / 货到付款",
+    "stripePayment": "Stripe 沙盒银行卡付款",
+    "stripeSandboxNotice": "仅供测试，不会收取真实款项。只支持银行卡，且所有商品必须属于已配置的演示卖家。",
+    "stripeMissingUrl": "无法打开 Stripe 结账页面。您的购物车已保留。",
+    "stripeConfirming": "我们正在确认您的 Stripe 付款。验证后的 webhook 到达后，购买记录将自动更新。",
+    "stripeReceived": "付款已收到。卖家现在可以准备您的订单。",
+    "stripeCancelled": "付款尚未确认。预留库存会保留到 Stripe Checkout 会话过期。",
+    "paymentLabel": "付款",
+    "paymentAwaiting": "等待确认",
+    "paymentPaid": "已付款",
+    "paymentFailed": "银行卡尝试失败 — 请在 Stripe 重试",
+    "paymentExpired": "已过期",
+    "paymentRefunded": "已退款"
+  },
   "common": {
     "loading": "加载中…"
   },

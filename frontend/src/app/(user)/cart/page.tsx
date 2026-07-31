@@ -8,6 +8,7 @@ import { useI18n } from '@/context/LanguageContext'
 import Header from '@/components/Header/Header'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { assignCheckoutLocation, createCheckoutRequestId } from '@/lib/browserNavigation'
 
 // Tailwind classes per order status, replacing the old .status_* CSS module rules.
 const STATUS_BADGE_STYLES: Record<string, string> = {
@@ -24,6 +25,7 @@ interface PurchaseOrder {
 	totalPrice: number;
 	status: string;
 	paymentMethod: string;
+	paymentStatus?: string;
 	createdAt: string;
 	listingTitle: string;
 	listingImage: string;
@@ -122,6 +124,9 @@ export default function CartPage() {
 	const [surveyOrderID, setSurveyOrderID] = useState<number | null>(null);
 	const [surveyForm, setSurveyForm] = useState<SurveyForm>(EMPTY_SURVEY);
 	const [surveySubmitting, setSurveySubmitting] = useState(false);
+	const [paymentMethod, setPaymentMethod] = useState<'meetup' | 'stripe'>('meetup');
+	const [stripeCheckoutRequestId, setStripeCheckoutRequestId] = useState('');
+	const [stripeReturnState, setStripeReturnState] = useState<'return' | 'cancelled' | null>(null);
 	const getImageUrl = (url: string) => {
 		if (!url)
 			return 'https://via.placeholder.com/100';
@@ -144,6 +149,11 @@ export default function CartPage() {
 		}
 		setIsCheckingOut(true);
 		try {
+			let checkoutRequestId = stripeCheckoutRequestId;
+			if (paymentMethod === 'stripe' && !checkoutRequestId) {
+				checkoutRequestId = createCheckoutRequestId();
+				setStripeCheckoutRequestId(checkoutRequestId);
+			}
 			const res = await fetch('/api/v1/orders', {
 				method: 'POST',
 				headers: {
@@ -155,17 +165,33 @@ export default function CartPage() {
 						listingId: item.id,
 						quantity: item.quantity,
 					})),
-					paymentMethod: 'meetup',
+					paymentMethod,
+					...(paymentMethod === 'stripe' ? { checkoutRequestId } : {}),
 				}),
 			});
 			const data = await res.json().catch(() => ({})) as {
 				error?: string;
 				orders?: Array<{ id: number }>;
+				checkoutUrl?: string;
 			};
 			if (!res.ok) {
 				const message = data.error || 'Checkout failed';
 				setCheckoutError(message);
 				showToast(message, 'error');
+				if (paymentMethod === 'stripe' && res.status !== 503)
+					setStripeCheckoutRequestId('');
+				return;
+			}
+			if (paymentMethod === 'stripe') {
+				if (!data.checkoutUrl) {
+					const message = t('cart.stripeMissingUrl');
+					setCheckoutError(message);
+					showToast(message, 'error');
+					return;
+				}
+				clearCart();
+				setStripeCheckoutRequestId('');
+				assignCheckoutLocation(data.checkoutUrl);
 				return;
 			}
 			const createdOrderIDs = (data.orders ?? []).map(order => order.id);
@@ -232,6 +258,21 @@ export default function CartPage() {
 			return 'Refunded';
 		return status;
 	};
+	const paymentStatusLabel = (status?: string) => {
+		if (!status)
+			return '';
+		if (status === 'awaiting_payment')
+			return t('cart.paymentAwaiting');
+		if (status === 'paid')
+			return t('cart.paymentPaid');
+		if (status === 'failed')
+			return t('cart.paymentFailed');
+		if (status === 'expired')
+			return t('cart.paymentExpired');
+		if (status === 'refunded')
+			return t('cart.paymentRefunded');
+		return status;
+	};
 	const formatDate = (value: string) => {
 		try {
 			return new Date(value).toLocaleDateString('en-MY', {
@@ -243,6 +284,17 @@ export default function CartPage() {
 			return value;
 		}
 	};
+
+	useEffect(() => {
+		const checkout = new URLSearchParams(window.location.search).get('checkout');
+		if (checkout === 'stripe-return') {
+			setStripeReturnState('return');
+			setActiveTab('purchases');
+			setOrdersLoaded(false);
+		} else if (checkout === 'stripe-cancelled') {
+			setStripeReturnState('cancelled');
+		}
+	}, []);
 
 	useEffect(() => {
 		if (activeTab !== 'purchases' || ordersLoaded || !user)
@@ -268,6 +320,18 @@ export default function CartPage() {
 			.catch((err) => showToast(err instanceof Error ? err.message : 'Failed to load purchases', 'error'))
 			.finally(() => setOrdersLoading(false));
 	}, [activeTab, ordersLoaded, showToast, user]);
+
+	const stripeReturnMessage = () => {
+		if (stripeReturnState === 'cancelled')
+			return t('cart.stripeCancelled');
+		if (stripeReturnState === 'return') {
+			const paid = orders.some(order =>
+				order.paymentMethod === 'stripe' && order.paymentStatus === 'paid',
+			);
+			return paid ? t('cart.stripeReceived') : t('cart.stripeConfirming');
+		}
+		return '';
+	};
 
 	const renderEmptyCart = () => (
 		<div className="text-center px-5 py-[100px]">
@@ -321,6 +385,11 @@ export default function CartPage() {
 							<span className={`rounded-full inline-block text-xs font-bold px-3 py-[5px] ${STATUS_BADGE_STYLES[order.status] || ''}`}>
 								{statusLabel(order.status)}
 							</span>
+							{order.paymentMethod === 'stripe' && order.paymentStatus && (
+								<span className="text-xs font-semibold text-[#475569]">
+									{t('cart.paymentLabel')}: {paymentStatusLabel(order.paymentStatus)}
+								</span>
+							)}
 							<p className="font-bold min-w-20 text-right">RM {order.totalPrice.toFixed(2)}</p>
 							{(order.status === 'pending' || order.status === 'completed') && (
 								order.recommendationSurveySubmitted
@@ -336,10 +405,15 @@ export default function CartPage() {
 
 	return (
 		<main>
-          <Header />
-            <div className="max-w-[1000px] mx-auto p-6">
-			  <h1 className="mb-6 text-[#333]">{activeTab === 'cart' ? `Shopping Cart (${items.length} items)` : 'My Purchases'}</h1>
-			  <div className="flex gap-2 mb-6 border-b border-[#e5e5e5]">
+	          <Header />
+	            <div className="max-w-[1000px] mx-auto p-6">
+				  <h1 className="mb-6 text-[#333]">{activeTab === 'cart' ? `Shopping Cart (${items.length} items)` : 'My Purchases'}</h1>
+				  {stripeReturnState && (
+					<div role="status" className="mb-5 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-4 text-[#1e3a8a]">
+						{stripeReturnMessage()}
+					</div>
+				  )}
+				  <div className="flex gap-2 mb-6 border-b border-[#e5e5e5]">
 				<button className={`bg-transparent cursor-pointer text-[15px] font-semibold px-4 py-3 border-0 border-solid border-b-[3px] ${activeTab === 'cart' ? 'text-[#111] border-b-[#111]' : 'text-[#666] border-b-transparent hover:text-[#111]'}`} onClick={() => setActiveTab('cart')}>
 					Cart
 				</button>
@@ -379,11 +453,47 @@ export default function CartPage() {
 					<span>Shipping</span>
 					<span>Free</span>
 				  </div>
-				  <div className="flex justify-between mb-3 text-lg font-bold text-[#333] pt-3 border-t border-[#eee]">
-					<span>Total</span>
-					<span>RM {total.toFixed(2)}</span>
-				  </div>
-				  {checkoutError && <p className="text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] rounded p-2.5 mt-3 mb-0 text-sm">{checkoutError}</p>}
+					  <div className="flex justify-between mb-3 text-lg font-bold text-[#333] pt-3 border-t border-[#eee]">
+						<span>Total</span>
+						<span>RM {total.toFixed(2)}</span>
+					  </div>
+					  <fieldset className="mt-4 border-0 p-0">
+						<legend className="mb-2 text-sm font-semibold text-[#333]">{t('cart.paymentMethod')}</legend>
+						<label className="mb-2 flex cursor-pointer items-center gap-2 text-sm">
+							<input
+								type="radio"
+								name="paymentMethod"
+								value="meetup"
+								checked={paymentMethod === 'meetup'}
+								onChange={() => {
+									setPaymentMethod('meetup');
+									setStripeCheckoutRequestId('');
+								}}
+								disabled={isCheckingOut}
+							/>
+							{t('cart.meetupPayment')}
+						</label>
+						<label className="flex cursor-pointer items-center gap-2 text-sm">
+							<input
+								type="radio"
+								name="paymentMethod"
+								value="stripe"
+								checked={paymentMethod === 'stripe'}
+								onChange={() => {
+									setPaymentMethod('stripe');
+									setStripeCheckoutRequestId('');
+								}}
+								disabled={isCheckingOut}
+							/>
+							{t('cart.stripePayment')}
+						</label>
+					  </fieldset>
+					  {paymentMethod === 'stripe' && (
+						<p className="mt-3 rounded bg-[#f8fafc] p-3 text-xs leading-5 text-[#475569]">
+							{t('cart.stripeSandboxNotice')}
+						</p>
+					  )}
+					  {checkoutError && <p className="text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] rounded p-2.5 mt-3 mb-0 text-sm">{checkoutError}</p>}
 				  <button className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }} onClick={handleCheckout} disabled={isCheckingOut}>
 					{isCheckingOut ? 'Checking out...' : 'Checkout'}
 				  </button>
