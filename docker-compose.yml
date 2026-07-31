@@ -61,8 +61,6 @@ services:
     container_name: transcendence-node-exporter
     command:
       - --collector.textfile.directory=/metrics
-    ports:
-      - "127.0.0.1:9100:9100"
     volumes:
       - backup_metrics:/metrics:ro
     restart: unless-stopped
