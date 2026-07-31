@@ -28,13 +28,13 @@ func newReviewContext(method, target, body string, listingID string, userID int)
 	return context, recorder
 }
 
-func TestCreateListingReviewRejectsUsersWithoutCompletedOrder(t *testing.T) {
+func TestCreateListingReviewRejectsUsersWithoutEligiblePurchase(t *testing.T) {
 	gormDB, mock := newTestGormDB(t)
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT seller_id, title FROM listings").
 		WithArgs(10).
 		WillReturnRows(sqlmock.NewRows([]string{"seller_id", "title"}).AddRow(7, "Astrox 99"))
-	mock.ExpectQuery("SELECT id FROM orders").
+	mock.ExpectQuery("SELECT o.id FROM orders").
 		WithArgs(10, 42).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
@@ -49,7 +49,7 @@ func TestCreateListingReviewRejectsUsersWithoutCompletedOrder(t *testing.T) {
 	expectNoOutstandingSQL(t, mock)
 }
 
-func TestCreateListingReviewPersistsReviewAndSellerNotificationBeforeCommit(t *testing.T) {
+func TestCreateListingReviewAllowsPendingMeetupPurchaseAndNotifiesSeller(t *testing.T) {
 	gormDB, mock := newTestGormDB(t)
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -60,7 +60,7 @@ func TestCreateListingReviewPersistsReviewAndSellerNotificationBeforeCommit(t *t
 	mock.ExpectQuery("SELECT seller_id, title FROM listings").
 		WithArgs(10).
 		WillReturnRows(sqlmock.NewRows([]string{"seller_id", "title"}).AddRow(7, "Astrox 99"))
-	mock.ExpectQuery("SELECT id FROM orders").
+	mock.ExpectQuery("SELECT o.id FROM orders").
 		WithArgs(10, 42).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(80))
 	mock.ExpectQuery("SELECT EXISTS\\(SELECT 1 FROM listing_reviews").

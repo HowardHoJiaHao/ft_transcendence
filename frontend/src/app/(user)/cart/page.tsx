@@ -32,6 +32,7 @@ interface PurchaseOrder {
 	listingImage: string;
 	sellerName: string;
 	recommendationSurveySubmitted: boolean;
+	listingReviewSubmitted: boolean;
 }
 
 type SurveyForm = {
@@ -125,6 +126,10 @@ export default function CartPage() {
 	const [surveyOrderID, setSurveyOrderID] = useState<number | null>(null);
 	const [surveyForm, setSurveyForm] = useState<SurveyForm>(EMPTY_SURVEY);
 	const [surveySubmitting, setSurveySubmitting] = useState(false);
+	const [reviewOrder, setReviewOrder] = useState<PurchaseOrder | null>(null);
+	const [reviewRating, setReviewRating] = useState(0);
+	const [reviewComment, setReviewComment] = useState('');
+	const [reviewSubmitting, setReviewSubmitting] = useState(false);
 	const [paymentMethod, setPaymentMethod] = useState<'meetup' | 'stripe'>('meetup');
 	const [stripeCheckoutRequestId, setStripeCheckoutRequestId] = useState('');
 	const [stripeReturnState, setStripeReturnState] = useState<'return' | 'cancelled' | null>(null);
@@ -239,6 +244,47 @@ export default function CartPage() {
 			showToast(err instanceof Error ? err.message : t('mlSurvey.submitFailed'), 'error');
 		} finally {
 			setSurveySubmitting(false);
+		}
+	};
+	const canReviewOrder = (order: PurchaseOrder) => (
+		(order.status === 'pending' || order.status === 'completed') &&
+		(order.paymentMethod !== 'stripe' || order.paymentStatus === 'paid')
+	);
+	const openReview = (order: PurchaseOrder) => {
+		setReviewOrder(order);
+		setReviewRating(0);
+		setReviewComment('');
+	};
+	const submitReview = async () => {
+		if (!reviewOrder || reviewRating < 1 || !reviewComment.trim()) {
+			showToast(t('productReviews.validationRequired'), 'error');
+			return;
+		}
+		const token = localStorage.getItem('token');
+		if (!token)
+			return;
+		setReviewSubmitting(true);
+		try {
+			const response = await fetch(`/api/v1/products/${reviewOrder.listingId}/reviews`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({ rating: reviewRating, comment: reviewComment.trim() }),
+			});
+			const data = await response.json().catch(() => ({})) as { error?: string };
+			if (!response.ok)
+				throw new Error(data.error || t('productReviews.submitFailed'));
+			setOrders(current => current.map(order => (
+				order.id === reviewOrder.id ? { ...order, listingReviewSubmitted: true } : order
+			)));
+			setReviewOrder(null);
+			showToast(t('productReviews.submitSuccess'), 'success');
+		} catch (error) {
+			showToast(error instanceof Error ? error.message : t('productReviews.submitFailed'), 'error');
+		} finally {
+			setReviewSubmitting(false);
 		}
 	};
 	const statusLabel = (status: string) => {
@@ -392,6 +438,11 @@ export default function CartPage() {
 									? <span className="text-xs font-semibold text-[#1a7f37]">{t('mlSurvey.submitted')}</span>
 									: <button type="button" className="btn btn-secondary" onClick={() => openSurvey(order.id)}>{t('mlSurvey.complete')}</button>
 							)}
+							{canReviewOrder(order) && (
+								order.listingReviewSubmitted
+									? <span className="text-xs font-semibold text-[#1a7f37]">{t('productReviews.alreadyReviewed')}</span>
+									: <button type="button" className="btn btn-secondary" onClick={() => openReview(order)}>{t('productReviews.writeReview')}</button>
+							)}
 						</div>
 					</div>
 				))}
@@ -527,6 +578,31 @@ export default function CartPage() {
 								onClick={() => void submitSurvey()}
 							>
 								{surveySubmitting ? t('mlSurvey.submitting') : t('mlSurvey.submit')}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+			{reviewOrder !== null && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="purchase-review-title">
+					<div className="w-full max-w-[560px] rounded-xl bg-white p-6 shadow-xl">
+						<h2 id="purchase-review-title" className="mt-0">{t('productReviews.writeReview')}</h2>
+						<p className="text-sm text-[#666]">{reviewOrder.listingTitle}</p>
+						<label className="mb-4 flex flex-col gap-1.5 text-sm font-semibold">
+							{t('productReviews.ratingLabel')}
+							<select aria-label={t('productReviews.ratingLabel')} value={reviewRating} onChange={event => setReviewRating(Number(event.target.value))} className="rounded-md border border-[#ccc] bg-white px-3 py-2.5 font-normal">
+								<option value={0}>{t('mlSurvey.chooseOption')}</option>
+								{[1, 2, 3, 4, 5].map(rating => <option key={rating} value={rating}>{rating} / 5</option>)}
+							</select>
+						</label>
+						<label className="flex flex-col gap-1.5 text-sm font-semibold">
+							{t('productReviews.commentLabel')}
+							<textarea value={reviewComment} onChange={event => setReviewComment(event.target.value)} placeholder={t('productReviews.commentPlaceholder')} maxLength={1000} rows={5} className="resize-y rounded-md border border-[#ccc] px-3 py-2.5 font-normal" />
+						</label>
+						<div className="mt-6 flex justify-end gap-2">
+							<button type="button" className="btn btn-secondary" disabled={reviewSubmitting} onClick={() => setReviewOrder(null)}>{t('mlSurvey.cancel')}</button>
+							<button type="button" className="btn btn-primary" disabled={reviewSubmitting || reviewRating < 1 || !reviewComment.trim()} onClick={() => void submitReview()}>
+								{reviewSubmitting ? t('productReviews.submitting') : t('productReviews.submit')}
 							</button>
 						</div>
 					</div>

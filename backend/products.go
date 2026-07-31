@@ -216,16 +216,16 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 			args = append(args, sellerIdInt)
 		}
 	}
-	// Public browse asks for no status, and must not surface listings that are
-	// reserved, sold or withdrawn -- a buyer could otherwise open one, add it to
-	// a cart and only be refused at checkout. Callers that manage their own
-	// listings (My Shop, the seller dashboard) pass an explicit status and are
-	// unaffected.
+	// Public browse keeps sold-out listings visible as marketplace history, but
+	// never surfaces an in-stock pending reservation. The client renders these
+	// zero-stock cards as Sold and disables purchase actions. Callers that manage
+	// their own listings (My Shop, the seller dashboard) pass an explicit status.
 	if status == "" {
-		status = "active"
+		whereClause += " AND (l.status = 'active' OR (l.status IN ('pending', 'sold') AND COALESCE(l.stock_quantity, 0) = 0))"
+	} else {
+		whereClause += fmt.Sprintf(" AND l.status = $%d", len(args)+1)
+		args = append(args, status)
 	}
-	whereClause += fmt.Sprintf(" AND l.status = $%d", len(args)+1)
-	args = append(args, status)
 
 	countQuery := "SELECT COUNT(*)" + listingFromClause + whereClause
 	var totalCount int
@@ -241,7 +241,9 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	} else if sortBy == "price-high" {
 		query += " ORDER BY l.price DESC"
 	} else if sortBy == "newest" {
-		query += " ORDER BY l.id DESC"
+		// Keep the live marketplace fresh: sold-out cards remain visible, but
+		// they always follow listings that buyers can still purchase.
+		query += " ORDER BY CASE WHEN l.status <> 'active' OR COALESCE(l.stock_quantity, 0) = 0 THEN 1 ELSE 0 END ASC, l.id DESC"
 	} else if sortBy == "rating" {
 		query += " ORDER BY COALESCE(lr.avg_rating, 0) DESC, l.id DESC"
 	} else {

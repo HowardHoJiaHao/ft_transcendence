@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'; //std react hook for managing local state & side effects
 import { useAuth } from '@/context/AuthContext';; //import hook to access global authentication data
+import { useI18n } from '@/context/LanguageContext';
 import Header from '@/components/Header/Header';
 import ListingImage from '@/components/ListingImage/ListingImage';
 import Link from 'next/link';
@@ -23,6 +24,8 @@ interface Product
   reviews: number;
   isNew: boolean;
   isFeatured: boolean;
+  stockQuantity: number;
+  status: string;
 }
 
 const WEIGHT_CATEGORIES = [
@@ -54,6 +57,7 @@ const BALANCE_CATEGORIES = [
 export default function Home()
 {
   const { user, logout } = useAuth();
+  const { t } = useI18n();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
   const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
   const [selectedFlexibilities, setSelectedFlexibilities] = useState<string[]>([]);
@@ -164,6 +168,8 @@ export default function Home()
           reviews: p.reviews,
           isNew: p.isNew,
           isFeatured: p.isFeatured,
+          stockQuantity: p.stockQuantity,
+          status: p.status,
         }));
 
         setProducts(mappedProducts);
@@ -346,7 +352,7 @@ export default function Home()
             ) : products.length > 0 ? (
               <div className="grid grid-cols-4 gap-4 max-[768px]:grid-cols-2">
                 {products.map((product) => (
-                  <div key={product.id} className="group bg-white rounded-lg overflow-hidden shadow-[var(--shadow)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[var(--shadow-lg)]">
+                  <div key={product.id} className={`group bg-white rounded-lg overflow-hidden shadow-[var(--shadow)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[var(--shadow-lg)] ${product.stockQuantity <= 0 || product.status === 'sold' ? 'opacity-85' : ''}`}>
                     <div className="relative w-full h-[200px] overflow-hidden">
                       <ListingImage
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -362,6 +368,11 @@ export default function Home()
                       {product.isNew && (
                         <span className="badge badge-success absolute top-2 right-2 text-[11px] px-2 py-1">
                           New
+                        </span>
+                      )}
+                      {(product.stockQuantity <= 0 || product.status === 'sold') && (
+                        <span className="absolute bottom-2 right-2 rounded bg-red-600 px-2 py-1 text-xs font-bold text-white">
+                          {t('cart.sold')}
                         </span>
                       )}
                     </div>

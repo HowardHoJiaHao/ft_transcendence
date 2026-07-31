@@ -394,7 +394,11 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 				{/* The whole listing is bought at once, so this is what you get,
 				    not a pool to draw from. */}
 				<p className="text-muted">
-				  {!isAvailable ? 'Unavailable' : `Quantity: ${availableStock}`}
+				  {!isAvailable
+					? (availableStock <= 0 || product.status === 'sold'
+						? <span className="font-bold text-red-600">{t('cart.sold')}</span>
+						: 'Unavailable')
+					: `Quantity: ${availableStock}`}
 				  {alreadyInCart && isAvailable ? ' · in your cart' : ''}
 				</p>
 		  	    <p className="text-2xl font-bold text-[var(--primary)] mb-5">${product.price.toFixed(2)}

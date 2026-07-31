@@ -169,16 +169,22 @@ func reviewEligibility(db *sql.DB, listingID, userID int) (listingReviewEligibil
 		return listingReviewEligibility{Reason: "already_reviewed"}, nil
 	}
 
-	var completedOrder bool
+	var eligiblePurchase bool
 	if err := db.QueryRow(`
 		SELECT EXISTS(
-			SELECT 1 FROM orders
-			WHERE listing_id = $1 AND buyer_id = $2 AND status = 'completed'
+			SELECT 1 FROM orders o
+			LEFT JOIN payments p ON p.id = o.payment_id
+			WHERE o.listing_id = $1 AND o.buyer_id = $2
+				AND o.status IN ('pending', 'completed')
+				AND (
+					COALESCE(o.payment_method, '') <> 'stripe'
+					OR p.status = 'paid'
+				)
 		)`, listingID, userID,
-	).Scan(&completedOrder); err != nil {
+	).Scan(&eligiblePurchase); err != nil {
 		return listingReviewEligibility{}, err
 	}
-	if !completedOrder {
+	if !eligiblePurchase {
 		return listingReviewEligibility{Reason: "completed_order_required"}, nil
 	}
 	return listingReviewEligibility{CanReview: true}, nil
@@ -253,13 +259,19 @@ func createListingReview(c echo.Context, gormDB *gorm.DB, notificationService *n
 
 	var orderID int
 	err = tx.QueryRow(`
-		SELECT id FROM orders
-		WHERE listing_id = $1 AND buyer_id = $2 AND status = 'completed'
-		ORDER BY updated_at DESC, id DESC
+		SELECT o.id FROM orders o
+		LEFT JOIN payments p ON p.id = o.payment_id
+		WHERE o.listing_id = $1 AND o.buyer_id = $2
+			AND o.status IN ('pending', 'completed')
+			AND (
+				COALESCE(o.payment_method, '') <> 'stripe'
+				OR p.status = 'paid'
+			)
+		ORDER BY o.updated_at DESC, o.id DESC
 		LIMIT 1`, listingID, userID,
 	).Scan(&orderID)
 	if err == sql.ErrNoRows {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "a completed order is required before reviewing"})
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "an eligible purchase is required before reviewing"})
 	}
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create review"})

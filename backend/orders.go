@@ -35,6 +35,7 @@ type EnrichedOrder struct {
 	BuyerUsername                 string  `json:"buyerUsername,omitempty"`
 	BuyerEmail                    string  `json:"buyerEmail,omitempty"`
 	RecommendationSurveySubmitted bool    `json:"recommendationSurveySubmitted"`
+	ListingReviewSubmitted        bool    `json:"listingReviewSubmitted"`
 }
 
 type CreateOrderItemRequest struct {
@@ -293,6 +294,10 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 				SELECT 1 FROM recommendation_training_feedback feedback
 				WHERE feedback.order_id = o.id
 			),
+			EXISTS (
+				SELECT 1 FROM listing_reviews review
+				WHERE review.order_id = o.id
+			),
 			CASE
 				WHEN p.status IN ('initializing', 'pending') THEN 'awaiting_payment'
 				ELSE p.status
@@ -325,6 +330,7 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 			&o.TotalPrice, &o.Status, &paymentMethod, &o.CreatedAt, &o.UpdatedAt,
 			&o.ListingTitle, &o.ListingImage, &o.ListingCategory, &o.ListingPrice, &o.SellerName,
 			&o.RecommendationSurveySubmitted,
+			&o.ListingReviewSubmitted,
 			&paymentStatus,
 		)
 		if err != nil {

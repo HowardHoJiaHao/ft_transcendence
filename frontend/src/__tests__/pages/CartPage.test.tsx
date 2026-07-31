@@ -88,6 +88,17 @@ vi.mock('@/context/LanguageContext', () => ({
       'cart.checkoutSuccess': 'Checkout successful',
       'cart.checkoutNetworkError': 'Network error during checkout',
       'cart.loadPurchasesFailed': 'Failed to load purchases',
+      'cart.sold': 'Sold',
+      'productReviews.writeReview': 'Write a review',
+      'productReviews.ratingLabel': 'Your rating',
+      'productReviews.commentLabel': 'Your review',
+      'productReviews.commentPlaceholder': 'Share your experience with this product',
+      'productReviews.submit': 'Post review',
+      'productReviews.submitting': 'Posting…',
+      'productReviews.validationRequired': 'Choose a rating and write a review first.',
+      'productReviews.submitSuccess': 'Your review has been posted.',
+      'productReviews.submitFailed': 'Unable to post your review.',
+      'productReviews.alreadyReviewed': 'You have already reviewed this product.',
       'mlSurvey.checkoutSuccess': 'Checkout successful',
       'mlSurvey.checkoutPrompt': 'Your purchase can now add a real row to the ML training dataset.',
       'mlSurvey.completeForOrder': 'Complete survey for order #{id}',
@@ -233,6 +244,7 @@ describe('CartPage checkout', () => {
           listingImage: '',
           sellerName: 'seller',
           recommendationSurveySubmitted: false,
+          listingReviewSubmitted: false,
         }]),
       })
       .mockResolvedValueOnce({
@@ -266,6 +278,46 @@ describe('CartPage checkout', () => {
       budget_range: '200-400',
     });
     expect(mocks.showToast).toHaveBeenCalledWith('Training row added', 'success');
+  });
+
+  it('lets a buyer review a meetup purchase immediately after checkout', async () => {
+    localStorage.setItem('token', 'valid-jwt');
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ orders: [{ id: 91 }] }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ([{
+          id: 91,
+          listingId: 10,
+          quantity: 2,
+          totalPrice: 200,
+          status: 'pending',
+          paymentMethod: 'meetup',
+          createdAt: new Date().toISOString(),
+          listingTitle: 'Racket',
+          listingImage: '',
+          sellerName: 'seller',
+          recommendationSurveySubmitted: false,
+          listingReviewSubmitted: false,
+        }]),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 22 }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const user = userEvent.setup();
+    renderCartPage();
+    await user.click(screen.getByRole('button', { name: 'Checkout' }));
+    await user.click(await screen.findByRole('button', { name: 'Write a review' }));
+    await user.selectOptions(screen.getByLabelText('Your rating'), '5');
+    await user.type(screen.getByLabelText('Your review'), 'Excellent racket');
+    await user.click(screen.getByRole('button', { name: 'Post review' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const [url, options] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(url).toBe('/api/v1/products/10/reviews');
+    expect(options.method).toBe('POST');
+    expect(JSON.parse(String(options.body))).toEqual({ rating: 5, comment: 'Excellent racket' });
+    expect(mocks.showToast).toHaveBeenCalledWith('Your review has been posted.', 'success');
   });
 
   it('selects Stripe, sends only trusted fields, and redirects to Checkout', async () => {
