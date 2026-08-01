@@ -27,6 +27,29 @@ type AssessmentStep = {
 
 const RECOMMENDATION_COMPLETE_MESSAGE = '__recommendation_assessment_complete__';
 
+type ProductLink = {
+  linkText?: string;
+  href: string;
+};
+
+// The model is instructed to use a plain Product link line, but it may wrap
+// the line in Markdown bold or include it in a bullet with listing details.
+export function parseProductLink(line: string): ProductLink | null {
+  const normalized = line
+    .trim()
+    .replace(/^\*\*(.+)\*\*$/, '$1')
+    .replace(/^[*\-]\s+/, '')
+    .trim();
+  const productLink = normalized.match(/^Product link:\s*(.+)$/i);
+  if (!productLink) return null;
+
+  const details = productLink[1].split('|').map((part) => part.trim());
+  const href = [...details].reverse().find((part) => /^\/products\/\d+$/.test(part));
+  if (!href) return null;
+
+  return details[0] === href ? { href } : { linkText: details[0], href };
+}
+
 const assessmentSteps: AssessmentStep[] = [
   {
     key: 'age_group',
@@ -301,7 +324,7 @@ export default function AIFloatingChat() {
     // Find Racket ID matches (e.g. "Racket ID: 3")
     const racketMatch = content.match(/Racket ID:\s*(\d+)/i);
     const orderMatch = content.match(/Order #\s*(\d+)/i);
-    const hasProductLinks = /^Product link:/im.test(content);
+    const hasProductLinks = /^(?:[*-]\s*)?Product link:/im.test(content);
     const postAdMatch = /\b(post an ad|create (?:a )?listing|list (?:my|your) racket|start selling|sell (?:my|your) racket)\b/i.test(content);
     
     const lines = content.split('\n');
@@ -327,38 +350,18 @@ export default function AIFloatingChat() {
         return;
       }
 
-      const productLinkMatch = trimmed.match(/^Product link:\s*(.+?)\s*\|\s*(\S+)/i);
-      if (productLinkMatch) {
+      const productLink = parseProductLink(trimmed);
+      if (productLink) {
         flushList();
-        const linkText = productLinkMatch[1].trim();
-        const href = productLinkMatch[2];
         formattedText.push(
           <a
             key={`product-link-${i}`}
-            href={href}
+            href={productLink.href}
             className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-2 bg-[linear-gradient(135deg,#059669_0%,#10b981_100%)] text-white border-none rounded-lg text-[11px] font-semibold cursor-pointer transition-all duration-200 no-underline hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]"
             target="_blank"
             rel="noopener noreferrer"
           >
-            Product link: {linkText}
-          </a>
-        );
-        return;
-      }
-
-      const productLinkFallback = trimmed.match(/^Product link:\s*(\S+)/i);
-      if (productLinkFallback) {
-        flushList();
-        const href = productLinkFallback[1];
-        formattedText.push(
-          <a
-            key={`product-link-${i}`}
-            href={href}
-            className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-2 bg-[linear-gradient(135deg,#059669_0%,#10b981_100%)] text-white border-none rounded-lg text-[11px] font-semibold cursor-pointer transition-all duration-200 no-underline hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Product link: {href}
+            Product link: {productLink.linkText ?? productLink.href}
           </a>
         );
         return;
