@@ -236,6 +236,14 @@ func runListingsMigration(db *sql.DB) error {
 				CHECK (status IN ('active', 'pending', 'sold', 'archived'));
 			END IF;
 		END $$`,
+		// The original two Unsplash seed URLs now return 404. Update existing
+		// volumes as well as fresh databases seeded from db/init.sql.
+		`UPDATE listings
+		 SET image = 'https://images.unsplash.com/photo-1722003185511-e9320e4a5d00?auto=format&fit=crop&w=800&q=80'
+		 WHERE image = 'https://images.unsplash.com/photo-1613918431703-aa508db4f50f?w=400&h=300&fit=crop'`,
+		`UPDATE listings
+		 SET image = 'https://images.unsplash.com/photo-1722003184145-a68a3b1d845c?auto=format&fit=crop&w=800&q=80'
+		 WHERE image = 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ad?w=400&h=300&fit=crop'`,
 	}
 	for _, m := range migrations {
 		if _, err := db.Exec(m); err != nil {

@@ -10,6 +10,7 @@ import { useToast } from '@/components/Toast/ToastContext';
 import Header from '@/components/Header/Header';
 import ChatModal from './ChatModal';
 import type { Conversation, DirectoryUser, PrivateMessage } from '@/types/websocket';
+import { DEFAULT_AVATAR, resolveAvatarUrl } from '@/lib/avatar';
 
 const PEOPLE_PAGE_SIZE = 40;
 type RoleFilter = '' | 'seller' | 'buyer';
@@ -221,7 +222,12 @@ export default function ChatPage() {
 								<li key={conversation.partner_id} onClick={() => void openChat(conversation.partner_id)} className="flex items-center p-3 border-b last:border-b-0 border-[#eee] cursor-pointer hover:bg-[#f5f5f5]">
 									<div className="w-10 h-10 rounded-full mr-2.5 shrink-0">
 										{conversation.partner_avatar_url ? (
-											<img src={conversation.partner_avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+											<img
+												src={resolveAvatarUrl(conversation.partner_avatar_url)}
+												alt=""
+												className="w-full h-full rounded-full object-cover"
+												onError={(event) => { event.currentTarget.src = DEFAULT_AVATAR; }}
+											/>
 										) : (
 											<span className="w-full h-full rounded-full bg-[#ccc] flex items-center justify-center text-white font-bold">{conversation.partner_username[0]}</span>
 										)}
@@ -260,7 +266,14 @@ export default function ChatPage() {
 											<div className="flex items-center gap-2 px-3 py-2.5 hover:bg-[#f8fafc]">
 												<button onClick={() => void openChat(person.id)} onContextMenu={(event) => { event.preventDefault(); openContextMenu(person, event.clientX, event.clientY); }} onKeyDown={(event) => { if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); openContextMenu(person, rect.right, rect.bottom); } }} className="flex items-center gap-2 min-w-0 flex-1 text-left bg-transparent border-0 p-0 cursor-pointer">
 													<span className="relative shrink-0 w-10 h-10">
-														{person.avatar_url ? <img src={person.avatar_url} alt="" className="w-full h-full rounded-full object-cover" /> : <span className="w-full h-full rounded-full bg-[#9ca3af] flex items-center justify-center text-white font-bold">{person.username[0]?.toUpperCase()}</span>}
+														{person.avatar_url ? (
+															<img
+																src={resolveAvatarUrl(person.avatar_url)}
+																alt=""
+																className="w-full h-full rounded-full object-cover"
+																onError={(event) => { event.currentTarget.src = DEFAULT_AVATAR; }}
+															/>
+														) : <span className="w-full h-full rounded-full bg-[#9ca3af] flex items-center justify-center text-white font-bold">{person.username[0]?.toUpperCase()}</span>}
 														<span className={`absolute right-0 bottom-0 w-3 h-3 rounded-full border-2 border-white ${isOnline ? 'bg-[#22c55e]' : 'bg-[#9ca3af]'}`} aria-label={isOnline ? t('chat.online') : t('chat.offline')} />
 													</span>
 													<span className="min-w-0 flex-1">

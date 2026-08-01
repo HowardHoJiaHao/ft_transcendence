@@ -6,6 +6,7 @@ import Header from "@/components/Header/Header";
 import ShopTabs from "@/components/ShopTabs/ShopTabs";
 import ShopHeader from "@/components/ShopTabs/ShopHeader";
 import ListingImage from "@/components/ListingImage/ListingImage";
+import { PLACEHOLDER_LISTING_IMAGE } from "@/lib/listingImage";
 import BulkImport from "@/components/BulkImport/BulkImport";
 import { useShopCounts } from "@/components/ShopTabs/useShopCounts";
 import { useAuth } from '@/context/AuthContext';
@@ -787,7 +788,7 @@ function SellPageInner() {
                       key={`existing-${file.id}`}
                       className="aspect-square border border-[#ddd] rounded-md overflow-hidden bg-[#f9f9f9] relative"
                     >
-                      <img
+					  <ListingImage
                         className="w-full h-full object-cover block"
                         src={file.contentUrl}
                         alt={file.originalName}
@@ -824,6 +825,7 @@ function SellPageInner() {
                         className="w-full h-full object-cover block"
                         src={previewUrl}
                         alt={photos[i]?.name || t("sell.photoAlt", { index: i + 1 })}
+						onError={(event) => { event.currentTarget.src = PLACEHOLDER_LISTING_IMAGE; }}
                       />
                       <button
                         type="button"

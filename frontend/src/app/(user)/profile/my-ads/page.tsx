@@ -26,6 +26,7 @@ import Header from '@/components/Header/Header';
 import ShopTabs, { type ShopListTab } from '@/components/ShopTabs/ShopTabs';
 import ShopHeader from '@/components/ShopTabs/ShopHeader';
 import { downloadCsv } from '@/lib/csv';
+import { PLACEHOLDER_LISTING_IMAGE } from '@/lib/listingImage';
 
 // A seller listing as returned by GET /api/v1/products.
 interface Ad {
@@ -127,7 +128,7 @@ const CHART_COLORS = [
 
 const ADS_PER_PAGE = 15;
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/350x450';
+const PLACEHOLDER_IMAGE = PLACEHOLDER_LISTING_IMAGE;
 
 const LIST_TABS: ShopListTab[] = ['active', 'pending', 'sold', 'archived', 'analytics'];
 

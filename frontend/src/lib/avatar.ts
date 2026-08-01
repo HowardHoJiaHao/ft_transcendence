@@ -8,7 +8,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 export const DEFAULT_AVATAR = '/default-avatar.png';
-export const PLACEHOLDER_AVATAR = 'https://via.placeholder.com/120';
+export const PLACEHOLDER_AVATAR = DEFAULT_AVATAR;
 
 export const resolveAvatarUrl = (url?: string) => {
   if (!url) return DEFAULT_AVATAR;

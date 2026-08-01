@@ -9,6 +9,8 @@ import { useToast } from '@/components/Toast/ToastContext';
 import { useAuth } from '@/context/AuthContext';;
 import ChatModal from '@/app/(user)/chat/ChatModal';
 import { useWebSocketContext } from '@/context/WebSocketContext';
+import { PLACEHOLDER_LISTING_IMAGE } from '@/lib/listingImage';
+import ListingImage from '@/components/ListingImage/ListingImage';
 
 interface Product
 {
@@ -57,8 +59,8 @@ export default function UserPage()
 	const { user: currentUser } = useAuth();
 	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 	const defaultAvatarUrl = '/default-avatar.png';
-	const placeholderAvatarUrl = 'https://via.placeholder.com/120';
-	const placeholderListingImageUrl = 'https://via.placeholder.com/350x450';
+	const placeholderAvatarUrl = defaultAvatarUrl;
+	const placeholderListingImageUrl = PLACEHOLDER_LISTING_IMAGE;
 	const [seller, setSeller] = useState<UserProfile | null>(null)
 	const [products, setProducts] = useState<Product[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -271,7 +273,12 @@ export default function UserPage()
                {products.map((product) => (
                  <div key={product.id} className="group bg-white rounded-lg overflow-hidden shadow-[var(--shadow)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[var(--shadow-lg)]">
                    <div className="relative w-full h-[200px] overflow-hidden">
-                     <img src={product.image} alt={product.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+									 <ListingImage
+										 src={product.image}
+										 alt={product.title}
+										 apiBase={apiBaseUrl}
+										 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+									 />
                      {product.isFeatured && (
                        <span className="badge badge-primary absolute top-2 left-2 text-[11px] px-2 py-1">
                          Featured
