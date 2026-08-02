@@ -79,7 +79,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const productId = parseInt(resolvedParams.id);
 	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 	const defaultAvatarUrl = '/default-avatar.png';
-	const placeholderAvatarUrl = 'https://via.placeholder.com/120';
+	const placeholderAvatarUrl = defaultAvatarUrl;
 
 	const [product, setProduct] = useState<Product | null>(null);
 	const [imageUrls, setImageUrls] = useState<string[]>([]);

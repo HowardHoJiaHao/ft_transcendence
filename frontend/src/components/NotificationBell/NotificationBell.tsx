@@ -226,7 +226,6 @@ export default function NotificationBell({ onBeforeOpen }: NotificationBellProps
                             <span className="text-[10px] font-bold uppercase tracking-wide text-[#c2185b]">
                               {t('notifications.new')}
                             </span>
-                            <span aria-hidden="true" className="w-2 h-2 rounded-full bg-[#ef4444]" />
                           </span>
                         )}
                       </button>

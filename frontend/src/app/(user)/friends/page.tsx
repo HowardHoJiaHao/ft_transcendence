@@ -8,6 +8,7 @@ import OnlineStatus from '@/components/OnlineStatus';
 import Header from "@/components/Header/Header"
 import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
+import { DEFAULT_AVATAR, resolveAvatarUrl } from '@/lib/avatar';
 
 type Friend = {
 	id: number;
@@ -97,7 +98,12 @@ export default function FriendPage()
 					  <Link href={`/user/${friend.id}`} className="flex items-center flex-1 no-underline text-inherit min-w-0">
 				        <div className="w-10 h-10 rounded-full mr-[10px]">
 					      {friend.avatar ? (
-								<img src={friend.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+								<img
+									src={resolveAvatarUrl(friend.avatar)}
+									alt=""
+									className="w-full h-full rounded-full object-cover"
+									onError={(event) => { event.currentTarget.src = DEFAULT_AVATAR; }}
+								/>
 							) : (
 								<span className="w-full h-full rounded-full bg-[#ccc] flex items-center justify-center text-white font-bold">{friend.username[0]}</span>
 							)}

@@ -203,7 +203,12 @@ export default function LoginPage ()
 					{isRegister ? 'Sign Up' : 'Sign In'}
 				</button>
 				<button type="button" className="inline-flex items-center justify-center gap-[10px] w-full p-3 bg-white border border-[#747775] rounded cursor-pointer" onClick={() => window.location.href = '/api/v1/auth/google'}>
-					<img src="/google-icon.svg" alt="" className="w-[18px] h-[18px]"/>
+					<img
+						src="/google-icon.svg"
+						alt=""
+						className="w-[18px] h-[18px]"
+						onError={(event) => { event.currentTarget.style.display = 'none'; }}
+					/>
 					Sign in with Google
 				</button>
 				{!isRegister && (

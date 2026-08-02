@@ -194,7 +194,6 @@ jobs:
                'friendships',
                'messages',
                'notifications',
-               'reviews',
                'listing_reviews',
                'recommendation_training_feedback',
                'ml_training_runs',
