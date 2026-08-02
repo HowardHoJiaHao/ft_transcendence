@@ -41,6 +41,7 @@ node_modules/
 static/avatars/
 storage/
 backups/
+study_folder/
 monitoring/alertmanager/logs/
 ai_service/ml_models/active.json
 ai_service/ml_models/.active.json.tmp
