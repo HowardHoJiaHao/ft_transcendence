@@ -14,30 +14,21 @@
 *~
 node_modules/
 *.tsbuildinfo
-
-# Python
 __pycache__/
 *.py[cod]
-
-# Go build artifacts
 /backend/transcendence
-
-# Docker
 docker-compose.override.yml
-
-# IDE
 .vscode/
 .idea/
 *.sublime-project
 *.sublime-workspace
-
-# OS
 .DS_Store
 Thumbs.db
-
-# vs code type
 node_modules/
 
 static/avatars/
 backups/
 monitoring/alertmanager/logs/
+notes/
+monitoring/PROMETHEUS_CHEAT_SHEET.md
+monitoring/RUNBOOKS.md
