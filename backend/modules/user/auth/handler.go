@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -100,6 +101,7 @@ func (h *Handler) Login(c echo.Context) error {
 
 	tempToken, err := h.service.GenerateAndSendOTP(req.Email)
 	if err != nil {
+		log.Printf("Error sending login OTP: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "OTP failed to send"})
 	}
 
@@ -128,6 +130,7 @@ func (h *Handler) RequestPasswordChange(c echo.Context) error {
 	}
 	tempToken, err := h.service.GenerateAndSendOTP(u.Email)
 	if err != nil {
+		log.Printf("Error sending password-change OTP: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "OTP failed to send"})
 	}
 	return c.JSON(http.StatusAccepted, map[string]string{"tempToken": tempToken, "message": "OTP sent"})
@@ -211,6 +214,7 @@ func (h *Handler) ResendOtp(c echo.Context) error {
 
 	tempToken, err := h.service.GenerateAndSendOTP(req.Email)
 	if err != nil {
+		log.Printf("Error resending OTP: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "OTP failed to send"})
 	}
 	return c.JSON(http.StatusAccepted, map[string]string{"tempToken": tempToken, "message": "OTP sent"})

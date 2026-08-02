@@ -616,5 +616,197 @@
     "errPriceInvalid": "harga mesti nombor lebih besar daripada 0",
     "errStockInvalid": "stockQuantity mesti nombor bulat sekurang-kurangnya 1",
     "errOriginalPriceInvalid": "originalPrice mesti nombor lebih besar daripada 0"
+  },
+  "terms": {
+    "title": "Terma Perkhidmatan",
+    "updated": "Kemas kini terakhir: 2 Ogos 2026",
+    "intro": "Terma ini menerangkan apa yang anda boleh harapkan daripada RacketDiction dan apa yang kami harapkan daripada anda semasa melayari, membeli, menjual atau berbual di platform ini.",
+    "noticeTitle": "Notis projek akademik",
+    "notice": "RacketDiction ialah projek pelajar yang dibina di 42 Kuala Lumpur. Dokumen ini menerangkan dengan jujur cara platform ini berfungsi, tetapi ia belum disemak oleh peguam dan bukan nasihat undang-undang. Dapatkan semakan profesional bertauliah sebelum mengendalikan platform ini secara komersial.",
+    "tocTitle": "Dalam halaman ini",
+    "acceptance": {
+      "title": "Penerimaan terma ini",
+      "p1": "Dengan mencipta akaun, melayari senarai produk, atau menggunakan RacketDiction (“platform ini”), anda bersetuju untuk terikat dengan terma ini. Jika anda tidak bersetuju, sila jangan gunakan platform ini.",
+      "p2": "Terma ini membentuk perjanjian antara anda dan pengendali RacketDiction. Sila baca juga Dasar Privasi kami — ia menerangkan cara kami mengendalikan data peribadi anda."
+    },
+    "eligibility": {
+      "title": "Kelayakan",
+      "p1": "Untuk mendaftar akaun, anda mengesahkan bahawa:",
+      "b1": "Anda berumur sekurang-kurangnya 18 tahun, atau mempunyai kebenaran ibu bapa atau penjaga sah.",
+      "b2": "Maklumat yang anda berikan semasa pendaftaran adalah tepat dan sentiasa dikemas kini.",
+      "b3": "Anda tidak dihalang daripada menggunakan platform ini di bawah mana-mana undang-undang yang terpakai kepada anda."
+    },
+    "account": {
+      "title": "Akaun anda dan keselamatannya",
+      "p1": "Anda bertanggungjawab ke atas segala yang berlaku di bawah akaun anda. Rahsiakan kata laluan dan sebarang kod laluan sekali guna, dan jangan sesekali berkongsi dengan sesiapa.",
+      "b1": "Pilih kata laluan yang kukuh dan jangan gunakannya semula di laman lain.",
+      "b2": "Beritahu kami dengan segera jika anda mengesyaki orang lain telah mengakses akaun anda.",
+      "b3": "Jangan cipta akaun tambahan untuk mengelak penggantungan atau mempengaruhi penilaian.",
+      "p2": "Jika anda log masuk dengan Google, keselamatan akaun Google tersebut kekal menjadi tanggungjawab anda."
+    },
+    "listings": {
+      "title": "Menyenaraikan barang untuk dijual",
+      "p1": "Penjual bertanggungjawab sepenuhnya ke atas barang yang disenaraikan. Apabila anda menerbitkan senarai, anda mengesahkan bahawa:",
+      "b1": "Anda memiliki barang tersebut, atau mempunyai kebenaran untuk menjualnya.",
+      "b2": "Penerangan, keadaan, harga dan gambar adalah tepat dan tidak mengelirukan.",
+      "b3": "Barang tersebut boleh dijual dan dihantar kepada pembeli secara sah di sisi undang-undang.",
+      "b4": "Anda akan mematuhi harga dan jumlah stok yang anda nyatakan.",
+      "p2": "Kami boleh menyunting, menyembunyikan atau membuang mana-mana senarai yang didapati melanggar terma ini, tanpa notis terlebih dahulu."
+    },
+    "prohibited": {
+      "title": "Barang dan kelakuan yang dilarang",
+      "p1": "Perkara berikut tidak dibenarkan di mana-mana bahagian platform:",
+      "b1": "Barang tiruan, curi, atau menyalahi undang-undang.",
+      "b2": "Senarai yang menipu, sengaja mengelirukan, atau menggunakan gambar orang lain tanpa kebenaran.",
+      "b3": "Gangguan, ucapan kebencian, ancaman, atau kandungan lucah dalam senarai, ulasan atau sembang.",
+      "b4": "Spam, mesej pukal yang tidak diminta, atau memanipulasi ulasan dan penilaian.",
+      "b5": "Mengikis data, akses automatik di luar Developer API, atau cubaan memintas had kadar dan kawalan keselamatan.",
+      "b6": "Menduga, mengimbas atau menyerang infrastruktur kami, atau cuba mencapai data milik pengguna lain."
+    },
+    "orders": {
+      "title": "Pesanan, pembayaran dan penghantaran",
+      "p1": "Pesanan yang selesai ialah perjanjian antara pembeli dan penjual. Platform ini menyediakan alat untuk menyenarai, mencari dan menguruskan pembelian; ia bukan pihak kepada jualan tersebut.",
+      "p2": "Penjual mesti memenuhi pesanan yang disahkan dengan segera dan mengemas kini status pesanan. Pembeli mesti membayar jumlah yang dipersetujui dan memberikan butiran penghantaran yang tepat.",
+      "p3": "Pertikaian mengenai barang, penghantaran atau bayaran balik hendaklah dibangkitkan dahulu dengan pihak satu lagi melalui sembang platform. Kami mungkin membantu jika boleh, tetapi kami tidak wajib menjadi orang tengah atau mengeluarkan bayaran balik."
+    },
+    "content": {
+      "title": "Kandungan yang anda muat naik",
+      "p1": "Anda kekal memiliki teks, gambar dan kandungan lain yang anda muat naik. Dengan memuat naiknya, anda memberi kami lesen bukan eksklusif, seluruh dunia dan bebas royalti untuk menghos, memaparkan dan mengedarkan kandungan itu bagi tujuan mengendalikan dan mempromosikan platform.",
+      "p2": "Anda bertanggungjawab memastikan kandungan anda tidak melanggar hak orang lain. Kami akan membuang kandungan yang kami percaya secara munasabah melanggar hak."
+    },
+    "messaging": {
+      "title": "Mesej dan komuniti",
+      "p1": "Sembang masa nyata disediakan supaya pembeli dan penjual boleh menguruskan urus niaga. Mesej disimpan di pelayan kami supaya perbualan dapat dihantar dan dimuat semula kemudian.",
+      "p2": "Jangan gunakan sembang untuk menghantar spam atau pautan pancingan data, atau mendesak seseorang menyelesaikan pembayaran di luar platform bagi mengelak perlindungannya."
+    },
+    "ai": {
+      "title": "RacketBot, pembantu AI",
+      "p1": "RacketBot boleh menjawab soalan dan mencari maklumat tentang senarai produk dan akaun anda sendiri. Ia boleh tersilap, dan jawapannya bukan nasihat profesional — sentiasa sahkan perkara penting pada senarai produk itu sendiri.",
+      "p2": "RacketBot bertindak hanya dengan kebenaran anda sendiri dan tidak boleh membaca atau mengubah data peribadi pengguna lain. Mesej anda kepadanya diproses oleh penyedia AI pihak ketiga, seperti yang diterangkan dalam Dasar Privasi."
+    },
+    "devapi": {
+      "title": "Developer API",
+      "p1": "Kunci API yang dikeluarkan melalui Developer API adalah milik akaun anda sahaja. Apabila menggunakannya:",
+      "b1": "Rahsiakan kunci itu dan anggap ia seperti kata laluan.",
+      "b2": "Kekal dalam had kadar yang diterbitkan dan jangan cuba memintasnya.",
+      "b3": "Terima bahawa anda kekal bertanggungjawab ke atas segala yang dilakukan dengan kunci anda.",
+      "b4": "Fahami bahawa kami boleh membatalkan kunci pada bila-bila masa jika ia disalahgunakan."
+    },
+    "suspension": {
+      "title": "Penggantungan dan penamatan",
+      "p1": "Kami boleh menggantung atau menutup akaun yang melanggar terma ini, digunakan secara menyalahi undang-undang, atau membahayakan pengguna lain. Jika boleh, kami akan menerangkan sebabnya.",
+      "p2": "Anda boleh berhenti menggunakan platform dan meminta kami memadam akaun anda pada bila-bila masa. Sesetengah rekod, seperti sejarah pesanan yang selesai, mungkin disimpan jika kami dikehendaki menyimpannya."
+    },
+    "liability": {
+      "title": "Penafian dan had liabiliti",
+      "p1": "Platform ini disediakan “sebagaimana adanya” dan “mengikut ketersediaan”. Kami tidak menjamin senarai produk adalah tepat, penjual akan menunaikan janji, atau perkhidmatan ini bebas gangguan dan ralat.",
+      "p2": "Kami tidak bertanggungjawab ke atas kualiti, keselamatan atau kesahihan barang yang dijual, mahupun kelakuan mana-mana pengguna. Anda berurusan dengan pengguna lain atas risiko anda sendiri.",
+      "p3": "Setakat yang dibenarkan undang-undang, kami tidak bertanggungan ke atas kerugian tidak langsung atau berbangkit akibat penggunaan platform ini."
+    },
+    "changes": {
+      "title": "Perubahan pada terma ini",
+      "p1": "Kami mungkin mengemas kini terma ini dari semasa ke semasa. Tarikh “kemas kini terakhir” di atas menunjukkan bila versi semasa berkuat kuasa, dan penggunaan berterusan selepas perubahan bermakna anda menerima terma yang disemak."
+    },
+    "contact": {
+      "title": "Hubungi kami",
+      "p1": "Soalan mengenai terma ini boleh dihantar kepada pengendali projek melalui pautan Hubungi Kami di bahagian bawah laman. Sebagai projek akademik, RacketDiction tidak dikendalikan sebagai entiti komersial berdaftar."
+    }
+  },
+  "privacy": {
+    "title": "Dasar Privasi",
+    "updated": "Kemas kini terakhir: 2 Ogos 2026",
+    "intro": "Dasar ini menerangkan data peribadi yang dikumpul oleh RacketDiction, sebab kami mengumpulnya, dengan siapa ia dikongsi, dan kawalan yang anda ada ke atasnya.",
+    "noticeTitle": "Notis projek akademik",
+    "notice": "RacketDiction ialah projek pelajar yang dibina di 42 Kuala Lumpur. Dokumen ini menerangkan dengan jujur cara platform ini mengendalikan data, tetapi ia belum disemak oleh peguam dan bukan nasihat undang-undang. Dapatkan semakan profesional bertauliah sebelum mengendalikan platform ini secara komersial.",
+    "tocTitle": "Dalam halaman ini",
+    "scope": {
+      "title": "Skop dasar ini",
+      "p1": "Dasar ini merangkumi laman web RacketDiction, sembang masa nyatanya, pembantu RacketBot dan Developer API.",
+      "p2": "Ia tidak merangkumi laman web luar yang anda capai melalui pautan dalam senarai produk atau mesej. Setelah anda meninggalkan platform, dasar privasi laman tersebut yang terpakai."
+    },
+    "collect": {
+      "title": "Maklumat yang kami kumpul",
+      "p1": "Kami mengumpul kategori data berikut:",
+      "b1": "Butiran akaun — nama pengguna, alamat e-mel, nombor telefon, dan kata laluan anda yang disimpan hanya sebagai cincangan bergaram, tidak pernah sebagai teks yang boleh dibaca.",
+      "b2": "Data log masuk — kod laluan sekali guna yang kami hantar untuk mengesahkan anda dan, jika anda log masuk dengan Google, profil asas yang dikongsi Google dengan kami.",
+      "b3": "Kandungan profil — imej avatar anda dan apa-apa lagi yang anda pilih untuk ditambah pada profil.",
+      "b4": "Aktiviti pasaran — senarai produk yang anda terbitkan, troli, pesanan, ulasan, dan rekod pemenuhan penjual.",
+      "b5": "Aktiviti sosial — sambungan rakan, mesej sembang dan pemberitahuan anda.",
+      "b6": "Data teknikal — alamat IP, jenis pelayar dan log permintaan, disimpan untuk keselamatan, had kadar dan mengesan kerosakan.",
+      "b7": "Penggunaan Developer API — kunci API yang anda jana dan log permintaan yang dibuat dengannya."
+    },
+    "use": {
+      "title": "Cara kami menggunakannya",
+      "p1": "Kami menggunakan data itu untuk:",
+      "b1": "Mencipta dan melindungi akaun anda, serta mengesahkannya dengan kod laluan sekali guna.",
+      "b2": "Menunjukkan senarai produk anda kepada pembeli dan membolehkan kedua-dua pihak menyelesaikan pesanan.",
+      "b3": "Menghantar mesej sembang dan pemberitahuan secara masa nyata.",
+      "b4": "Menjawab soalan anda melalui pembantu RacketBot.",
+      "b5": "Mengesan dan menghalang penipuan, penyalahgunaan dan serangan terhadap platform.",
+      "b6": "Memastikan perkhidmatan berjalan dan mendiagnosis masalah apabila ia gagal."
+    },
+    "sharing": {
+      "title": "Bila kami berkongsi data",
+      "p1": "Kami tidak menjual data peribadi anda. Ia dikongsi hanya dalam keadaan berikut:",
+      "b1": "Dengan pengguna lain — nama pengguna, avatar, senarai produk dan ulasan anda boleh dilihat orang lain. Alamat e-mel dan nombor telefon anda tidak dipaparkan secara awam.",
+      "b2": "Dengan penyedia perkhidmatan — pemproses yang disenaraikan di bahagian seterusnya, semata-mata untuk menyediakan ciri yang mereka sokong.",
+      "b3": "Apabila undang-undang menghendakinya — untuk memenuhi kewajipan undang-undang, atau melindungi hak dan keselamatan pengguna kami."
+    },
+    "processors": {
+      "title": "Perkhidmatan pihak ketiga",
+      "p1": "Platform ini bergantung pada perkhidmatan luar berikut, dan setiap satu mempunyai dasar privasinya sendiri:",
+      "b1": "Google — digunakan hanya jika anda memilih untuk log masuk dengan akaun Google.",
+      "b2": "Brevo — menghantar e-mel transaksi seperti kod pengesahan anda.",
+      "b3": "DeepSeek — memproses mesej yang anda hantar kepada pembantu RacketBot.",
+      "b4": "OpenRouter — menjana pembenaman yang membolehkan RacketBot mencari dokumen bantuan kami."
+    },
+    "ai": {
+      "title": "Pembantu AI dan data anda",
+      "p1": "Apabila anda berbual dengan RacketBot, mesej anda dihantar kepada penyedia AI kami supaya jawapan dapat dijana. Sila jangan masukkan kata laluan, nombor kad pembayaran atau butiran sensitif lain dalam perbualan tersebut.",
+      "p2": "RacketBot hanya boleh mencari data yang anda memang dibenarkan lihat. Pemeriksaan itu berlaku di bahagian belakang sistem kami, bukan pada pembantu itu, jadi ia tidak boleh dipujuk untuk mendedahkan maklumat peribadi pengguna lain."
+    },
+    "cookies": {
+      "title": "Kuki dan storan pelayar",
+      "p1": "Kami menggunakan beberapa mekanisme storan sahaja, kesemuanya perlu untuk laman ini berfungsi. Kami tidak menggunakan kuki pengiklanan atau penjejakan pihak ketiga.",
+      "b1": "Satu kuki yang menyimpan token log masuk anda apabila anda mengesahkan diri dengan Google.",
+      "b2": "Storan setempat pelayar untuk token log masuk dan bahasa pilihan anda.",
+      "p2": "Membersihkan storan pelayar akan melog keluar anda, tetapi ia tidak memadam akaun atau mana-mana data anda."
+    },
+    "retention": {
+      "title": "Berapa lama kami menyimpannya",
+      "p1": "Kami menyimpan data anda selagi akaun anda aktif. Senarai produk, pesanan dan mesej kekal supaya kedua-dua pihak dalam urus niaga mempunyai rekod yang konsisten.",
+      "p2": "Kod laluan sekali guna luput dalam beberapa minit. Log pelayan dan keselamatan disimpan untuk tempoh terhad sebelum digilirkan. Sandaran pangkalan data dijalankan mengikut jadual dan dipadam setelah melepasi tempoh penyimpanannya."
+    },
+    "security": {
+      "title": "Cara kami melindunginya",
+      "p1": "Kami mengambil langkah teknikal yang munasabah untuk melindungi data anda:",
+      "b1": "Kata laluan disimpan sebagai cincangan bcrypt, tidak pernah sebagai teks yang boleh dibaca.",
+      "b2": "Trafik antara pelayar anda dan platform disulitkan dengan HTTPS.",
+      "b3": "Tembok api aplikasi web menapis serangan biasa sebelum ia sampai kepada aplikasi.",
+      "b4": "Setiap permintaan disemak terhadap sesi log masuk anda sebelum sebarang data anda dikembalikan.",
+      "p2": "Tiada sistem yang selamat sepenuhnya. Jika kami mengetahui berlakunya pelanggaran yang menjejaskan data anda, kami akan memberitahu anda."
+    },
+    "rights": {
+      "title": "Hak dan pilihan anda",
+      "p1": "Bergantung pada tempat anda tinggal, anda mungkin berhak untuk:",
+      "b1": "Bertanya data peribadi apa yang kami simpan tentang anda.",
+      "b2": "Membetulkan maklumat yang salah — kebanyakan medan boleh diubah dari profil anda.",
+      "b3": "Memadam akaun anda dan data peribadi yang berkaitan dengannya.",
+      "b4": "Membantah pemprosesan tertentu, atau meminta kami mengehadkannya.",
+      "b5": "Menerima salinan data yang anda berikan dalam format mudah alih.",
+      "p2": "Anda boleh melakukan kebanyakannya terus dalam tetapan profil anda. Untuk perkara lain, hubungi kami menggunakan butiran di bawah."
+    },
+    "children": {
+      "title": "Privasi kanak-kanak",
+      "p1": "Platform ini tidak ditujukan kepada kanak-kanak bawah 13 tahun dan kami tidak mengumpul data mereka dengan sedar. Jika anda percaya seorang kanak-kanak telah mencipta akaun, hubungi kami dan kami akan membuangnya."
+    },
+    "changes": {
+      "title": "Perubahan pada dasar ini",
+      "p1": "Kami mungkin mengemas kini dasar ini apabila platform berubah. Tarikh “kemas kini terakhir” di atas menunjukkan versi semasa, dan perubahan penting akan diumumkan dalam aplikasi."
+    },
+    "contact": {
+      "title": "Hubungi kami",
+      "p1": "Untuk soalan privasi, atau untuk melaksanakan mana-mana hak di atas, hubungi pengendali projek melalui pautan Hubungi Kami di bahagian bawah laman."
+    }
   }
 }
