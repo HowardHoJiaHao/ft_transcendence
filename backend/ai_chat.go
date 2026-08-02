@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"log"
@@ -29,7 +30,7 @@ type AIChatRequest struct {
 
 var aiHTTPClient = &http.Client{Timeout: 70 * time.Second}
 
-func getOptionalJWTAuth(c echo.Context) (int, string, error) {
+func getOptionalJWTAuth(c echo.Context, db *sql.DB) (int, string, error) {
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader == "" {
 		return 0, "", nil
@@ -43,10 +44,23 @@ func getOptionalJWTAuth(c echo.Context) (int, string, error) {
 	if err != nil {
 		return 0, "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid token")
 	}
+	if claims.Role != "member" || claims.UserId <= 0 {
+		return 0, "", echo.NewHTTPError(http.StatusForbidden, "Member access required")
+	}
+	var status string
+	if err := db.QueryRow(
+		"SELECT account_status FROM users WHERE id = $1",
+		claims.UserId,
+	).Scan(&status); err != nil {
+		return 0, "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid user")
+	}
+	if status != "active" {
+		return 0, "", echo.NewHTTPError(http.StatusForbidden, "Account is not active")
+	}
 	return claims.UserId, tokenStr, nil
 }
 
-func handleAIChat(c echo.Context) error {
+func handleAIChat(c echo.Context, db *sql.DB) error {
 	var userReq struct {
 		Message               string            `json:"message"`
 		History               []AIChatMessage   `json:"history"`
@@ -58,7 +72,7 @@ func handleAIChat(c echo.Context) error {
 	}
 
 	// 1. Resolve JWT auth context if present. Guest AI chat remains allowed.
-	userID, authToken, err := getOptionalJWTAuth(c)
+	userID, authToken, err := getOptionalJWTAuth(c, db)
 	if err != nil {
 		return err
 	}

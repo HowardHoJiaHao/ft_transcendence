@@ -1,13 +1,16 @@
 package chat
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
+	"transcendence/modules/user/notifications"
 )
 
 type OutgoingMessage struct {
@@ -23,12 +26,14 @@ type Client struct {
 }
 
 type Hub struct {
-	Clients    map[int]*Client
-	Send       chan OutgoingMessage
-	Broadcast  chan []byte
-	Register   chan *Client
-	Unregister chan int
-	Repo       *Repository
+	Clients       map[int]*Client
+	Send          chan OutgoingMessage
+	Broadcast     chan []byte
+	Register      chan *Client
+	Unregister    chan int
+	Snapshots     chan chan []int
+	Repo          *Repository
+	Notifications *notifications.Service
 }
 
 func NewHub(repo *Repository) *Hub {
@@ -38,6 +43,7 @@ func NewHub(repo *Repository) *Hub {
 		Broadcast:  make(chan []byte, 256),
 		Register:   make(chan *Client, 256),
 		Unregister: make(chan int, 256),
+		Snapshots:  make(chan chan []int),
 		Repo:       repo,
 	}
 }
@@ -98,6 +104,13 @@ func (h *Hub) Run() {
 				}
 			}
 
+		case reply := <-h.Snapshots:
+			userIDs := make([]int, 0, len(h.Clients))
+			for userID := range h.Clients {
+				userIDs = append(userIDs, userID)
+			}
+			reply <- userIDs
+
 		case msg := <-h.Send:
 			if client, ok := h.Clients[msg.ToUserId]; ok {
 				select {
@@ -117,6 +130,24 @@ func (h *Hub) Run() {
 				}
 			}
 		}
+	}
+}
+
+// OnlineUserIDs returns a consistent snapshot without accessing the hub map
+// outside the hub's event loop.
+func (h *Hub) OnlineUserIDs(ctx context.Context) ([]int, error) {
+	reply := make(chan []int, 1)
+	select {
+	case h.Snapshots <- reply:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	select {
+	case userIDs := <-reply:
+		return userIDs, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -177,6 +208,10 @@ func (c *Client) readPump(h *Hub) {
 			log.Printf("JSON parse error: %v", err)
 			continue
 		}
+		if inbound.ReceiverId <= 0 || inbound.ReceiverId == c.UserId || strings.TrimSpace(inbound.Content) == "" {
+			log.Printf("Rejected invalid private message from user %d", c.UserId)
+			continue
+		}
 
 		//store in database and retake
 		//h.repo.createmessage
@@ -186,7 +221,7 @@ func (c *Client) readPump(h *Hub) {
 			continue
 		}
 
-		msg, err := repo.CreateMessage(c.UserId, inbound.ReceiverId, inbound.Content)
+		msg, notificationID, err := repo.CreateMessageWithNotification(c.UserId, inbound.ReceiverId, inbound.Content)
 		if err != nil {
 			log.Printf("Failed to save message: %v", err)
 			continue
@@ -204,6 +239,9 @@ func (c *Client) readPump(h *Hub) {
 		payload, _ := json.Marshal(outbound)
 		h.SendPrivateMessage(msg.ReceiverId, payload)
 		h.SendPrivateMessage(msg.SenderId, payload)
+		if h.Notifications != nil {
+			h.Notifications.PublishByID(msg.ReceiverId, notificationID)
+		}
 	}
 }
 
@@ -231,11 +269,6 @@ func (c *Client) writePump() {
 				return
 			}
 			w.Write(message)
-
-			n := len(c.Send)
-			for i := 0; i < n; i++ {
-				w.Write(<-c.Send)
-			}
 
 			if err := w.Close(); err != nil {
 				return

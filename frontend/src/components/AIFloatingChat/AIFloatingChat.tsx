@@ -2,7 +2,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import styles from './AIFloatingChat.module.css';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -27,6 +26,29 @@ type AssessmentStep = {
 };
 
 const RECOMMENDATION_COMPLETE_MESSAGE = '__recommendation_assessment_complete__';
+
+type ProductLink = {
+  linkText?: string;
+  href: string;
+};
+
+// The model is instructed to use a plain Product link line, but it may wrap
+// the line in Markdown bold or include it in a bullet with listing details.
+export function parseProductLink(line: string): ProductLink | null {
+  const normalized = line
+    .trim()
+    .replace(/^\*\*(.+)\*\*$/, '$1')
+    .replace(/^[*\-]\s+/, '')
+    .trim();
+  const productLink = normalized.match(/^Product link:\s*(.+)$/i);
+  if (!productLink) return null;
+
+  const details = productLink[1].split('|').map((part) => part.trim());
+  const href = [...details].reverse().find((part) => /^\/products\/\d+$/.test(part));
+  if (!href) return null;
+
+  return details[0] === href ? { href } : { linkText: details[0], href };
+}
 
 const assessmentSteps: AssessmentStep[] = [
   {
@@ -302,7 +324,7 @@ export default function AIFloatingChat() {
     // Find Racket ID matches (e.g. "Racket ID: 3")
     const racketMatch = content.match(/Racket ID:\s*(\d+)/i);
     const orderMatch = content.match(/Order #\s*(\d+)/i);
-    const hasProductLinks = /^Product link:/im.test(content);
+    const hasProductLinks = /^(?:[*-]\s*)?Product link:/im.test(content);
     const postAdMatch = /\b(post an ad|create (?:a )?listing|list (?:my|your) racket|start selling|sell (?:my|your) racket)\b/i.test(content);
     
     const lines = content.split('\n');
@@ -328,38 +350,18 @@ export default function AIFloatingChat() {
         return;
       }
 
-      const productLinkMatch = trimmed.match(/^Product link:\s*(.+?)\s*\|\s*(\S+)/i);
-      if (productLinkMatch) {
+      const productLink = parseProductLink(trimmed);
+      if (productLink) {
         flushList();
-        const linkText = productLinkMatch[1].trim();
-        const href = productLinkMatch[2];
         formattedText.push(
           <a
             key={`product-link-${i}`}
-            href={href}
-            className={styles.actionBtn}
+            href={productLink.href}
+            className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-2 bg-[linear-gradient(135deg,#059669_0%,#10b981_100%)] text-white border-none rounded-lg text-[11px] font-semibold cursor-pointer transition-all duration-200 no-underline hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]"
             target="_blank"
             rel="noopener noreferrer"
           >
-            Product link: {linkText}
-          </a>
-        );
-        return;
-      }
-
-      const productLinkFallback = trimmed.match(/^Product link:\s*(\S+)/i);
-      if (productLinkFallback) {
-        flushList();
-        const href = productLinkFallback[1];
-        formattedText.push(
-          <a
-            key={`product-link-${i}`}
-            href={href}
-            className={styles.actionBtn}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Product link: {href}
+            Product link: {productLink.linkText ?? productLink.href}
           </a>
         );
         return;
@@ -382,14 +384,14 @@ export default function AIFloatingChat() {
     flushList();
 
     return (
-      <div className={styles.messageContent}>
+      <div className="text-[#f8fafc] text-[13.5px] leading-[1.55] [&_strong]:text-white [&_strong]:font-bold">
         {formattedText}
         
         {/* Render quick navigation actions based on AI suggestions */}
         {racketMatch && !hasProductLinks && (
           <a
             href={`/products/${racketMatch[1]}`}
-            className={styles.actionBtn}
+            className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-2 bg-[linear-gradient(135deg,#059669_0%,#10b981_100%)] text-white border-none rounded-lg text-[11px] font-semibold cursor-pointer transition-all duration-200 no-underline hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -398,13 +400,13 @@ export default function AIFloatingChat() {
         )}
         
         {postAdMatch && (
-          <a href="/sell" className={styles.actionBtn}>
+          <a href="/sell" className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-2 bg-[linear-gradient(135deg,#059669_0%,#10b981_100%)] text-white border-none rounded-lg text-[11px] font-semibold cursor-pointer transition-all duration-200 no-underline hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]">
             ➕ Post an Ad Now →
           </a>
         )}
 
         {content.toLowerCase().includes("browse") && (
-          <a href="/products" className={styles.actionBtn}>
+          <a href="/products" className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-2 bg-[linear-gradient(135deg,#059669_0%,#10b981_100%)] text-white border-none rounded-lg text-[11px] font-semibold cursor-pointer transition-all duration-200 no-underline hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]">
             🔎 Browse Marketplace →
           </a>
         )}
@@ -413,60 +415,60 @@ export default function AIFloatingChat() {
   };
 
   return (
-    <div className={styles.container}>
+    <div className="fixed bottom-[90px] right-6 z-[1000] font-[inherit]">
       {/* Floating Trigger Button */}
       <button 
-        className={styles.triggerButton} 
+        className="w-[60px] h-[60px] rounded-full bg-[linear-gradient(135deg,#00f2fe_0%,#4facfe_100%)] border-none text-white text-[28px] cursor-pointer shadow-[0_8px_32px_rgba(79,172,254,0.4)] flex items-center justify-center transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] relative hover:scale-110 hover:rotate-[5deg] hover:shadow-[0_12px_40px_rgba(79,172,254,0.6)] active:scale-95" 
         onClick={() => setIsOpen(!isOpen)}
         title="RacketBot AI Help"
       >
         🤖
-        {!isOpen && <div className={styles.pulseRing}></div>}
+        {!isOpen && <div className="absolute inset-0 rounded-full border-2 border-[#00f2fe] animate-[aiPulseRing_2s_infinite] pointer-events-none"></div>}
       </button>
 
       {/* Floating Chat Box Window */}
-      <div className={`${styles.chatWindow} ${isOpen ? styles.chatWindowOpen : ''}`}>
+      <div className={`absolute bottom-20 right-0 w-[380px] h-[560px] bg-[rgba(15,23,42,0.85)] backdrop-blur-[20px] border border-white/10 rounded-[20px] shadow-[0_20px_50px_rgba(0,0,0,0.4)] flex flex-col overflow-hidden transition-all duration-[400ms] ease-[cubic-bezier(0.165,0.84,0.44,1)] origin-bottom-right max-[480px]:w-[calc(100vw-32px)] max-[480px]:-right-2 max-[480px]:h-[480px] ${isOpen ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-[0.8] translate-y-5 pointer-events-none'}`}>
         
         {/* Header */}
-        <div className={styles.header}>
-          <div className={styles.headerInfo}>
-            <div className={styles.avatar}>🏸</div>
-            <div className={styles.titleContainer}>
-              <h3 className={styles.title}>
-                RacketBot <span className={styles.onlineDot}></span>
+        <div className="bg-[linear-gradient(135deg,rgba(15,23,42,0.95)_0%,rgba(30,41,59,0.95)_100%)] px-5 py-4 flex items-center justify-between border-b border-white/[0.08]">
+          <div className="flex items-center gap-3">
+            <div className="w-[38px] h-[38px] rounded-full bg-[linear-gradient(135deg,#00f2fe_0%,#4facfe_100%)] flex items-center justify-center text-xl shadow-[0_4px_12px_rgba(0,242,254,0.3)]">🏸</div>
+            <div className="flex flex-col">
+              <h3 className="text-white text-[15px] font-bold m-0 flex items-center gap-1.5">
+                RacketBot <span className="w-2 h-2 bg-[#10b981] rounded-full inline-block shadow-[0_0_8px_#10b981] animate-[aiGlow_1.5s_infinite_ease-in-out]"></span>
               </h3>
-              <p className={styles.subtitle}>RacketDiction AI Assistant (Malaysian) </p>
+              <p className="text-[#94a3b8] text-[11px] m-0">RacketDiction AI Assistant (Malaysian) </p>
             </div>
           </div>
-          <button className={styles.closeButton} onClick={() => setIsOpen(false)}>
+          <button className="bg-transparent border-none text-[#94a3b8] text-xl cursor-pointer w-[30px] h-[30px] rounded-full flex items-center justify-center transition-all duration-200 hover:bg-white/[0.08] hover:text-white" onClick={() => setIsOpen(false)}>
             &times;
           </button>
         </div>
 
         {/* Messages Body */}
-        <div className={styles.messagesContainer}>
+        <div className="flex-1 p-5 overflow-y-auto flex flex-col gap-4 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent] [&::-webkit-scrollbar]:w-[5px] [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded">
           {messages.length === 0 ? (
-            <div className={styles.welcomeCard}>
-              <h3>Selamat Datang, Boss! 👋</h3>
-              <p>
+            <div className="bg-[rgba(30,41,59,0.4)] border border-white/[0.06] rounded-2xl p-[18px] text-center text-[#e2e8f0] animate-[slideUp_0.4s_ease-out]">
+              <h3 className="mt-0 mx-0 mb-1.5 text-base font-bold bg-[linear-gradient(135deg,#00f2fe_0%,#4facfe_100%)] bg-clip-text text-transparent">Selamat Datang, Boss! 👋</h3>
+              <p className="mt-0 mx-0 mb-4 text-xs text-[#94a3b8] leading-[1.5]">
                 I am RacketBot, your badminton assistant. Ask me to find rackets, 
                 explain weight metrics (3U vs 4U), check order status, or explain how platform buying works lah!
               </p>
               <button
                 type="button"
-                className={styles.recommendButton}
+                className="w-full border border-[rgba(16,185,129,0.42)] rounded-[10px] px-3 py-2.5 bg-[linear-gradient(135deg,#047857_0%,#10b981_100%)] text-white text-xs font-bold cursor-pointer transition-all duration-200 enabled:hover:-translate-y-px enabled:hover:shadow-[0_6px_16px_rgba(16,185,129,0.25)] disabled:bg-[#334155] disabled:border-white/[0.08] disabled:text-[#94a3b8] disabled:cursor-not-allowed"
                 onClick={startAssessment}
                 disabled={isLoading}
               >
                 Recommend Me a Racket
               </button>
               
-              <div className={styles.suggestedPromptsContainer}>
-                <p className={styles.suggestedTitle}>Suggested Prompts</p>
+              <div className="flex flex-col gap-2 mt-2.5 animate-[fadeIn_0.5s_ease-out]">
+                <p className="text-[#64748b] text-[11px] font-semibold uppercase tracking-[0.5px] mb-0.5">Suggested Prompts</p>
                 {suggestedPrompts.map((prompt, idx) => (
                   <button 
                     key={idx} 
-                    className={styles.promptCard}
+                    className="bg-[rgba(30,41,59,0.6)] border border-white/[0.05] rounded-xl px-3.5 py-2.5 text-[#e2e8f0] text-[12.5px] cursor-pointer text-left transition-all duration-200 hover:bg-[rgba(79,172,254,0.15)] hover:border-[rgba(0,242,254,0.3)] hover:text-[#00f2fe] hover:translate-x-1"
                     onClick={() => handleSendMessage(prompt)}
                   >
                     💡 "{prompt}"
@@ -478,13 +480,13 @@ export default function AIFloatingChat() {
             messages.map((msg, idx) => (
               <div 
                 key={idx} 
-                className={`${styles.messageRow} ${
-                  msg.role === 'user' ? styles.rowUser : styles.rowAI
+                className={`flex w-full ${
+                  msg.role === 'user' ? 'justify-end' : 'justify-start'
                 }`}
               >
                 <div 
-                  className={`${styles.bubble} ${
-                    msg.role === 'user' ? styles.bubbleUser : styles.bubbleAI
+                  className={`max-w-[80%] px-4 py-3 rounded-2xl text-[13.5px] leading-[1.5] break-words shadow-[0_2px_10px_rgba(0,0,0,0.1)] animate-[bubblePop_0.3s_cubic-bezier(0.175,0.885,0.32,1.1)] ${
+                    msg.role === 'user' ? 'bg-[linear-gradient(135deg,#4facfe_0%,#00f2fe_100%)] text-white rounded-br-[4px]' : 'bg-[rgba(17,24,39,0.92)] text-[#f8fafc] border border-white/[0.06] rounded-bl-[4px] [&_*]:text-[#f8fafc] [&_p]:mt-0 [&_p]:mx-0 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:mt-0 [&_ul]:mx-0 [&_ul]:mb-2 [&_ul]:pl-5 [&_ol]:mt-0 [&_ol]:mx-0 [&_ol]:mb-2 [&_ol]:pl-5 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0 [&_li]:mb-1'
                   }`}
                 >
                   {msg.role === 'user' ? (
@@ -498,12 +500,12 @@ export default function AIFloatingChat() {
           )}
 
           {currentAssessmentStep && (
-            <div className={styles.assessmentOptions}>
+            <div className="flex flex-wrap gap-2 pl-0.5">
               {currentAssessmentStep.options.map((option) => (
                 <button
                   key={option.value}
                   type="button"
-                  className={styles.assessmentOption}
+                  className="flex-[1_1_calc(50%-8px)] min-w-[128px] min-h-[36px] border border-[rgba(0,242,254,0.26)] rounded-lg px-2.5 py-2 bg-[rgba(30,41,59,0.82)] text-[#e2e8f0] text-xs font-semibold cursor-pointer transition-all duration-200 enabled:hover:bg-[rgba(79,172,254,0.18)] enabled:hover:border-[rgba(0,242,254,0.5)] enabled:hover:text-white disabled:text-[#64748b] disabled:cursor-not-allowed"
                   onClick={() => handleAssessmentAnswer(option)}
                   disabled={isLoading}
                 >
@@ -514,12 +516,12 @@ export default function AIFloatingChat() {
           )}
           
           {isLoading && messages[messages.length - 1]?.content === '' && (
-            <div className={`${styles.messageRow} ${styles.rowAI}`}>
-              <div className={`${styles.bubble} ${styles.bubbleAI}`}>
-                <div className={styles.typingLoader}>
-                  <div className={styles.dot}></div>
-                  <div className={styles.dot}></div>
-                  <div className={styles.dot}></div>
+            <div className="flex w-full justify-start">
+              <div className="max-w-[80%] px-4 py-3 rounded-2xl text-[13.5px] leading-[1.5] break-words shadow-[0_2px_10px_rgba(0,0,0,0.1)] animate-[bubblePop_0.3s_cubic-bezier(0.175,0.885,0.32,1.1)] bg-[rgba(17,24,39,0.92)] text-[#f8fafc] border border-white/[0.06] rounded-bl-[4px] [&_*]:text-[#f8fafc] [&_p]:mt-0 [&_p]:mx-0 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:mt-0 [&_ul]:mx-0 [&_ul]:mb-2 [&_ul]:pl-5 [&_ol]:mt-0 [&_ol]:mx-0 [&_ol]:mb-2 [&_ol]:pl-5 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0 [&_li]:mb-1">
+                <div className="flex gap-1 px-2 py-1 items-center justify-center">
+                  <div className="w-1.5 h-1.5 bg-[#94a3b8] rounded-full animate-[aiTypingBounce_1.4s_infinite_ease-in-out_both] [animation-delay:-0.32s]"></div>
+                  <div className="w-1.5 h-1.5 bg-[#94a3b8] rounded-full animate-[aiTypingBounce_1.4s_infinite_ease-in-out_both] [animation-delay:-0.16s]"></div>
+                  <div className="w-1.5 h-1.5 bg-[#94a3b8] rounded-full animate-[aiTypingBounce_1.4s_infinite_ease-in-out_both]"></div>
                 </div>
               </div>
             </div>
@@ -529,21 +531,21 @@ export default function AIFloatingChat() {
         </div>
 
         {/* Chat Box Input Footer */}
-        <div className={styles.inputFooter}>
+        <div className="px-5 py-4 bg-[rgba(15,23,42,0.95)] border-t border-white/[0.08]">
           {assessmentStepIndex === null && (
             <button
               type="button"
-              className={styles.footerRecommendButton}
+              className="w-full mb-2.5 border border-[rgba(16,185,129,0.34)] rounded-lg px-2.5 py-2 bg-[rgba(5,150,105,0.18)] text-[#d1fae5] text-xs font-bold cursor-pointer transition-all duration-200 enabled:hover:bg-[rgba(16,185,129,0.28)] enabled:hover:border-[rgba(16,185,129,0.58)] disabled:text-[#64748b] disabled:border-white/[0.08] disabled:cursor-not-allowed"
               onClick={startAssessment}
               disabled={isLoading}
             >
               Recommend Me a Racket
             </button>
           )}
-          <form onSubmit={handleFormSubmit} className={styles.inputForm}>
+          <form onSubmit={handleFormSubmit} className="flex gap-2.5 items-center bg-[rgba(30,41,59,0.7)] border border-white/[0.08] rounded-xl pt-1 pr-1.5 pb-1 pl-3.5 transition-all duration-300 focus-within:border-[#00f2fe] focus-within:shadow-[0_0_12px_rgba(0,242,254,0.2)] focus-within:bg-[rgba(30,41,59,0.9)]">
             <input 
               type="text" 
-              className={styles.textInput}
+              className="flex-1 bg-transparent border-none text-white text-[13px] outline-none py-2 placeholder:text-[#64748b]"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder={assessmentStepIndex === null ? 'Ask RacketBot anything, Boss...' : 'Choose an assessment option above...'}
@@ -551,7 +553,7 @@ export default function AIFloatingChat() {
             />
             <button 
               type="submit" 
-              className={styles.sendButton}
+              className="w-8 h-8 rounded-lg bg-[linear-gradient(135deg,#00f2fe_0%,#4facfe_100%)] border-none text-white cursor-pointer flex items-center justify-center transition-all duration-200 enabled:hover:scale-105 enabled:hover:shadow-[0_4px_10px_rgba(0,242,254,0.3)] disabled:bg-[#334155] disabled:text-[#64748b] disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none"
               disabled={!inputValue.trim() || isLoading || assessmentStepIndex !== null}
             >
               🚀

@@ -27,8 +27,13 @@ Thumbs.db
 node_modules/
 
 static/avatars/
+storage/
 backups/
+study_folder/
 monitoring/alertmanager/logs/
 notes/
 monitoring/PROMETHEUS_CHEAT_SHEET.md
 monitoring/RUNBOOKS.md
+ai_service/ml_models/active.json
+ai_service/ml_models/.active.json.tmp
+ai_service/ml_models/versions/

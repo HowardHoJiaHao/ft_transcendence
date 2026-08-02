@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'; //std react hook for managing local state & side effects
 import { useAuth } from '@/context/AuthContext';; //import hook to access global authentication data
-import styles from './page.module.css'; //import CSS module for scope styling
+import { useI18n } from '@/context/LanguageContext';
 import Header from '@/components/Header/Header';
+import ListingImage from '@/components/ListingImage/ListingImage';
 import Link from 'next/link';
 
 interface Product
@@ -23,6 +24,8 @@ interface Product
   reviews: number;
   isNew: boolean;
   isFeatured: boolean;
+  stockQuantity: number;
+  status: string;
 }
 
 const WEIGHT_CATEGORIES = [
@@ -54,8 +57,8 @@ const BALANCE_CATEGORIES = [
 export default function Home()
 {
   const { user, logout } = useAuth();
+  const { t } = useI18n();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-  const placeholderListingImageUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='900' viewBox='0 0 700 900'%3E%3Crect width='700' height='900' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%236b7280' font-family='Arial,sans-serif' font-size='32'%3ENo image%3C/text%3E%3C/svg%3E";
   const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
   const [selectedFlexibilities, setSelectedFlexibilities] = useState<string[]>([]);
   const [selectedBalances, setSelectedBalances] = useState<string[]>([]);
@@ -73,15 +76,6 @@ export default function Home()
 //     setSearchQuery(nextSearchQuery);
 //   };
 
-  const resolveListingImageUrl = (url?: string) => {
-    if (!url)
-      return placeholderListingImageUrl;
-    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:'))
-      return url;
-    if (url.startsWith('/'))
-      return `${apiBaseUrl}${url}`;
-    return `${apiBaseUrl}/${url}`;
-  }
 
   //			SEARH INITIALIZATION (FROM OTHER PAGE SEARCH)
   useEffect(() => {
@@ -174,6 +168,8 @@ export default function Home()
           reviews: p.reviews,
           isNew: p.isNew,
           isFeatured: p.isFeatured,
+          stockQuantity: p.stockQuantity,
+          status: p.status,
         }));
 
         setProducts(mappedProducts);
@@ -190,7 +186,7 @@ export default function Home()
   }, [selectedWeights, selectedFlexibilities, selectedBalances, searchQuery, sortBy, currentPage]);
 
   return (
-    <main className={styles.main}>
+    <main className="flex flex-col min-h-screen px-5">
       {/* Header */}
       <Header
         searchValue={searchInput}
@@ -199,24 +195,24 @@ export default function Home()
       />
 
         {/* Main Content */}
-	    <div className={styles.content}>
+	    <div className="grid grid-cols-[250px_1fr] gap-6 my-6 mx-auto flex-1 max-w-[1200px] w-full px-5 max-[768px]:grid-cols-1">
           {/* Sidebar Filters */}
-          <aside className={styles.sidebar}>
-            <div className={styles.filterSection}>
-              <h3>Price Range</h3>
-			  	<div className={styles.priceRange}>
-				  <div className={styles.rangeInputs}>
-					<input className={styles.priceInput} type="number" id="minPrice" placeholder="Min" min="0"/>
-					<span className={styles.separator}>-</span>
-					<input className={styles.priceInput} type="number" id="maxPrice" placeholder="Max" min="0"/>
+          <aside className="bg-white p-4 rounded-lg shadow-[var(--shadow)] h-fit top-[100px] max-[768px]:relative max-[768px]:top-0">
+            <div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
+              <h3 className="text-sm font-semibold mb-3">Price Range</h3>
+			  	<div className="flex justify-between text-xs mt-2 text-[var(--secondary)] gap-4">
+				  <div className="flex items-center gap-2">
+					<input className="placeholder:text-[11px]" type="number" id="minPrice" placeholder="Min" min="0"/>
+					<span className="text-base flex items-center justify-center">-</span>
+					<input className="placeholder:text-[11px]" type="number" id="maxPrice" placeholder="Max" min="0"/>
 				  </div>
-                  <button className={styles.applyBtn}>Apply</button>
+                  <button className="px-2.5 py-1">Apply</button>
 				</div>
             </div>
 
-			<div className={styles.filterSection}>
-			  <h3>Weight</h3>
-			    <div className={styles.weightFilterOptions}>
+			<div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
+			  <h3 className="text-sm font-semibold mb-3">Weight</h3>
+			    <div className="grid grid-cols-2 gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
 				  {WEIGHT_CATEGORIES.filter(c => c !== 'All').map((category) => (
 					<label key={category}>
 					  <input type="checkbox" value={category} checked={selectedWeights.includes(category)}
@@ -234,9 +230,9 @@ export default function Home()
 				</div>
 			</div>
 
-			<div className={styles.filterSection}>
-				<h3>Flexibility</h3>
-				<div className={styles.filterOptions}>
+			<div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
+				<h3 className="text-sm font-semibold mb-3">Flexibility</h3>
+				<div className="flex flex-col gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
 					{FLEXIBILITY_CATEGORIES.filter(c => c !== 'All').map((category) => (
 						<label key={category}>
 							<input type="checkbox" value={category} checked={selectedFlexibilities.includes(category)}
@@ -254,9 +250,9 @@ export default function Home()
 				</div>
 			</div>
 
-			<div className={styles.filterSection}>
-			  <h3>Balance</h3>
-			    <div className={styles.filterOptions}>
+			<div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
+			  <h3 className="text-sm font-semibold mb-3">Balance</h3>
+			    <div className="flex flex-col gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
 				  {BALANCE_CATEGORIES.filter(c => c !== 'All').map((category) => (
 					<label key={category}>
 					  <input type="checkbox" value={category} checked={selectedBalances.includes(category)}
@@ -274,9 +270,9 @@ export default function Home()
 				</div>
 			</div>
 
-            <div className={styles.filterSection}>
-              <h3>Location</h3>
-              <div className={styles.filterOptions}>
+            <div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
+              <h3 className="text-sm font-semibold mb-3">Location</h3>
+              <div className="flex flex-col gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
                 <label>
                   <input type="checkbox" /> Kuala Lumpur
                 </label>
@@ -292,9 +288,9 @@ export default function Home()
               </div>
             </div>
 
-            <div className={styles.filterSection}>
-              <h3>Condition</h3>
-              <div className={styles.filterOptions}>
+            <div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
+              <h3 className="text-sm font-semibold mb-3">Condition</h3>
+              <div className="flex flex-col gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
                 <label>
                   <input type="checkbox" defaultChecked /> New
                 </label>
@@ -304,9 +300,9 @@ export default function Home()
               </div>
             </div>
 
-            <div className={styles.filterSection}>
-              <h3>Rating</h3>
-              <div className={styles.filterOptions}>
+            <div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
+              <h3 className="text-sm font-semibold mb-3">Rating</h3>
+              <div className="flex flex-col gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
                 <label>
                   <input type="checkbox" /> 4.5+ ⭐
                 </label>
@@ -321,14 +317,14 @@ export default function Home()
           </aside>
 
           {/* Products */}
-          <div className={styles.productsSection}>
+          <div className="flex-1">
             {/* Sort Controls */}
-            <div className={styles.sortBar}>
+            <div className="flex justify-between items-center mb-5 px-4 py-3 bg-white rounded text-sm max-[480px]:flex-col max-[480px]:items-start max-[480px]:gap-3">
               <span>{products.length} results found</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className={styles.sortSelect}
+                className="px-3 py-2 border border-[var(--border)] rounded cursor-pointer text-sm"
               >
                 <option value="featured">Featured</option>
                 <option value="newest">Newest</option>
@@ -340,12 +336,12 @@ export default function Home()
 
             {/* Products Grid */}
             {loading ? (
-              <div className={styles.noResults}>
-                <p>Loading products...</p>
+              <div className="text-center px-5 py-[60px] bg-white rounded-lg">
+                <p className="text-base mb-5">Loading products...</p>
               </div>
             ) : error ? (
-              <div className={styles.noResults}>
-                <p>Error: {error}</p>
+              <div className="text-center px-5 py-[60px] bg-white rounded-lg">
+                <p className="text-base mb-5">Error: {error}</p>
                 <button
                   className="btn btn-secondary"
                   onClick={() => window.location.reload()}
@@ -354,54 +350,58 @@ export default function Home()
                 </button>
               </div>
             ) : products.length > 0 ? (
-              <div className={styles.productsGrid}>
+              <div className="grid grid-cols-4 gap-4 max-[768px]:grid-cols-2">
                 {products.map((product) => (
-                  <div key={product.id} className={styles.productCard}>
-                    <div className={styles.productImage}>
-                      <img
-                        src={resolveListingImageUrl(product.image)}
+                  <div key={product.id} className={`group bg-white rounded-lg overflow-hidden shadow-[var(--shadow)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[var(--shadow-lg)] ${product.stockQuantity <= 0 || product.status === 'sold' ? 'opacity-85' : ''}`}>
+                    <div className="relative w-full h-[200px] overflow-hidden">
+                      <ListingImage
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        src={product.image}
                         alt={product.title}
-                        onError={(event) => {
-                          (event.currentTarget as HTMLImageElement).src = placeholderListingImageUrl;
-                        }}
+                        apiBase={apiBaseUrl}
                       />
                       {product.isFeatured && (
-                        <span className={`badge badge-primary ${styles.badgeFeatured}`}>
+                        <span className="badge badge-primary absolute top-2 left-2 text-[11px] px-2 py-1">
                           Featured
                         </span>
                       )}
                       {product.isNew && (
-                        <span className={`badge badge-success ${styles.badgeNew}`}>
+                        <span className="badge badge-success absolute top-2 right-2 text-[11px] px-2 py-1">
                           New
+                        </span>
+                      )}
+                      {(product.stockQuantity <= 0 || product.status === 'sold') && (
+                        <span className="absolute bottom-2 right-2 rounded bg-red-600 px-2 py-1 text-xs font-bold text-white">
+                          {t('cart.sold')}
                         </span>
                       )}
                     </div>
 
-                    <div className={styles.productBody}>
-                      <h4 className={styles.productTitle}>{product.title}</h4>
+                    <div className="p-3">
+                      <h4 className="text-sm font-semibold mb-2 text-[var(--dark)] leading-[1.4] h-[2.8em] overflow-hidden text-ellipsis line-clamp-2">{product.title}</h4>
 
-                      <div className={styles.productMeta}>
-                        <span className={styles.location}>📍 {product.location}</span>
+                      <div className="text-xs text-[var(--secondary)] mb-2">
+                        <span className="block whitespace-nowrap overflow-hidden text-ellipsis">📍 {product.location}</span>
                       </div>
 
-                      <div className={styles.productPrice}>
+                      <div className="mb-2">
                         <span className="price">RM {product.price}</span>
                         {product.originalPrice && (
                           <span className="price-old">RM {product.originalPrice}</span>
                         )}
                       </div>
 
-                      <div className={styles.productRating}>
-                        <span className={styles.stars}>
+                      <div className="flex items-center gap-1.5 mb-2 text-xs">
+                        <span className="inline-block tracking-[2px] text-[11px]">
                           {'⭐'.repeat(Math.floor(product.rating))}
                         </span>
-                        <span className={styles.ratingText}>
+                        <span className="text-[var(--secondary)]">
                           {product.rating} ({product.reviews} reviews)
                         </span>
                       </div>
 
-                      <div className={styles.productSeller}>
-                        <span className={styles.sellerName}>{product.sellerName}</span>
+                      <div className="py-2 border-t border-[var(--border)] text-xs text-[var(--secondary)]">
+                        <span className="font-medium text-[var(--dark)]">{product.sellerName}</span>
                       </div>
 					  <Link href={`/products/${product.id}`}>
                         <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} >
@@ -413,8 +413,8 @@ export default function Home()
                 ))}
               </div>
             ) : (
-              <div className={styles.noResults}>
-                <p>No products found matching your criteria</p>
+              <div className="text-center px-5 py-[60px] bg-white rounded-lg">
+                <p className="text-base mb-5">No products found matching your criteria</p>
                 <button
                   className="btn btn-secondary"
                   onClick={() => {
@@ -431,23 +431,23 @@ export default function Home()
           </div>
 
 		    {!loading && !error && products.length > 0 && (
-			  <div className={styles.pagination}>
-			    <div className={styles.paginationButtons}>
-			      <button className={styles.paginationBtn} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
+			  <div className="flex flex-col justify-center items-center gap-2 mt-6 p-4 bg-white rounded-lg w-fit box-border col-span-full max-w-full mx-auto justify-self-center">
+			    <div className="flex justify-center items-center gap-2 flex-nowrap w-fit pb-1">
+			      <button className="flex-none px-3 py-2 border rounded cursor-pointer text-sm min-w-9 bg-white border-[var(--border)] enabled:hover:border-[var(--primary)] enabled:hover:text-[var(--primary)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
 			        ← Prev
 				  </button>
 				  
 				  {/*Page Numbers*/}
 				  {[...Array(totalPages)].map((_, i) => (
-				    <button key={i + 1} className={`${styles.paginationBtn} ${currentPage === i + 1 ? styles.active : ''}`} onClick={() => setCurrentPage(i + 1)}>
+				    <button key={i + 1} className={`flex-none px-3 py-2 border rounded cursor-pointer text-sm min-w-9 ${currentPage === i + 1 ? 'bg-[var(--primary)] text-white border-[var(--primary)]' : 'bg-white border-[var(--border)] enabled:hover:border-[var(--primary)] enabled:hover:text-[var(--primary)] disabled:opacity-50 disabled:cursor-not-allowed'}`} onClick={() => setCurrentPage(i + 1)}>
 				  	{i + 1}
 				    </button>
 				  ))}
-				  <button className={styles.paginationBtn} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
+				  <button className="flex-none px-3 py-2 border rounded cursor-pointer text-sm min-w-9 bg-white border-[var(--border)] enabled:hover:border-[var(--primary)] enabled:hover:text-[var(--primary)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
 				    Next →
 				  </button>
 				</div>
-				<span className={styles.pageInfo}>
+				<span className="text-sm text-[var(--secondary)]">
 				  Page {currentPage} of {totalPages}
 				</span>
 			  </div>

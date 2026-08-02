@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/labstack/echo/v4"
 	auth "transcendence/modules/user/auth"
 )
@@ -44,6 +45,11 @@ func captureAIRequestClient(t *testing.T, received *AIChatRequest) {
 }
 
 func TestAIChatIgnoresUntrustedIdentityFieldsFromRequestBody(t *testing.T) {
+	db, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error = %v", err)
+	}
+	defer db.Close()
 	var received AIChatRequest
 	captureAIRequestClient(t, &received)
 	t.Setenv("AI_SERVICE_URL", "http://ai.test")
@@ -62,7 +68,7 @@ func TestAIChatIgnoresUntrustedIdentityFieldsFromRequestBody(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	context := e.NewContext(request, recorder)
 
-	if err := handleAIChat(context); err != nil {
+	if err := handleAIChat(context, db); err != nil {
 		t.Fatalf("handleAIChat() error = %v", err)
 	}
 	if received.UserID != 0 || received.AuthToken != "" {
@@ -79,6 +85,14 @@ func TestAIChatForwardsOnlyValidatedJWTIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
 	}
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error = %v", err)
+	}
+	defer db.Close()
+	mock.ExpectQuery("SELECT account_status FROM users").
+		WithArgs(42).
+		WillReturnRows(sqlmock.NewRows([]string{"account_status"}).AddRow("active"))
 
 	var received AIChatRequest
 	captureAIRequestClient(t, &received)
@@ -95,10 +109,48 @@ func TestAIChatForwardsOnlyValidatedJWTIdentity(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	context := e.NewContext(request, recorder)
 
-	if err := handleAIChat(context); err != nil {
+	if err := handleAIChat(context, db); err != nil {
 		t.Fatalf("handleAIChat() error = %v", err)
 	}
 	if received.UserID != 42 || received.AuthToken != token {
 		t.Fatalf("forwarded identity = userId=%d token=%q", received.UserID, received.AuthToken)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAIChatRejectsDeletedJWTIdentity(t *testing.T) {
+	t.Setenv("JWT_SECRET", aiChatTestJWTSecret)
+	if err := auth.ConfigureJWTSecretFromEnv(); err != nil {
+		t.Fatalf("ConfigureJWTSecretFromEnv() error = %v", err)
+	}
+	token, err := auth.GenerateToken(42)
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error = %v", err)
+	}
+	defer db.Close()
+	mock.ExpectQuery("SELECT account_status FROM users").
+		WithArgs(42).
+		WillReturnRows(sqlmock.NewRows([]string{"account_status"}).AddRow("deleted"))
+
+	e := echo.New()
+	request := httptest.NewRequest(http.MethodPost, "/ai/chat", bytes.NewBufferString(`{"message":"hello"}`))
+	request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	request.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	recorder := httptest.NewRecorder()
+	context := e.NewContext(request, recorder)
+
+	err = handleAIChat(context, db)
+	httpError, ok := err.(*echo.HTTPError)
+	if !ok || httpError.Code != http.StatusForbidden {
+		t.Fatalf("error = %#v, want HTTP 403", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

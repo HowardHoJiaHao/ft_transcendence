@@ -1,14 +1,18 @@
 package chat
 
 import (
+	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"transcendence/modules/user"
+	"transcendence/modules/user/notifications"
 )
 
 type Repository struct {
 	*user.Repository
+	Notifications *notifications.Repository
 }
 
 func NewRepository(baseRepo *user.Repository) *Repository {
@@ -30,6 +34,54 @@ func (r *Repository) CreateMessage(senderId, receiverId int, content string) (*M
 	}
 
 	return &msg, nil
+}
+
+// CreateMessageWithNotification persists the message and its grouped
+// notification atomically. Repositories without a notification store retain
+// the original behavior, which keeps the module reusable in focused tests.
+func (r *Repository) CreateMessageWithNotification(senderID, receiverID int, content string) (*Message, int64, error) {
+	if senderID <= 0 || receiverID <= 0 || senderID == receiverID || strings.TrimSpace(content) == "" {
+		return nil, 0, fmt.Errorf("invalid private message")
+	}
+	if r.Notifications == nil {
+		message, err := r.CreateMessage(senderID, receiverID, content)
+		return message, 0, err
+	}
+
+	tx, err := r.DB.Begin()
+	if err != nil {
+		return nil, 0, fmt.Errorf("start message transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	var message Message
+	err = tx.QueryRow(`
+		INSERT INTO messages (sender_id, receiver_id, content, is_read)
+		VALUES ($1, $2, $3, false)
+		RETURNING id, sender_id, receiver_id, content, is_read, created_at`,
+		senderID, receiverID, content,
+	).Scan(
+		&message.Id,
+		&message.SenderId,
+		&message.ReceiverId,
+		&message.Content,
+		&message.IsRead,
+		&message.CreatedAt,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("create message: %w", err)
+	}
+
+	notificationID, err := r.Notifications.UpsertMessageTx(
+		tx, receiverID, senderID, message.Id, content,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, 0, fmt.Errorf("commit message transaction: %w", err)
+	}
+	return &message, notificationID, nil
 }
 
 // distinct maybe unnecessary
@@ -121,4 +173,64 @@ func (r *Repository) DeleteConversation(userId, partnerId int) error {
 	).Delete(&Message{})
 
 	return result.Error
+}
+
+// SearchDirectoryUsers returns active accounts other than the requester. Seller
+// and buyer filters are derived from marketplace activity rather than a mutable
+// profile role, because a member may be both.
+func (r *Repository) SearchDirectoryUsers(currentUserID int, search, role string, limit, offset int) ([]DirectoryUser, error) {
+	conditions := []string{
+		"u.account_status = 'active'",
+		"u.id <> $1",
+	}
+	args := []interface{}{currentUserID}
+
+	search = strings.TrimSpace(search)
+	if search != "" {
+		args = append(args, "%"+search+"%")
+		placeholder := fmt.Sprintf("$%d", len(args))
+		conditions = append(conditions, "(u.username ILIKE "+placeholder+" OR concat_ws(' ', u.first_name, u.last_name) ILIKE "+placeholder+")")
+	}
+
+	switch role {
+	case "seller":
+		conditions = append(conditions, "EXISTS (SELECT 1 FROM listings l WHERE l.seller_id = u.id AND l.status = 'active')")
+	case "buyer":
+		conditions = append(conditions, "EXISTS (SELECT 1 FROM orders o WHERE o.buyer_id = u.id)")
+	}
+
+	args = append(args, limit, offset)
+	limitPlaceholder := fmt.Sprintf("$%d", len(args)-1)
+	offsetPlaceholder := fmt.Sprintf("$%d", len(args))
+	query := `
+		SELECT u.id, u.username, u.avatar_url,
+			EXISTS (SELECT 1 FROM listings l WHERE l.seller_id = u.id AND l.status = 'active') AS is_seller,
+			EXISTS (SELECT 1 FROM orders o WHERE o.buyer_id = u.id) AS is_buyer
+		FROM users u
+		WHERE ` + strings.Join(conditions, " AND ") + `
+		ORDER BY lower(u.username), u.id
+		LIMIT ` + limitPlaceholder + ` OFFSET ` + offsetPlaceholder
+
+	rows, err := r.DB.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("search people directory: %w", err)
+	}
+	defer rows.Close()
+
+	people := make([]DirectoryUser, 0)
+	for rows.Next() {
+		var person DirectoryUser
+		var avatarURL sql.NullString
+		if err := rows.Scan(&person.ID, &person.Username, &avatarURL, &person.IsSeller, &person.IsBuyer); err != nil {
+			return nil, fmt.Errorf("scan people directory user: %w", err)
+		}
+		if avatarURL.Valid {
+			person.AvatarURL = &avatarURL.String
+		}
+		people = append(people, person)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate people directory: %w", err)
+	}
+	return people, nil
 }

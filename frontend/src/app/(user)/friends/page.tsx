@@ -6,7 +6,9 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import OnlineStatus from '@/components/OnlineStatus';
 import Header from "@/components/Header/Header"
-import styles from "./friends.module.css"
+import { useToast } from '@/components/Toast/ToastContext';
+import { useI18n } from '@/context/LanguageContext';
+import { DEFAULT_AVATAR, resolveAvatarUrl } from '@/lib/avatar';
 
 type Friend = {
 	id: number;
@@ -19,6 +21,8 @@ type Friend = {
 export default function FriendPage()
 {
 	const { user } = useAuth();
+	const { showToast } = useToast();
+	const { t } = useI18n();
 	const [friendList, setFriendList] = useState<Friend[]>([]);
 	const [loading, setLoading] = useState(true);
 
@@ -39,11 +43,17 @@ export default function FriendPage()
 			if (res.ok)
 			{
 				setFriendList(prev => prev.filter(f => f.id !== partnerId));
+				showToast(t('toast.friendRemoved'), 'success');
+			}
+			else
+			{
+				showToast(t('toast.friendRemoveFailed'), 'error');
 			}
 		}
 		catch (err)
 		{
 			console.error('Failed to delete conversation: ', err);
+			showToast(t('toast.networkError'), 'error');
 		}
 	}
 
@@ -77,29 +87,34 @@ export default function FriendPage()
 	return (
 		<main>
 		  <Header />
-			<div className={styles.container}>
-			  <h1 className={styles.title}>Your Friends</h1>
+			<div className="p-5 max-w-[800px] mx-auto">
+			  <h1 className="text-2xl mb-5">{t('friends.title')}</h1>
 			  {friendList.length === 0 ? (
-				<div className={styles.emptyState}>No Friends yet.</div>
+				<div className="text-center text-[#666] text-lg mt-[50px]">{t('friends.empty')}</div>
 			  ) : (
-				<ul className={styles.friendList}>
+				<ul className="list-none p-0">
 				  {friendList.map((friend) => (
-				  	<li key={friend.id} className={styles.friendListItem}>
-					  <Link href={`/user/${friend.id}`} className={styles.friendLink}>
-				        <div className={styles.avatar}>
+				  	<li key={friend.id} className="flex items-center p-[10px] border-b border-[#eee] cursor-pointer">
+					  <Link href={`/user/${friend.id}`} className="flex items-center flex-1 no-underline text-inherit min-w-0">
+				        <div className="w-10 h-10 rounded-full mr-[10px]">
 					      {friend.avatar ? (
-								<img src={friend.avatar} alt="" />
+								<img
+									src={resolveAvatarUrl(friend.avatar)}
+									alt=""
+									className="w-full h-full rounded-full object-cover"
+									onError={(event) => { event.currentTarget.src = DEFAULT_AVATAR; }}
+								/>
 							) : (
-								<span className={styles.avatarPlaceholder}>{friend.username[0]}</span>
+								<span className="w-full h-full rounded-full bg-[#ccc] flex items-center justify-center text-white font-bold">{friend.username[0]}</span>
 							)}
 					    </div>
-					    <div className={styles.friendInfo}>
-					      <div className={styles.friendName}>{friend.username}</div>
+					    <div className="flex-1">
+					      <div className="font-bold m-0">{friend.username}</div>
 					    </div>
 						<div><OnlineStatus userId={friend.id}/></div>
 					  </Link>
-					  <div className={styles.friendActions}>
-					    <button className={styles.delete} onClick={(e) => deleteFriend(friend.id, e)} title="Delete friend">x</button>
+					  <div className="flex items-center gap-2">
+					    <button className="bg-transparent border-none text-[#ff6b6b] cursor-pointer text-base" onClick={(e) => deleteFriend(friend.id, e)} title={t('friends.delete')} aria-label={t('friends.delete')}>x</button>
 					  </div>
 					</li>
 				  ))}

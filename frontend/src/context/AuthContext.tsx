@@ -16,7 +16,9 @@ type User = {
   gender?: string;
   dateOfBirth?: string;
   avatarUrl?: string;
-  status: string;	
+  oauthProvider?: string;
+  role: 'user' | 'moderator' | 'admin';
+  accountStatus: 'active' | 'suspended' | 'deleted';
 };
 
 interface AuthContextType {

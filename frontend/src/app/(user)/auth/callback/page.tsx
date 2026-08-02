@@ -19,9 +19,10 @@ function AuthCallbackContent() {
 					return;
 				}
 
-				const userData = await res.json();
+				const data = await res.json();
+				if (data.token) localStorage.setItem('token', data.token);
 
-				login(userData);
+				login(data.user);
 				router.replace('/');
 			} catch {
 				router.replace('/login');

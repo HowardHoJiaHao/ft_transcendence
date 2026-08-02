@@ -86,14 +86,32 @@ type UpdateProductRequest struct {
 const maxListingImageSize = 10 * 1024 * 1024
 
 // listingSelectCols is the shared SELECT column list used in all product queries.
+//
+// Rating, review count and seller name are derived, not read from the columns
+// of the same name on listings. Those columns are never maintained -- nothing
+// in the backend writes listings.rating or listings.reviews, and a username
+// change never rewrites listings.seller_name -- so reading them served stale
+// values that disagreed with the review section on the product page. The
+// listing_reviews table and the users row are the single sources of truth.
 const listingSelectCols = `l.id, l.title, l.price, l.original_price, COALESCE(l.image, ''),
 	COALESCE(l.category, 'Others'), COALESCE(l.condition, 'Second-hand (Used)'),
 	COALESCE(l.dealing_method, ''), COALESCE(l.phone_number, ''),
 	COALESCE(l.weight_category, ''), COALESCE(l.flexibility_category, ''), COALESCE(l.balance_category, ''),
-	COALESCE(l.location, ''), l.seller_id, COALESCE(l.seller_name, ''), COALESCE(u.avatar_url, ''),
-	COALESCE(l.rating, 0), COALESCE(l.reviews, 0), l.is_new, l.is_featured,
+	COALESCE(l.location, ''), l.seller_id, COALESCE(u.username, l.seller_name, ''), COALESCE(u.avatar_url, ''),
+	ROUND(COALESCE(lr.avg_rating, 0), 1)::float8, COALESCE(lr.review_count, 0), l.is_new, l.is_featured,
 	COALESCE(l.stock_quantity, 0), COALESCE(l.status, 'active'), COALESCE(l.views_count, 0),
 	l.created_at, COALESCE(l.description, '')`
+
+// listingFromClause pairs every listing with its seller and its live review
+// aggregate. Kept next to listingSelectCols because the two must stay in step:
+// the select list references both u and lr.
+const listingFromClause = ` FROM listings l
+	LEFT JOIN users u ON l.seller_id = u.id
+	LEFT JOIN (
+		SELECT listing_id, COUNT(*) AS review_count, AVG(rating) AS avg_rating
+		FROM listing_reviews
+		GROUP BY listing_id
+	) lr ON lr.listing_id = l.id`
 
 // list all products with filters
 func getProducts(c echo.Context, gormDB *gorm.DB) error {
@@ -133,7 +151,7 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 		offsetInt = 0
 	}
 
-	query := "SELECT " + listingSelectCols + " FROM listings l LEFT JOIN users u ON l.seller_id = u.id"
+	query := "SELECT " + listingSelectCols + listingFromClause
 	whereClause := " WHERE 1=1"
 	var args []interface{}
 
@@ -198,12 +216,18 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 			args = append(args, sellerIdInt)
 		}
 	}
-	if status != "" {
+	// Public browse keeps sold-out listings visible as marketplace history, but
+	// never surfaces an in-stock pending reservation. The client renders these
+	// zero-stock cards as Sold and disables purchase actions. Callers that manage
+	// their own listings (My Shop, the seller dashboard) pass an explicit status.
+	if status == "" {
+		whereClause += " AND (l.status = 'active' OR (l.status IN ('pending', 'sold') AND COALESCE(l.stock_quantity, 0) = 0))"
+	} else {
 		whereClause += fmt.Sprintf(" AND l.status = $%d", len(args)+1)
 		args = append(args, status)
 	}
 
-	countQuery := "SELECT COUNT(*) FROM listings l LEFT JOIN users u ON l.seller_id = u.id" + whereClause
+	countQuery := "SELECT COUNT(*)" + listingFromClause + whereClause
 	var totalCount int
 	err = sqlDB.QueryRow(countQuery, args...).Scan(&totalCount)
 	if err != nil {
@@ -217,9 +241,11 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	} else if sortBy == "price-high" {
 		query += " ORDER BY l.price DESC"
 	} else if sortBy == "newest" {
-		query += " ORDER BY l.id DESC"
+		// Keep the live marketplace fresh: sold-out cards remain visible, but
+		// they always follow listings that buyers can still purchase.
+		query += " ORDER BY CASE WHEN l.status <> 'active' OR COALESCE(l.stock_quantity, 0) = 0 THEN 1 ELSE 0 END ASC, l.id DESC"
 	} else if sortBy == "rating" {
-		query += " ORDER BY l.rating DESC"
+		query += " ORDER BY COALESCE(lr.avg_rating, 0) DESC, l.id DESC"
 	} else {
 		query += " ORDER BY l.is_featured DESC, l.id DESC"
 	}
@@ -238,6 +264,15 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	if err != nil {
 		log.Printf("Error scanning products: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to scan products"})
+	}
+
+	// Seller phone numbers are contact PII. The list endpoint is public and
+	// bulk-paginated, so it must never expose them — otherwise a single
+	// unauthenticated scrape harvests every seller's phone number. Phone
+	// numbers are revealed only on the detail endpoint, and only to
+	// authenticated users.
+	for i := range products {
+		products[i].PhoneNumber = ""
 	}
 
 	return c.JSON(200, map[string]interface{}{
@@ -285,6 +320,13 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 	if err != nil {
 		log.Printf("Error querying product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to fetch product"})
+	}
+
+	// The seller's phone number is contact PII. Reveal it only to authenticated
+	// users so anonymous visitors cannot read (or scrape) seller contact
+	// details. The JWT must still belong to an active database user.
+	if uid, _, authErr := getOptionalJWTAuth(c, sqlDB); authErr != nil || uid <= 0 {
+		product.PhoneNumber = ""
 	}
 
 	recordListingView(sqlDB, product.ID, product.SellerId, c)
@@ -455,9 +497,28 @@ func deleteProduct(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(403, map[string]string{"error": "Forbidden: you do not own this listing"})
 	}
 
+	// Orders reference listings with ON DELETE RESTRICT so a delete can never
+	// erase someone's purchase history. Check up front to answer with something
+	// the seller can act on instead of a bare foreign-key failure.
+	var orderCount int
+	if err := sqlDB.QueryRow("SELECT COUNT(*) FROM orders WHERE listing_id = $1", id).Scan(&orderCount); err != nil {
+		return c.JSON(500, map[string]string{"error": "Database error"})
+	}
+	if orderCount > 0 {
+		return c.JSON(409, map[string]string{
+			"error": "This listing has orders and cannot be deleted. Archive it instead.",
+		})
+	}
+
 	if _, err := sqlDB.Exec("DELETE FROM listings WHERE id = $1", id); err != nil {
 		log.Printf("Error deleting product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to delete product"})
+	}
+	if err := removeListingFileDirectory(id); err != nil {
+		log.Printf("Product %d deleted but attachment cleanup failed: %v", id, err)
+	}
+	if err := clearStoredListingImages(id); err != nil {
+		log.Printf("Product %d deleted but legacy image cleanup failed: %v", id, err)
 	}
 	return c.JSON(200, map[string]string{"message": "Product deleted"})
 }
@@ -713,7 +774,7 @@ func clearStoredListingImages(listingID int) error {
 }
 
 func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {
-	query := "SELECT " + listingSelectCols + " FROM listings l LEFT JOIN users u ON l.seller_id = u.id WHERE l.id = $1"
+	query := "SELECT " + listingSelectCols + listingFromClause + " WHERE l.id = $1"
 	var p Product
 	err := sqlDB.QueryRow(query, id).Scan(
 		&p.ID, &p.Title, &p.Price, &p.OriginalPrice, &p.Image,

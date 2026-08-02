@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from '@/context/AuthContext';
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useToast } from "@/components/Toast/ToastContext";
 import Header from "@/components/Header/Header";
-import styles from "./profile.module.css";
+import { resolveAvatarUrl, PLACEHOLDER_AVATAR } from "@/lib/avatar";
+import { useI18n } from "@/context/LanguageContext";
 
 interface UserProfile {
   id: number;
@@ -17,12 +18,42 @@ interface UserProfile {
   gender?: string;
   dateOfBirth?: string;
   avatarUrl?: string;
+  oauthProvider?: string;
 }
+
+// Shared with My Shop / Developer API / Bulk Import so the whole seller area
+// reads as one design: grey page, white bordered cards, blue-bar section
+// headings, pill primary buttons and outlined secondary ones.
+const PAGE = 'min-h-screen bg-[#f0f0f0]';
+const CONTAINER =
+  'max-w-[980px] mx-auto pt-7 px-8 pb-16 max-[640px]:pt-5 max-[640px]:px-4 max-[640px]:pb-12';
+const CARD =
+  'bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]';
+const SECTION_H2 =
+  "flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 mb-4 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0";
+const ROW =
+  'flex gap-4 items-center py-3 border-b border-[#f2f2f0] last:border-b-0 max-[640px]:flex-col max-[640px]:items-start max-[640px]:gap-2';
+const LABEL = 'w-[150px] shrink-0 text-[13.5px] font-semibold text-[#444]';
+const VALUE = 'flex-1 min-w-0 text-sm text-[#222] break-words';
+const MUTED = 'flex-1 min-w-0 text-sm text-[#898781] break-words';
+const INPUT =
+  'flex-1 min-w-0 border border-[#ddd] rounded-lg px-3 py-2 text-sm text-[#222] bg-white transition-colors duration-150 focus:border-[#2a78d6] focus:outline-none max-[640px]:w-full';
+const BTN_SECONDARY =
+  'shrink-0 border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]';
+const BTN_DISABLED =
+  'shrink-0 border border-[#ddd] bg-[#f3f3f3] rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#999] cursor-not-allowed';
+const BTN_PRIMARY =
+  'inline-flex items-center px-[22px] py-[9px] rounded-[20px] bg-[#111] text-white border-none text-sm font-semibold cursor-pointer transition-colors duration-150 hover:bg-[#333] disabled:bg-[#bbb] disabled:cursor-not-allowed';
+
+// <input type="date"> only accepts YYYY-MM-DD, but the API sends a full ISO
+// timestamp — trim it so the field shows the stored birthday.
+const toDateInput = (value?: string) => (value ? value.slice(0, 10) : '');
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user: ctxUser, logout, updateUser } = useAuth();
+  const { user: ctxUser, loading: authLoading, updateUser } = useRequireAuth('/');
   const { showToast } = useToast();
+  const { t } = useI18n();
   const [user, setUser] = useState<UserProfile | null>(ctxUser ?? null);
   const [loading, setLoading] = useState(!ctxUser);
   const [error, setError] = useState<string | null>(null);
@@ -30,17 +61,18 @@ export default function ProfilePage() {
     firstName: ctxUser?.firstName ?? "",
     lastName: ctxUser?.lastName ?? "",
     gender: ctxUser?.gender ?? "",
-    dateOfBirth: ctxUser?.dateOfBirth ?? "",
+    dateOfBirth: toDateInput(ctxUser?.dateOfBirth),
   });
+
+  useEffect(() => 
+    {setUser(ctxUser ?? null);
+  }, [ctxUser]);
 
   //OTP Handling
   const [showOtp, setShowOtp] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [tempToken, setTempToken] = useState("");
   const [resendCd, setResendCd] = useState(0);
-  const [changeTarget, setChangeTarget] = useState<"email" | "phoneNo" | null>(
-    null,
-  );
 
   useEffect(() => {
     if (resendCd <= 0) return;
@@ -56,7 +88,7 @@ export default function ProfilePage() {
     if (resendCd > 0) return false;
 
     if (!ctxUser?.email.trim()) {
-      showToast("Email is required to resend OTP", "error");
+      showToast(t("profile.emailRequiredForOtp"), "error");
       return false;
     }
 
@@ -70,28 +102,24 @@ export default function ProfilePage() {
       const data = await res.json();
       if (res.ok) {
         if (!data.tempToken) {
-          showToast(
-            "Resend succeeded but no tempToken returned. Please try login again.",
-            "error",
-          );
+          showToast(t("profile.resendNoToken"), "error");
           return false;
         }
         setTempToken(data.tempToken);
         setResendCd(60);
-        showToast(data.message ?? "OTP resent", "success");
+        showToast(data.message ?? t("profile.otpResent"), "success");
         return true;
       }
-      showToast(data.error ?? "Failed to resend OTP", "error");
+      showToast(data.error ?? t("profile.resendFailed"), "error");
       return false;
     } catch (err) {
       console.error(err);
-      showToast("Network error", "error");
+      showToast(t("profile.networkError"), "error");
       return false;
     }
   };
 
-  const startOtpFlow = async (target: "email" | "phoneNo") => {
-    setChangeTarget(target);
+  const startOtpFlow = async () => {
     setOtpCode("");
     const sent = await sendOtp();
     if (sent) setShowOtp(true);
@@ -101,10 +129,7 @@ export default function ProfilePage() {
   const handleOtp = async () => {
     try {
       if (!tempToken.trim() || !otpCode.trim()) {
-        showToast(
-          "tempToken and otpCode are required. Please request a new OTP and enter the code.",
-          "error",
-        );
+        showToast(t("profile.otpFieldsRequired"), "error");
         return;
       }
       const res = await fetch("/api/v1/auth/verify-otp", {
@@ -125,12 +150,8 @@ export default function ProfilePage() {
         {
           setShowOtp(false);
           setOtpCode("");
-          showToast("OTP verified", "success");
-          router.push(
-            changeTarget === "email"
-              ? "/profile/change-email"
-              : "/profile/change-phoneNo",
-          );
+          showToast(t("profile.otpVerified"), "success");
+          router.push("/profile/change-email");
         }
       } else {
         setOtpCode("");
@@ -138,7 +159,7 @@ export default function ProfilePage() {
       }
     } catch (err) {
       console.error(err); //prints error in browser dev console
-      showToast("Network error", "error");
+      showToast(t("profile.networkError"), "error");
     }
   };
 
@@ -146,6 +167,8 @@ export default function ProfilePage() {
     e.preventDefault();
     await handleOtp();
   };
+
+  const isGoogleAuthenticated = user?.oauthProvider === "google";
 
   useEffect(() => {
     const fetchMe = async () => {
@@ -166,21 +189,22 @@ export default function ProfilePage() {
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to load profile");
+          throw new Error(data.error || t("profile.loadFailed"));
         }
 
         const data = await res.json();
-        setUser(data);
+        if (data.token) localStorage.setItem("token", data.token);
+        setUser(data.user);
       } catch (err) {
         if (err instanceof Error) setError(err.message);
-        else setError("An unexpected error occured");
+        else setError(t("profile.unexpectedError"));
       } finally {
         setLoading(false);
       }
     };
 
     fetchMe();
-  }, [router]);
+  }, [router, t]);
 
   useEffect(() => {
     if (user) {
@@ -188,7 +212,7 @@ export default function ProfilePage() {
         firstName: user.firstName ?? "",
         lastName: user.lastName ?? "",
         gender: user.gender ?? "",
-        dateOfBirth: user.dateOfBirth ?? "",
+        dateOfBirth: toDateInput(user.dateOfBirth),
       });
     }
   }, [user]);
@@ -209,13 +233,13 @@ export default function ProfilePage() {
 
   const handleChangeAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!user) {
-      showToast("User not loaded", "error");
+      showToast(t("profile.userNotLoaded"), "error");
       return;
     }
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      showToast("File is too large (max 2MB)", "error");
+      showToast(t("profile.fileTooLarge"), "error");
       return;
     }
 
@@ -240,13 +264,13 @@ export default function ProfilePage() {
         setUser((prev) => (prev ? { ...prev, avatarUrl: newAvatarUrl } : null));
         // Update auth context so avatar reflects everywhere in the app
         updateUser({ avatarUrl: newAvatarUrl });
-        showToast("Avatar updated succesfully", "success");
+        showToast(t("profile.avatarUpdated"), "success");
       } else {
-        showToast("Failed to upload avatar", "error");
+        showToast(t("profile.avatarUploadFailed"), "error");
       }
     } catch (err) {
       console.error(err);
-      showToast("Error uploading file", "error");
+      showToast(t("profile.avatarUploadError"), "error");
     }
   };
 
@@ -268,252 +292,321 @@ export default function ProfilePage() {
         body: JSON.stringify(updatedInputData),
       });
       if (res.ok) {
-        showToast("Profile successfully updated", "success");
+        showToast(t("profile.profileUpdated"), "success");
         const updated = await res.json();
         setUser(updated);
       } else {
-        showToast("Failed to update profile", "error");
+        showToast(t("profile.profileUpdateFailed"), "error");
       }
     } catch (err) {
-      showToast("Connection error. is the server running?", "error");
+      showToast(t("profile.connectionError"), "error");
     }
   };
-  if (loading) return <div style={{ padding: 24 }}>Loading profile...</div>;
+  if (authLoading || loading)
+    return (
+      <main className={PAGE}>
+        <Header />
+        <div className={CONTAINER}>
+          <p className="text-[#898781] text-[15px]">{t("profile.loading")}</p>
+        </div>
+      </main>
+    );
+
   if (error)
     return (
-      <div style={{ padding: 24 }}>
-        <p>Error: {error}</p>
-        <button
-          className="btn btn-secondary"
-          onClick={() => router.push("/login")}
-        >
-          Login
-        </button>
-      </div>
+      <main className={PAGE}>
+        <Header />
+        <div className={CONTAINER}>
+          <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">{t("profile.heading")}</h1>
+          <div className={CARD}>
+            <p className="bg-[#fdecea] border border-[#f5c6c0] rounded-md text-[#b71c1c] text-sm px-3.5 py-2.5 mt-0 mx-0 mb-4">
+              {error}
+            </p>
+            <button className={BTN_PRIMARY} onClick={() => router.push("/login")}>
+              {t("profile.goToLogin")}
+            </button>
+          </div>
+        </div>
+      </main>
     );
 
   if (!user) return null;
 
   const today = new Date().toISOString().split("T")[0];
 
-  // backend base URL for serving avatars
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-  const defaultAvatarUrl = "/default-avatar.png";
-  const placeholderAvatarUrl = "https://via.placeholder.com/120";
-  const resolveAvatarUrl = (url?: string) => {
-    if (!url)
-      return defaultAvatarUrl;
-    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
-      return url;
-    if (url.startsWith("/"))
-      return `${API_BASE}${url}`;
-    return `${API_BASE}/${url}`;
-  };
 
   if (showOtp) {
     return (
-      <div className={styles.otpContainer}>
-        <form onSubmit={handleOtpSubmit} className={styles.otpForm}>
-          <h2>Enter OTP Code</h2>
-          <p className={styles.otpPurpose}>
-            Verifying Purpose:{" "}
-            {changeTarget === "email" ? "Change Email" : "Change Phone Number"}
+      <main className={PAGE}>
+        <Header />
+
+        <div className="max-w-[480px] mx-auto pt-10 px-4 pb-16">
+          <button
+            className="bg-white border border-[#ddd] rounded-[20px] text-[#444] text-[13px] font-semibold cursor-pointer px-4 py-[7px] mb-3.5 inline-flex items-center gap-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 hover:border-[#888] hover:text-[#111] hover:-translate-x-0.5"
+            onClick={() => setShowOtp(false)}
+            type="button"
+          >
+            {t("profile.back")}
+          </button>
+
+          <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">{t("profile.verifyTitle")}</h1>
+          <p className="text-[#898781] text-sm mt-[-8px] mx-0 mb-[18px]">
+            {t("profile.verifySubtitle", { email: user.email })}
           </p>
-          <input
-            type="text"
-            placeholder="6-digit OTP"
-            value={otpCode}
-            onChange={(e) => setOtpCode(e.target.value)}
-            required
-            className={styles.input}
-          />
-          <div className={styles.otpActions}>
-            <button type="submit" className={styles.button}>
-              Verify Code
-            </button>
-            <button
-              type="button"
-              className={styles.button}
-              onClick={sendOtp}
-              disabled={resendCd > 0}
-            >
-              {resendCd > 0 ? `Resend OTP (${resendCd}s)` : "Resend OTP"}
-            </button>
-          </div>
-        </form>
-      </div>
+
+          <form onSubmit={handleOtpSubmit} className={CARD}>
+            <div className="bg-[#eff6ff] border border-[#bfdbfe] rounded-[10px] px-4 py-3 mb-4">
+              <p className="text-[13px] text-[#1c5cab] m-0">
+                {t("profile.verifyReasonPrefix")}{" "}
+                <strong>{t("profile.verifyReasonTarget")}</strong>.
+              </p>
+            </div>
+
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder={t("profile.otpPlaceholder")}
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value)}
+              required
+              className="w-full border border-[#ddd] rounded-lg px-3.5 py-2.5 text-lg tracking-[0.35em] text-center text-[#222] bg-white transition-colors duration-150 focus:border-[#2a78d6] focus:outline-none"
+            />
+
+            <div className="flex gap-2.5 items-center mt-4 flex-wrap">
+              <button type="submit" className={BTN_PRIMARY}>
+                {t("profile.verifyCode")}
+              </button>
+              <button
+                type="button"
+                className={`${BTN_SECONDARY} disabled:text-[#aaa] disabled:cursor-not-allowed disabled:hover:border-[#ccc]`}
+                onClick={sendOtp}
+                disabled={resendCd > 0}
+              >
+                {resendCd > 0
+                  ? t("profile.resendIn", { seconds: resendCd })
+                  : t("profile.resendCode")}
+              </button>
+            </div>
+          </form>
+        </div>
+      </main>
     );
   }
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ");
+
   return (
-    <main className={styles.main}>
-      <Header/>
+    <main className={PAGE}>
+      <Header />
 
-      <div className={styles.cardFlex}>
-        <div className="container">
-          <div className={styles.card}>
-            <h1>My profile</h1>
-            <p>Manage and protect your account</p>
+      <div className={CONTAINER}>
+        <h1 className="text-[26px] font-bold text-[#222] mt-0 mx-0 mb-4">{t("profile.heading")}</h1>
+        <p className="text-[#898781] text-sm mt-[-8px] mx-0 mb-[18px]">
+          {t("profile.subheading")}
+        </p>
 
-            <hr className={styles.divider} />
-            <div className={styles.avatarContainer}>
-              <img
-                src={resolveAvatarUrl(user.avatarUrl)}
-                alt="Profile Avatar"
-                className={styles.avatarImg}
-                onError={(event) => {
-                  (event.currentTarget as HTMLImageElement).src = placeholderAvatarUrl;
-                }}
+        {/* ── Identity: avatar + who you are at a glance ── */}
+        <div className={CARD}>
+          <div className="flex gap-5 items-center max-[640px]:flex-col max-[640px]:text-center">
+            <img
+              src={resolveAvatarUrl(user.avatarUrl)}
+              alt={t("profile.avatarAlt")}
+              className="w-[88px] h-[88px] shrink-0 rounded-full object-cover border border-[#e8e8e6] bg-[#f5f5f3] shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+              onError={(event) => {
+                (event.currentTarget as HTMLImageElement).src = PLACEHOLDER_AVATAR;
+              }}
+            />
+
+            <div className="min-w-0 flex-1">
+              <p className="text-[19px] font-bold text-[#222] m-0 truncate">
+                {fullName || user.username}
+              </p>
+              <p className="text-[#898781] text-sm mt-1 mx-0 mb-0 truncate">{user.email}</p>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleChangeAvatar}
               />
-              <div>
+              <button type="button" className={`${BTN_SECONDARY} mt-3`} onClick={triggerFileSelect}>
+                {t("profile.changeAvatar")}
+              </button>
+              <span className="block text-xs text-[#898781] mt-2">{t("profile.avatarHint")}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Account & security: read-only values with their own change flows ── */}
+        <div className={CARD}>
+          <h2 className={SECTION_H2}>{t("profile.accountSecurity")}</h2>
+
+          <div className={ROW}>
+            <div className={LABEL}>{t("profile.username")}</div>
+            <div className={VALUE}>{user.username}</div>
+          </div>
+
+          <div className={ROW}>
+            <div className={LABEL}>{t("profile.email")}</div>
+            <div className={VALUE}>{user.email}</div>
+            <button
+              className={isGoogleAuthenticated ? BTN_DISABLED : BTN_SECONDARY}
+              disabled={isGoogleAuthenticated}
+              title={isGoogleAuthenticated ? t("profile.googleManaged") : undefined}
+              onClick={isGoogleAuthenticated ? undefined : startOtpFlow}
+            >
+              {t("profile.change")}
+            </button>
+          </div>
+
+          <div className={ROW}>
+            <div className={LABEL}>{t("profile.phoneNo")}</div>
+            <div className={user.phoneNo ? VALUE : MUTED}>{user.phoneNo || t("profile.notSet")}</div>
+            <button
+              className={BTN_SECONDARY}
+              onClick={() => router.push("/profile/change-phoneNo")}
+            >
+              {t("profile.change")}
+            </button>
+          </div>
+
+          <div className={ROW}>
+            <div className={LABEL}>{t("profile.password")}</div>
+            <div className={`${VALUE} tracking-[0.2em]`}>••••••••</div>
+            <button
+              className={isGoogleAuthenticated ? BTN_DISABLED : BTN_SECONDARY}
+              disabled={isGoogleAuthenticated}
+              title={isGoogleAuthenticated ? t("profile.googleManaged") : undefined}
+              onClick={isGoogleAuthenticated ? undefined : () => router.push("/profile/change-password")}
+            >
+              {t("profile.change")}
+            </button>
+          </div>
+
+          <p className="text-xs text-[#898781] mt-3.5 mb-0">
+            {isGoogleAuthenticated ? t("profile.googleSecurityHint") : t("profile.emailOtpHint")}
+          </p>
+        </div>
+
+        {/* ── Personal details: the only editable-in-place fields ── */}
+        <div className={CARD}>
+          <h2 className={SECTION_H2}>{t("profile.personalDetails")}</h2>
+
+          <div className={ROW}>
+            <label className={LABEL} htmlFor="firstName">
+              {t("profile.firstName")}
+            </label>
+            <input
+              id="firstName"
+              name="firstName"
+              value={inputData.firstName}
+              onChange={handleChange}
+              placeholder={t("profile.firstNamePlaceholder")}
+              className={INPUT}
+            />
+          </div>
+
+          <div className={ROW}>
+            <label className={LABEL} htmlFor="lastName">
+              {t("profile.lastName")}
+            </label>
+            <input
+              id="lastName"
+              name="lastName"
+              value={inputData.lastName}
+              onChange={handleChange}
+              placeholder={t("profile.lastNamePlaceholder")}
+              className={INPUT}
+            />
+          </div>
+
+          <div className={ROW}>
+            <div className={LABEL}>{t("profile.gender")}</div>
+            <div className="flex-1 min-w-0 flex gap-2 items-center flex-wrap">
+              <label
+                className={`inline-flex items-center gap-2 px-3.5 py-[7px] rounded-[20px] border text-[13px] cursor-pointer transition-all duration-150 ${inputData.gender === "Male" ? "bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold" : "bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]"}`}
+              >
                 <input
-                  type="file"
-                  ref={fileInputRef}
-                  style={{ display: "none" }}
-                  accept="image/*"
-                  onChange={handleChangeAvatar}
+                  type="radio"
+                  name="gender"
+                  value="Male"
+                  checked={inputData.gender === "Male"}
+                  onChange={handleChange}
+                  className="accent-[#c2185b]"
                 />
+                {t("profile.male")}
+              </label>
+              <label
+                className={`inline-flex items-center gap-2 px-3.5 py-[7px] rounded-[20px] border text-[13px] cursor-pointer transition-all duration-150 ${inputData.gender === "Female" ? "bg-[#fce4ec] border-[#f48fb1] text-[#c2185b] font-bold" : "bg-white border-[#ccc] text-[#444] font-medium hover:border-[#888]"}`}
+              >
+                <input
+                  type="radio"
+                  name="gender"
+                  value="Female"
+                  checked={inputData.gender === "Female"}
+                  onChange={handleChange}
+                  className="accent-[#c2185b]"
+                />
+                {t("profile.female")}
+              </label>
+              <label className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-[20px] border border-[#ccc] bg-white text-[13px] font-medium text-[#444] cursor-pointer transition-all duration-150 hover:border-[#888]">
+                <input
+                  type="radio"
+                  name="gender"
+                  value="PreferNotToTell"
+                  checked={false}
+                  onChange={() => {
+                    showToast(t("profile.chooseGender"), "success");
+                  }}
+                  className="accent-[#c2185b]"
+                />
+                {t("profile.preferNotToTell")}
+              </label>
+              {inputData.gender && (
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={triggerFileSelect}
+                  className="text-[13px] font-semibold text-[#2563eb] bg-transparent border-none cursor-pointer px-1.5 py-1 hover:underline"
+                  onClick={() => setInputData((prev) => ({ ...prev, gender: "" }))}
                 >
-                  Change Avatar
+                  {t("profile.clear")}
                 </button>
-              </div>
+              )}
             </div>
+          </div>
 
-            <div className={styles.row}>
-              <div className={styles.label}>Username</div>
-              <div className={styles.static}>{user.username}</div>
-            </div>
-
-            <div className={styles.row}>
-              <div className={styles.label}>Email</div>
-              <div className={styles.static}>{user.email}</div>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => startOtpFlow("email")}
-              >
-                change
-              </button>
-            </div>
-
-            <div className={styles.row}>
-              <div className={styles.label}>Phone Number</div>
-              <div className={styles.static}>{user.phoneNo}</div>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => startOtpFlow("phoneNo")}
-              >
-                change
-              </button>
-            </div>
-
-            <hr className={styles.divider} />
-
-			<div className={styles.row}>
-			  <div className={styles.label}>Password</div>
-			  <div className={styles.static}>••••••••</div>
-			  <button
-				className="btn btn-secondary btn-sm"
-				onClick={() => router.push("/profile/change-password")}
-			  >
-				change
-			  </button>
-			</div>
-
-			<hr className={styles.divider} />
-
-            <div className={styles.row}>
-              <div className={styles.label}>First Name</div>
+          <div className={ROW}>
+            <label className={LABEL} htmlFor="dateOfBirth">
+              {t("profile.dateOfBirth")}
+            </label>
+            <div className="flex-1 min-w-0 flex gap-3 items-center flex-wrap">
               <input
-                name="firstName"
-                value={inputData.firstName}
-                onChange={handleChange}
-                className={styles.input}
-              />
-            </div>
-
-            <div className={styles.row}>
-              <div className={styles.label}>Last Name</div>
-              <input
-                name="lastName"
-                value={inputData.lastName}
-                onChange={handleChange}
-                className={styles.input}
-              />
-            </div>
-
-            <div className={styles.row}>
-              <div className={styles.label}>Gender</div>
-              <div className={styles.genderGroup}>
-                <div className={styles.static}>{user.gender}</div>
-                <label className={styles.radioLabel}>
-                  <input
-                    type="radio"
-                    name="gender"
-                    value="Male"
-                    checked={inputData.gender === "Male"}
-                    onChange={handleChange}
-                  />
-                  Male
-                </label>
-                <label className={styles.radioLabel}>
-                  <input
-                    type="radio"
-                    name="gender"
-                    value="Female"
-                    checked={inputData.gender === "Female"}
-                    onChange={handleChange}
-                  />
-                  Female
-                </label>
-                <label className={styles.radioLabel}>
-                  <input
-                    type="radio"
-                    name="gender"
-                    value="PreferNotToTell"
-                    checked={false}
-                    onChange={() => {
-                      showToast("🏳️‍🌈🏳️‍🌈🏳️‍🌈 ARE YOU GAY?", "success");
-                    }}
-                  />
-                  Prefer not to tell
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() =>
-                    setInputData((prev) => ({ ...prev, gender: "" }))
-                  }
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.row}>
-              <div className={styles.label}>Date of birth</div>
-              <div className={styles.static}>
-                {user.dateOfBirth
-                  ? new Date(user.dateOfBirth).toLocaleDateString()
-                  : ""}
-              </div>
-              <input
+                id="dateOfBirth"
                 type="date"
                 name="dateOfBirth"
                 value={inputData.dateOfBirth}
                 onChange={handleChange}
                 max={today}
                 min="1950-01-01"
+                className="border border-[#ddd] rounded-lg px-3 py-2 text-sm text-[#222] bg-white transition-colors duration-150 focus:border-[#2a78d6] focus:outline-none"
               />
+              {user.dateOfBirth && (
+                <span className="text-[13px] text-[#898781]">
+                  {t("profile.currently", {
+                    date: new Date(user.dateOfBirth).toLocaleDateString(),
+                  })}
+                </span>
+              )}
             </div>
+          </div>
 
-            <div className={styles.footer}>
-              <button className="btn btn-primary" onClick={handleSave}>
-                Save Profile Changes
-              </button>
-            </div>
+          <div className="mt-5 pt-4 border-t border-[#eee] flex items-center gap-3 flex-wrap">
+            <button className={BTN_PRIMARY} onClick={handleSave}>
+              {t("profile.saveChanges")}
+            </button>
+            <span className="text-xs text-[#898781]">
+              {t("profile.saveHint")}
+            </span>
           </div>
         </div>
       </div>

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Demo Racket Receipt and Specification</title>
+  <style>
+    @page { size: A4; margin: 18mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #172033;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11pt;
+      line-height: 1.45;
+    }
+    header {
+      border-bottom: 3px solid #2563eb;
+      display: flex;
+      justify-content: space-between;
+      padding-bottom: 14px;
+    }
+    h1 { color: #14315c; font-size: 22pt; margin: 0 0 4px; }
+    h2 {
+      border-bottom: 1px solid #cbd5e1;
+      color: #14315c;
+      font-size: 14pt;
+      margin: 24px 0 10px;
+      padding-bottom: 5px;
+    }
+    p { margin: 4px 0; }
+    .label { color: #64748b; font-size: 9pt; text-transform: uppercase; }
+    .demo {
+      background: #fff4cf;
+      border: 1px solid #e8b923;
+      border-radius: 5px;
+      color: #784d00;
+      font-weight: bold;
+      margin: 18px 0;
+      padding: 10px 12px;
+      text-align: center;
+    }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+    th { background: #eff6ff; color: #14315c; }
+    .money { text-align: right; white-space: nowrap; }
+    .total td { border-top: 2px solid #94a3b8; font-weight: bold; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 24px;
+    }
+    .card {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      padding: 12px;
+    }
+    footer {
+      border-top: 1px solid #cbd5e1;
+      color: #64748b;
+      font-size: 8.5pt;
+      margin-top: 26px;
+      padding-top: 9px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>RacketMarket Demo Store</h1>
+      <p>Badminton equipment marketplace demonstration</p>
+      <p class="label">Fictional retailer — not a real sales document</p>
+    </div>
+    <div>
+      <p class="label">Demo receipt</p>
+      <p><strong>DEMO-2026-0042</strong></p>
+      <p>30 July 2026</p>
+    </div>
+  </header>
+
+  <div class="demo">
+    DEMONSTRATION SAMPLE ONLY — NOT VALID AS PROOF OF PURCHASE OR WARRANTY
+  </div>
+
+  <section>
+    <h2>Purchase summary</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Quantity</th>
+          <th class="money">Unit price</th>
+          <th class="money">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Yonex Astrox 88D Pro badminton racket — 4U/G5</td>
+          <td>1</td>
+          <td class="money">RM 899.00</td>
+          <td class="money">RM 899.00</td>
+        </tr>
+        <tr>
+          <td>Demo stringing service</td>
+          <td>1</td>
+          <td class="money">RM 35.00</td>
+          <td class="money">RM 35.00</td>
+        </tr>
+        <tr class="total">
+          <td colspan="3" class="money">Demo total</td>
+          <td class="money">RM 934.00</td>
+        </tr>
+      </tbody>
+    </table>
+    <p><strong>Payment:</strong> Redacted for seller privacy</p>
+    <p><strong>Customer details:</strong> Redacted for seller privacy</p>
+  </section>
+
+  <section>
+    <h2>Racket specification</h2>
+    <div class="grid">
+      <div class="card"><span class="label">Brand / model</span><br><strong>Yonex Astrox 88D Pro</strong></div>
+      <div class="card"><span class="label">Product type</span><br><strong>Badminton racket</strong></div>
+      <div class="card"><span class="label">Weight / grip</span><br><strong>4U / G5</strong></div>
+      <div class="card"><span class="label">Balance</span><br><strong>Head heavy</strong></div>
+      <div class="card"><span class="label">Flexibility</span><br><strong>Medium flex</strong></div>
+      <div class="card"><span class="label">Recommended tension</span><br><strong>20–28 lb</strong></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Seller condition declaration</h2>
+    <p>Lightly used. The frame has no visible cracks. The grip was replaced recently,
+      and normal cosmetic wear is shown in the listing photographs.</p>
+    <p><strong>Attachment purpose:</strong> This sample demonstrates how a seller can
+      add an optional receipt, warranty page, or specification document to a marketplace listing.</p>
+  </section>
+
+  <footer>
+    This file contains fictional demonstration data only. It has no commercial,
+    warranty, ownership, authenticity, or payment value.
+  </footer>
+</body>
+</html>

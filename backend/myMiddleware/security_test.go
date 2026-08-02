@@ -118,13 +118,13 @@ func TestJWTAuthAllowsOnlyActiveExistingMember(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
 	}
-	query := regexp.QuoteMeta("SELECT account_status FROM users WHERE id = $1")
+	query := regexp.QuoteMeta("SELECT account_status, role FROM users WHERE id = $1")
 
 	t.Run("active member", func(t *testing.T) {
 		db, mock := newMockDB(t)
 		mock.ExpectQuery(query).
 			WithArgs(42).
-			WillReturnRows(sqlmock.NewRows([]string{"account_status"}).AddRow("active"))
+			WillReturnRows(sqlmock.NewRows([]string{"account_status", "role"}).AddRow("active", "user"))
 
 		e := echo.New()
 		request := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -153,7 +153,7 @@ func TestJWTAuthAllowsOnlyActiveExistingMember(t *testing.T) {
 		db, mock := newMockDB(t)
 		mock.ExpectQuery(query).
 			WithArgs(42).
-			WillReturnRows(sqlmock.NewRows([]string{"account_status"}).AddRow("suspended"))
+			WillReturnRows(sqlmock.NewRows([]string{"account_status", "role"}).AddRow("suspended", "user"))
 
 		e := echo.New()
 		request := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -220,16 +220,25 @@ func TestAdminAuthEnforcesRoleSeparation(t *testing.T) {
 	tests := []struct {
 		name       string
 		header     string
+		dbRole     string
 		wantStatus int
 		wantCalled bool
 	}{
 		{name: "missing", wantStatus: http.StatusUnauthorized},
-		{name: "member forbidden", header: "Bearer " + memberToken, wantStatus: http.StatusForbidden},
+		{name: "ordinary user forbidden", header: "Bearer " + memberToken, dbRole: "user", wantStatus: http.StatusForbidden},
+		{name: "moderator allowed", header: "Bearer " + memberToken, dbRole: "moderator", wantStatus: http.StatusNoContent, wantCalled: true},
+		{name: "database admin allowed", header: "Bearer " + memberToken, dbRole: "admin", wantStatus: http.StatusNoContent, wantCalled: true},
 		{name: "admin allowed", header: "Bearer " + adminToken, wantStatus: http.StatusNoContent, wantCalled: true},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			db, mock := newMockDB(t)
+			if test.dbRole != "" {
+				mock.ExpectQuery(regexp.QuoteMeta("SELECT account_status, role FROM users WHERE id = $1")).
+					WithArgs(42).
+					WillReturnRows(sqlmock.NewRows([]string{"account_status", "role"}).AddRow("active", test.dbRole))
+			}
 			e := echo.New()
 			request := httptest.NewRequest(http.MethodGet, "/admin", nil)
 			request.Header.Set(echo.HeaderAuthorization, test.header)
@@ -237,7 +246,7 @@ func TestAdminAuthEnforcesRoleSeparation(t *testing.T) {
 			context := e.NewContext(request, recorder)
 
 			called := false
-			handler := AdminAuth()(func(c echo.Context) error {
+			handler := AdminAuth(db)(func(c echo.Context) error {
 				called = true
 				return c.NoContent(http.StatusNoContent)
 			})
@@ -249,6 +258,9 @@ func TestAdminAuthEnforcesRoleSeparation(t *testing.T) {
 			}
 			if recorder.Code != test.wantStatus {
 				t.Fatalf("status = %d, want %d", recorder.Code, test.wantStatus)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}

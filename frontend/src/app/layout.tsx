@@ -5,6 +5,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import { CartProvider } from "@/context/CartContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { ToastProvider } from "@/components/Toast/ToastContext";
+import { NotificationProvider } from "@/context/NotificationContext";
 import Footer from "@/components/Footer/Footer";
 import FloatingChat from "@/components/FloatingChat/FloatingChat";
 import AIFloatingChat from "@/components/AIFloatingChat/AIFloatingChat";
@@ -25,14 +26,16 @@ export default function RootLayout({
         <LanguageProvider>
           <AuthProvider>
             <WebSocketProvider>
-              <CartProvider>
-                <ToastProvider>
-                    {children}
-                </ToastProvider> {/*suggested moving toast as parents of floating chat and footer */}
-                <FloatingChat />
-                <AIFloatingChat />
-              <Footer />
-			  </CartProvider>
+              <NotificationProvider>
+                <CartProvider>
+                  <ToastProvider>
+                      {children}
+                  </ToastProvider> {/*suggested moving toast as parents of floating chat and footer */}
+                  <FloatingChat />
+                  <AIFloatingChat />
+                <Footer />
+                </CartProvider>
+              </NotificationProvider>
             </WebSocketProvider>
           </AuthProvider>
         </LanguageProvider>

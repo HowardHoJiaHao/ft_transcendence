@@ -8,13 +8,15 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"transcendence/modules/user/auth"
+	"transcendence/modules/user/notifications"
 	"transcendence/myMiddleware"
 )
 
 type Handler struct {
-	Hub     *Hub
-	Repo    *Repository
-	Service *auth.Service
+	Hub           *Hub
+	Repo          *Repository
+	Service       *auth.Service
+	Notifications *notifications.Service
 }
 
 func NewHandler(hub *Hub, repo *Repository, service *auth.Service) *Handler {
@@ -28,6 +30,8 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.GET("/ws", h.WebSocketHandler)
 	protected.POST("/messages", h.SendMessage)
 	protected.GET("/conversations", h.GetConversations)
+	protected.GET("/online-users", h.GetOnlineUsers)
+	protected.GET("/people", h.GetPeople)
 	protected.DELETE("/conversations/:userId", h.DeleteConversation)
 	protected.GET("/messages/:userId", h.GetMessages)
 }
@@ -70,7 +74,7 @@ func (h *Handler) SendMessage(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot send message to yourself"})
 	}
 
-	msg, err := h.Repo.CreateMessage(senderId, req.ReceiverId, req.Content)
+	msg, notificationID, err := h.Repo.CreateMessageWithNotification(senderId, req.ReceiverId, req.Content)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to save message"})
 	}
@@ -86,6 +90,9 @@ func (h *Handler) SendMessage(c echo.Context) error {
 
 	payload, _ := json.Marshal(outbound)
 	h.Hub.SendPrivateMessage(msg.ReceiverId, payload)
+	if h.Notifications != nil {
+		h.Notifications.PublishByID(msg.ReceiverId, notificationID)
+	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "sent",
@@ -105,6 +112,73 @@ func (h *Handler) GetConversations(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{"conversations": conversations})
+}
+
+func (h *Handler) GetOnlineUsers(c echo.Context) error {
+	currentUserID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
+
+	onlineIDs, err := h.Hub.OnlineUserIDs(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "online users unavailable"})
+	}
+
+	users := make([]OnlineUser, 0, len(onlineIDs))
+	for _, userID := range onlineIDs {
+		if userID == currentUserID {
+			continue
+		}
+		user, err := h.Repo.GetUserByID(userID)
+		if err != nil || user.AccountStatus != "active" {
+			continue
+		}
+		users = append(users, OnlineUser{ID: user.ID, Username: user.Username, AvatarURL: user.AvatarURL})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"users": users})
+}
+
+func (h *Handler) GetPeople(c echo.Context) error {
+	currentUserID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
+
+	role := c.QueryParam("role")
+	if role != "" && role != "seller" && role != "buyer" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "role must be seller or buyer"})
+	}
+
+	const defaultLimit = 40
+	limit := defaultLimit
+	if rawLimit := c.QueryParam("limit"); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed < 1 || parsed > 100 {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "limit must be between 1 and 100"})
+		}
+		limit = parsed
+	}
+
+	offset := 0
+	if rawOffset := c.QueryParam("offset"); rawOffset != "" {
+		parsed, err := strconv.Atoi(rawOffset)
+		if err != nil || parsed < 0 {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "offset must be zero or greater"})
+		}
+		offset = parsed
+	}
+
+	people, err := h.Repo.SearchDirectoryUsers(currentUserID, c.QueryParam("q"), role, limit, offset)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to fetch people"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"people":   people,
+		"has_more": len(people) == limit,
+	})
 }
 
 func (h *Handler) GetMessages(c echo.Context) error {

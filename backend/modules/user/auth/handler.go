@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -100,6 +101,7 @@ func (h *Handler) Login(c echo.Context) error {
 
 	tempToken, err := h.service.GenerateAndSendOTP(req.Email)
 	if err != nil {
+		log.Printf("Error sending login OTP: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "OTP failed to send"})
 	}
 
@@ -119,12 +121,16 @@ func (h *Handler) RequestPasswordChange(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User not found"})
 	}
+	if u.OAuthProvider == "google" {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "Google-authenticated accounts cannot change their password"})
+	}
 	withPassword, err := h.repo.GetUserByEmailWithPassword(u.Email)
 	if err != nil || bcrypt.CompareHashAndPassword([]byte(withPassword.PasswordHash), []byte(req.CurrentPassword)) != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Current password is incorrect"})
 	}
 	tempToken, err := h.service.GenerateAndSendOTP(u.Email)
 	if err != nil {
+		log.Printf("Error sending password-change OTP: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "OTP failed to send"})
 	}
 	return c.JSON(http.StatusAccepted, map[string]string{"tempToken": tempToken, "message": "OTP sent"})
@@ -145,6 +151,9 @@ func (h *Handler) ConfirmPasswordChange(c echo.Context) error {
 	u, err := h.repo.GetUserByID(userID)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User not found"})
+	}
+	if u.OAuthProvider == "google" {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "Google-authenticated accounts cannot change their password"})
 	}
 	passwordRequest := user.RegisterRequest{Username: u.Username, Password: req.NewPassword}
 	if err := h.service.CheckAndHashNewPassword(&passwordRequest); err != nil {
@@ -205,6 +214,7 @@ func (h *Handler) ResendOtp(c echo.Context) error {
 
 	tempToken, err := h.service.GenerateAndSendOTP(req.Email)
 	if err != nil {
+		log.Printf("Error resending OTP: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "OTP failed to send"})
 	}
 	return c.JSON(http.StatusAccepted, map[string]string{"tempToken": tempToken, "message": "OTP sent"})

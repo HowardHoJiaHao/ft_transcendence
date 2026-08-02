@@ -43,3 +43,20 @@ type OnlineUsersMessage struct {
 	Type    string `json:"type"`
 	UserIds []int  `json:"user_ids"`
 }
+
+// OnlineUser is the minimal profile information needed to start a chat.
+type OnlineUser struct {
+	ID        int     `json:"id"`
+	Username  string  `json:"username"`
+	AvatarURL *string `json:"avatar_url,omitempty"`
+}
+
+// DirectoryUser is the limited profile data exposed by the chat people directory.
+// It intentionally excludes contact details and other private account fields.
+type DirectoryUser struct {
+	ID        int     `json:"id"`
+	Username  string  `json:"username"`
+	AvatarURL *string `json:"avatar_url,omitempty"`
+	IsSeller  bool    `json:"is_seller"`
+	IsBuyer   bool    `json:"is_buyer"`
+}

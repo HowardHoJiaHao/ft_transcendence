@@ -13,8 +13,9 @@ Expected dataset columns:
 
 Recommended usage in Colab:
 1. Generate/upload `dummy_racket_recommendation_data.csv`.
-2. Paste this script into a Colab cell, or upload and run it.
-3. Download the generated model files:
+2. Clone the repository in Colab, or upload this script together with
+   `ai_service/model_training.py`.
+3. Run this script and download the generated model files:
    - racket_recommender.joblib
    - model_metadata.json
 
@@ -29,33 +30,24 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
-from sklearn.multioutput import MultiOutputClassifier
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
+
+try:
+    # Canonical implementation when this script is run from a repository clone.
+    from ai_service.model_training import (
+        FEATURE_COLUMNS,
+        TARGET_COLUMNS,
+        build_pipeline,
+    )
+except ImportError:
+    # Colab users may upload ai_service/model_training.py beside this script.
+    from model_training import FEATURE_COLUMNS, TARGET_COLUMNS, build_pipeline
 
 
 DATASET_PATH = Path("/content/dummy_racket_recommendation_data.csv")
 MODEL_OUTPUT_PATH = Path("/content/racket_recommender.joblib")
 METADATA_OUTPUT_PATH = Path("/content/model_metadata.json")
-
-FEATURE_COLUMNS = [
-    "age_group",
-    "gender",
-    "experience_level",
-    "play_style",
-    "budget_range",
-]
-
-TARGET_COLUMNS = [
-    "weightCategory",
-    "flexibilityCategory",
-    "balanceCategory",
-]
-
 
 def load_dataset(path: Path) -> pd.DataFrame:
     if not path.exists():
@@ -73,37 +65,7 @@ def load_dataset(path: Path) -> pd.DataFrame:
     return df[required_columns].dropna().reset_index(drop=True)
 
 
-def build_pipeline() -> Pipeline:
-    preprocessor = ColumnTransformer(
-        transformers=[
-            (
-                "categorical",
-                OneHotEncoder(handle_unknown="ignore"),
-                FEATURE_COLUMNS,
-            )
-        ],
-        remainder="drop",
-    )
-
-    model = MultiOutputClassifier(
-        RandomForestClassifier(
-            n_estimators=250,
-            max_depth=None,
-            min_samples_leaf=2,
-            random_state=42,
-            class_weight="balanced_subsample",
-        )
-    )
-
-    return Pipeline(
-        steps=[
-            ("preprocessor", preprocessor),
-            ("model", model),
-        ]
-    )
-
-
-def evaluate_model(pipeline: Pipeline, x_test: pd.DataFrame, y_test: pd.DataFrame) -> dict:
+def evaluate_model(pipeline, x_test: pd.DataFrame, y_test: pd.DataFrame) -> dict:
     predictions = pipeline.predict(x_test)
     pred_df = pd.DataFrame(predictions, columns=TARGET_COLUMNS)
 
@@ -128,7 +90,7 @@ def evaluate_model(pipeline: Pipeline, x_test: pd.DataFrame, y_test: pd.DataFram
     return metrics
 
 
-def show_prediction_examples(pipeline: Pipeline) -> None:
+def show_prediction_examples(pipeline) -> None:
     examples = pd.DataFrame(
         [
             {

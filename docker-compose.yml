@@ -61,8 +61,6 @@ services:
     container_name: transcendence-node-exporter
     command:
       - --collector.textfile.directory=/metrics
-    ports:
-      - "127.0.0.1:9100:9100"
     volumes:
       - backup_metrics:/metrics:ro
     restart: unless-stopped
@@ -135,15 +133,21 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL}
-    ports:
-      - "127.0.0.1:8080:8080"
-    # expose:
-      # - "8080"
+      FRONTEND_URL: ${FRONTEND_URL:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_TEST_CONNECTED_ACCOUNT_ID: ${STRIPE_TEST_CONNECTED_ACCOUNT_ID:-}
+      STRIPE_TEST_SELLER_EMAIL: ${STRIPE_TEST_SELLER_EMAIL:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-}
+      STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-}
+    expose:
+      - "8080"
     volumes:
       - ./uploads:/app/uploads
       - ./avatar:/app/avatar
       - ./static/avatars:/app/static/avatars
       - ./static/listings:/app/static/listings
+      - ./storage:/app/storage
     depends_on:
       db:
         condition: service_healthy
@@ -153,6 +157,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - transcendence-network
+
+  stripe-cli:
+    image: stripe/stripe-cli:v1.44.0
+    profiles:
+      - stripe
+    environment:
+      STRIPE_API_KEY: ${STRIPE_SECRET_KEY:-}
+    command:
+      - listen
+      - --events
+      - checkout.session.completed,checkout.session.expired,payment_intent.payment_failed
+      - --forward-to
+      - http://backend:8080/api/v1/webhooks/stripe
+    restart: unless-stopped
     networks:
       - transcendence-network
 
@@ -179,8 +199,8 @@ services:
 
   ai:
     build:
-      context: ./ai_service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ai_service/Dockerfile
     container_name: transcendence-ai
     environment:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
@@ -200,8 +220,13 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-transcendence}
       BACKEND_URL: http://backend:8080
+      RACKET_RECOMMENDER_MODEL_DIR: /app/ml_models
+      RACKET_RECOMMENDER_BASELINE_DATASET: /app/training_data/dummy_racket_recommendation_data.csv
+      RACKET_RECOMMENDER_SEED_DIR: /app/model_seed
     expose:
       - "8000"
+    volumes:
+      - recommender_models:/app/ml_models
     depends_on:
       db:
         condition: service_healthy
@@ -311,8 +336,10 @@ services:
     command: -config.file=/etc/promtail/promtail-config.yml
     volumes:
       - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro,rslave
+      # Rootful Docker uses these defaults. For rootless Docker, set
+      # DOCKER_SOCKET_PATH and DOCKER_CONTAINERS_PATH to its user-owned paths.
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
+      - ${DOCKER_CONTAINERS_PATH:-/var/lib/docker/containers}:/var/lib/docker/containers:ro
     depends_on:
       - loki
     restart: unless-stopped
@@ -381,9 +408,9 @@ services:
       DETECTION_PARANOIA: "1"
       REPORTING_LEVEL: "2"
       ALLOWED_METHODS: "GET HEAD POST PUT PATCH DELETE OPTIONS"
-      MODSEC_REQ_BODY_LIMIT: "73400320"
+      MODSEC_REQ_BODY_LIMIT: "75497472"
       MAX_FILE_SIZE: "10485760"
-      COMBINED_FILE_SIZES: "62914560"
+      COMBINED_FILE_SIZES: "73400320"
     volumes:
       # Loaded before CRS rules. Keep application-specific exclusions narrow.
       - ./waf/racketbot-before.conf:/opt/owasp-crs/plugins/racketbot-before.conf:ro
@@ -395,6 +422,7 @@ services:
 
 volumes:
   postgres_data:
+  recommender_models:
   prometheus_data:
   alertmanager_data:
   grafana_data:

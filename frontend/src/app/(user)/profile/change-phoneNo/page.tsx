@@ -2,11 +2,14 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import styles from './change-phoneNo.module.css'
+import { useToast } from '@/components/Toast/ToastContext';
+import { useI18n } from '@/context/LanguageContext';
 
-export default function ChangePhoneNoPage() 
+export default function ChangePhoneNoPage()
 {
 	const router = useRouter();
+	const { showToast } = useToast();
+	const { t } = useI18n();
 	const [newPhoneNo, setNewPhoneNo] = useState('');
 	const [loading, setLoading] = useState(false);
 	const [msg, setMsg] = useState('');
@@ -38,15 +41,19 @@ export default function ChangePhoneNoPage()
 
 			if (!res.ok)
 			{
-				setMsg(data.error ?? 'Failed to update PhoneNo');
+				const message = data.error ?? t('toast.phoneUpdateFailed');
+				setMsg(message);
+				showToast(message, 'error');
 				return ;
 			}
-			setMsg('PhoneNo updated successfully')
+			setMsg(t('toast.phoneUpdated'));
+			showToast(t('toast.phoneUpdated'), 'success');
 			setTimeout(() => router.push('/profile'), 800);
 		}
 		catch
 		{
-			setMsg('Network error')
+			setMsg(t('toast.networkError'));
+			showToast(t('toast.networkError'), 'error');
 		}
 		finally
 		{
@@ -55,16 +62,16 @@ export default function ChangePhoneNoPage()
 	}
 
 	return (
-		<div className={styles.container}>
-			<main className={styles.form}>
-				<h1>Change Phone Number</h1>
-				<form onSubmit={handleSubmit}>
-					<input type="PhoneNo" placeholder="Enter new Phone Number" value={newPhoneNo} onChange={(e) => setNewPhoneNo(e.target.value)} required className={styles.input} />
-					<button type="submit" disabled={loading} className={styles.button}>
+		<div className="flex justify-center items-center h-[calc(100vh-80px)] bg-[#fafafa] px-4 py-6">
+			<main className="bg-white p-10 rounded-lg shadow-[0_4px_6px_rgba(0,0,0,0.1)] w-full max-w-[560px] flex flex-col gap-4">
+				<h1 className="text-center mb-2 text-[#333]">Change Phone Number</h1>
+				<form onSubmit={handleSubmit} className="grid gap-3">
+					<input type="PhoneNo" placeholder="Enter new Phone Number" value={newPhoneNo} onChange={(e) => setNewPhoneNo(e.target.value)} required className="p-3 border border-[#ccc] rounded text-base" />
+					<button type="submit" disabled={loading} className="p-3 bg-[#080808] text-white border-none rounded text-base font-bold cursor-pointer w-full mt-0 hover:bg-[#323131] disabled:opacity-70 disabled:cursor-not-allowed">
 						{loading ? 'Saving...' : 'Save New Phone Number'}
 					</button>
 				</form>
-				{msg && <p className={styles.message}>{msg}</p>}
+				{msg && <p className="mt-1">{msg}</p>}
 			</main>
 		</div>
 	);
