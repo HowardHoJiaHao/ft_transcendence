@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 
 import Header from '@/components/Header/Header';
@@ -53,7 +53,6 @@ interface PrivateMessage {
 export default function UserPage()
 {
 	const { id } = useParams();
-	const router = useRouter();
 	const { user: currentUser } = useAuth();
 	const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 	const defaultAvatarUrl = '/default-avatar.png';
@@ -68,19 +67,9 @@ export default function UserPage()
 	const [chatLoading, setChatLoading] = useState(false);
 
 	const { showToast } = useToast();
-	const { onlineUsers } = useWebSocketContext();
 	const resolveAvatarUrl = (url?: string) => {
 		if (!url)
 			return defaultAvatarUrl;
-		if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:'))
-			return url;
-		if (url.startsWith('/'))
-			return `${apiBaseUrl}${url}`;
-		return `${apiBaseUrl}/${url}`;
-	}
-	const resolveListingImageUrl = (url?: string) => {
-		if (!url)
-			return placeholderListingImageUrl;
 		if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:'))
 			return url;
 		if (url.startsWith('/'))
@@ -170,7 +159,7 @@ export default function UserPage()
 			fetchSeller();
 	}, [id, showToast])
 
-   	useEffect(() =>
+	useEffect(() =>
 	{
 		if (!seller)
 			return ;
@@ -333,70 +322,3 @@ function OnlineStatus({ userId, showDot = true }: { userId: number, showDot?: bo
 		</span>
 	)
 }
-//               {/* Products Grid */}
-//               {loading ? (
-//                 <div className="text-center px-5 py-[60px] bg-white rounded-lg"><p className="text-base mb-5">Loading products...</p></div>
-//               ) : error ? (
-//                 <div className="text-center px-5 py-[60px] bg-white rounded-lg"><p className="text-base mb-5">Error: {error}</p>
-//                   <button className="btn btn-secondary" onClick={() => window.location.reload()}>
-//                     Retry
-//                   </button>
-//                 </div>
-//               ) : products.length > 0 ? (
-//                 <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-//                   {products.map((product) => (
-//                     <div key={product.id} className="group bg-white rounded-lg overflow-hidden shadow-[var(--shadow)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[var(--shadow-lg)]">
-//                       <div className="relative w-full h-[200px] overflow-hidden">
-// 							<img
-// 								src={resolveListingImageUrl(product.image)}
-// 								alt={product.title}
-// 								onError={(event) => {
-// 									(event.currentTarget as HTMLImageElement).src = placeholderListingImageUrl;
-// 								}}
-// 							/>
-//                         {product.isFeatured && (
-//                           <span className="badge badge-primary absolute top-2 left-2 text-[11px] px-2 py-1">
-//                             Featured
-//                           </span>
-//                         )}
-//                         {product.isNew && (
-//                           <span className="badge badge-success absolute top-2 right-2 text-[11px] px-2 py-1">
-//                             New
-//                           </span>
-//                         )}
-//                       </div>
-//                       <div className="p-3">
-//                         <h4 className="text-sm font-semibold mb-2 text-[var(--dark)] leading-[1.4] h-[2.8em] overflow-hidden text-ellipsis line-clamp-2">{product.title}</h4>
-//                         <div className="text-xs text-[var(--secondary)] mb-2">
-//                           <span className="block whitespace-nowrap overflow-hidden text-ellipsis">📍 {product.location}</span>
-//                         </div>
-//                         <div className="mb-2">
-//                           <span className="price">RM {product.price}</span>
-//                           {product.originalPrice && (
-//                             <span className="price-old">RM {product.originalPrice}</span>
-//                           )}
-//                         </div>
-//                         <div className="flex items-center gap-1.5 mb-2 text-xs">
-//                           <span className="inline-block tracking-[2px] text-[11px]">{'⭐'.repeat(Math.floor(product.rating))}</span>
-//                           <span className="text-[var(--secondary)]">{product.rating} ({product.reviews} reviews)</span>
-//                         </div>
-//                         <div className="py-2 border-t border-[var(--border)] text-xs text-[var(--secondary)]">
-//                           <span className="font-medium text-[var(--dark)]">{product.sellerName}</span>
-//                         </div>
-//                         <Link href={`/products/${product.id}`}>
-//                           <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} >
-//                             View Details
-//                           </button>
-//                         </Link>
-//                       </div>
-//                     </div>
-//                   ))}
-//                 </div>
-//               ) : (
-//                 <div className="text-center px-5 py-[60px] bg-white rounded-lg"><p className="text-base mb-5">No products available</p></div>
-//               )}
-//           </div>
-// 		</div>
-// 	  </main>
-// 	);
-// }	

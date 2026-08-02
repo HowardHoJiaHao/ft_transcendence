@@ -616,5 +616,197 @@
     "errPriceInvalid": "price must be a number greater than 0",
     "errStockInvalid": "stockQuantity must be a whole number of at least 1",
     "errOriginalPriceInvalid": "originalPrice must be a number greater than 0"
+  },
+  "terms": {
+    "title": "Terms of Service",
+    "updated": "Last updated: 2 August 2026",
+    "intro": "These terms explain what you can expect from RacketDiction and what we expect from you when you browse, buy, sell or chat on the platform.",
+    "noticeTitle": "Academic project notice",
+    "notice": "RacketDiction is a student project built at 42 Kuala Lumpur. This document describes in good faith how the platform actually works, but it has not been reviewed by a lawyer and is not legal advice. Have a qualified professional review it before running the platform commercially.",
+    "tocTitle": "On this page",
+    "acceptance": {
+      "title": "Acceptance of these terms",
+      "p1": "By creating an account, browsing listings, or otherwise using RacketDiction (“the platform”), you agree to be bound by these terms. If you do not agree with them, please do not use the platform.",
+      "p2": "These terms form an agreement between you and the operator of RacketDiction. Please read our Privacy Policy as well — it explains how we handle your personal data."
+    },
+    "eligibility": {
+      "title": "Eligibility",
+      "p1": "To register an account you confirm that:",
+      "b1": "You are at least 18 years old, or have the consent of a parent or legal guardian.",
+      "b2": "The information you give us during registration is accurate and kept up to date.",
+      "b3": "You are not barred from using the platform under any law that applies to you."
+    },
+    "account": {
+      "title": "Your account and its security",
+      "p1": "You are responsible for everything that happens under your account. Keep your password and any one-time passcode confidential, and never share them with anyone.",
+      "b1": "Choose a strong password and do not reuse it on other sites.",
+      "b2": "Tell us immediately if you suspect someone else has accessed your account.",
+      "b3": "Do not create additional accounts to evade a suspension or to influence ratings.",
+      "p2": "If you sign in with Google, the security of that Google account remains your responsibility."
+    },
+    "listings": {
+      "title": "Listing items for sale",
+      "p1": "Sellers are solely responsible for the items they list. When you publish a listing you confirm that:",
+      "b1": "You own the item, or are otherwise authorised to sell it.",
+      "b2": "The description, condition, price and photographs are accurate and not misleading.",
+      "b3": "The item may lawfully be sold and delivered to the buyer.",
+      "b4": "You will honour the price and the stock availability you have stated.",
+      "p2": "We may edit, hide or remove any listing that appears to breach these terms, and we may do so without prior notice."
+    },
+    "prohibited": {
+      "title": "Prohibited items and conduct",
+      "p1": "The following are not allowed anywhere on the platform:",
+      "b1": "Counterfeit, stolen, or otherwise illegal goods.",
+      "b2": "Listings that are fraudulent, deliberately misleading, or that reuse someone else’s photographs without permission.",
+      "b3": "Harassment, hate speech, threats, or sexually explicit content in listings, reviews or chat.",
+      "b4": "Spam, unsolicited bulk messaging, or manipulating reviews and ratings.",
+      "b5": "Scraping, automated access outside the Developer API, or attempts to bypass rate limits and security controls.",
+      "b6": "Probing, scanning or attacking our infrastructure, or trying to reach data belonging to another user."
+    },
+    "orders": {
+      "title": "Orders, payment and fulfilment",
+      "p1": "A completed order is an agreement between the buyer and the seller. The platform provides the tools to list, discover and arrange a purchase; it is not itself a party to the sale.",
+      "p2": "Sellers must fulfil confirmed orders promptly and keep the order status up to date. Buyers must pay the agreed amount and give accurate delivery details.",
+      "p3": "Disputes about an item, a delivery or a refund should first be raised with the other party through the platform’s chat. We may help where we can, but we are not obliged to mediate or to issue refunds."
+    },
+    "content": {
+      "title": "Content you upload",
+      "p1": "You keep ownership of the text, photographs and other content you upload. By uploading it, you grant us a non-exclusive, worldwide, royalty-free licence to host, display and distribute that content for the purpose of operating and promoting the platform.",
+      "p2": "You are responsible for making sure your content does not infringe anyone else’s rights. We will remove content that we reasonably believe to be infringing."
+    },
+    "messaging": {
+      "title": "Messaging and community",
+      "p1": "Real-time chat exists so that buyers and sellers can arrange transactions. Messages are stored on our servers so that conversations can be delivered and reloaded later.",
+      "p2": "Do not use chat to send spam or phishing links, or to push someone into completing payment outside the platform in order to avoid its protections."
+    },
+    "ai": {
+      "title": "RacketBot, the AI assistant",
+      "p1": "RacketBot can answer questions and look things up about listings and your own account. It can be wrong, and its answers are not professional advice — always confirm anything important against the listing itself.",
+      "p2": "RacketBot acts only with your own permissions and cannot read or change another user’s private data. Your messages to it are processed by a third-party AI provider, as described in the Privacy Policy."
+    },
+    "devapi": {
+      "title": "The Developer API",
+      "p1": "API keys issued through the Developer API belong to your account alone. When you use one:",
+      "b1": "Keep the key secret and treat it like a password.",
+      "b2": "Stay within the published rate limits and do not attempt to work around them.",
+      "b3": "Accept that you remain responsible for everything done with your key.",
+      "b4": "Understand that we may revoke a key at any time if it is being abused."
+    },
+    "suspension": {
+      "title": "Suspension and termination",
+      "p1": "We may suspend or close an account that breaches these terms, is used unlawfully, or puts other users at risk. Where it is practical to do so, we will explain why.",
+      "p2": "You may stop using the platform and ask us to delete your account at any time. Some records, such as completed order history, may be kept where we are required to keep them."
+    },
+    "liability": {
+      "title": "Disclaimers and limitation of liability",
+      "p1": "The platform is provided “as is” and “as available”. We do not guarantee that listings are accurate, that sellers will perform, or that the service will be uninterrupted or free of errors.",
+      "p2": "We are not responsible for the quality, safety or legality of the items sold, nor for the conduct of any user. You deal with other users at your own risk.",
+      "p3": "To the fullest extent the law allows, we are not liable for indirect or consequential loss arising from your use of the platform."
+    },
+    "changes": {
+      "title": "Changes to these terms",
+      "p1": "We may update these terms from time to time. The “last updated” date above shows when the current version took effect, and continuing to use the platform after a change means you accept the revised terms."
+    },
+    "contact": {
+      "title": "Contact",
+      "p1": "Questions about these terms can be sent to the project operator through the Contact link in the footer. As an academic project, RacketDiction is not operated as a registered commercial entity."
+    }
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "updated": "Last updated: 2 August 2026",
+    "intro": "This policy explains what personal data RacketDiction collects, why we collect it, who we share it with, and what control you have over it.",
+    "noticeTitle": "Academic project notice",
+    "notice": "RacketDiction is a student project built at 42 Kuala Lumpur. This document describes in good faith how the platform actually handles data, but it has not been reviewed by a lawyer and is not legal advice. Have a qualified professional review it before running the platform commercially.",
+    "tocTitle": "On this page",
+    "scope": {
+      "title": "Scope of this policy",
+      "p1": "This policy covers the RacketDiction website, its real-time chat, the RacketBot assistant and the Developer API.",
+      "p2": "It does not cover external websites you reach by following a link in a listing or a message. Once you leave the platform, the privacy policy of that other site applies."
+    },
+    "collect": {
+      "title": "Information we collect",
+      "p1": "We collect the following categories of data:",
+      "b1": "Account details — your username, email address, phone number, and your password stored only as a salted hash, never as readable text.",
+      "b2": "Sign-in data — the one-time passcodes we send to verify you and, if you use Google sign-in, the basic profile Google shares with us.",
+      "b3": "Profile content — your avatar image and anything else you choose to add to your profile.",
+      "b4": "Marketplace activity — the listings you publish, your cart, your orders, your reviews, and seller fulfilment records.",
+      "b5": "Social activity — your friend connections, chat messages and notifications.",
+      "b6": "Technical data — IP address, browser type and request logs, kept for security, rate limiting and diagnosing faults.",
+      "b7": "Developer API usage — the API keys you generate and a log of the requests made with them."
+    },
+    "use": {
+      "title": "How we use it",
+      "p1": "We use that data to:",
+      "b1": "Create and secure your account, and verify it with one-time passcodes.",
+      "b2": "Show your listings to buyers and let both sides complete an order.",
+      "b3": "Deliver chat messages and notifications in real time.",
+      "b4": "Answer your questions through the RacketBot assistant.",
+      "b5": "Detect and prevent fraud, abuse and attacks against the platform.",
+      "b6": "Keep the service running and diagnose problems when it breaks."
+    },
+    "sharing": {
+      "title": "When we share it",
+      "p1": "We do not sell your personal data. It is shared only in these situations:",
+      "b1": "With other users — your username, avatar, listings and reviews are visible to others. Your email address and phone number are not shown publicly.",
+      "b2": "With service providers — the processors listed in the next section, strictly so they can provide the feature they support.",
+      "b3": "Where the law requires it — to meet a legal obligation, or to protect the rights and safety of our users."
+    },
+    "processors": {
+      "title": "Third-party services",
+      "p1": "The platform depends on these external services, each of which has its own privacy policy:",
+      "b1": "Google — used only if you choose to sign in with a Google account.",
+      "b2": "Brevo — sends transactional email such as your verification codes.",
+      "b3": "DeepSeek — processes the messages you send to the RacketBot assistant.",
+      "b4": "OpenRouter — generates the embeddings that let RacketBot search our help documents."
+    },
+    "ai": {
+      "title": "The AI assistant and your data",
+      "p1": "When you chat with RacketBot, your message is sent to our AI provider so a reply can be generated. Please do not put passwords, payment card numbers or other sensitive details into that conversation.",
+      "p2": "RacketBot can only look up data you are already allowed to see. That check happens in our backend rather than in the assistant, so it cannot be talked into revealing another user’s private information."
+    },
+    "cookies": {
+      "title": "Cookies and browser storage",
+      "p1": "We use a small number of storage mechanisms, all of them necessary for the site to work. We do not use advertising or third-party tracking cookies.",
+      "b1": "A cookie holding your sign-in token when you authenticate with Google.",
+      "b2": "Browser local storage for your sign-in token and your chosen language.",
+      "p2": "Clearing your browser storage will sign you out, but it will not delete your account or any of your data."
+    },
+    "retention": {
+      "title": "How long we keep it",
+      "p1": "We keep your data for as long as your account is active. Listings, orders and messages persist so that both sides of a transaction keep a consistent record.",
+      "p2": "One-time passcodes expire within minutes. Server and security logs are kept for a limited period and then rotated. Database backups run on a schedule and are deleted once they pass their retention window."
+    },
+    "security": {
+      "title": "How we protect it",
+      "p1": "We take reasonable technical measures to protect your data:",
+      "b1": "Passwords are stored as bcrypt hashes, never as readable text.",
+      "b2": "Traffic between your browser and the platform is encrypted with HTTPS.",
+      "b3": "A web application firewall filters common attacks before they reach the application.",
+      "b4": "Every request is checked against your signed-in session before any of your data is returned.",
+      "p2": "No system is perfectly secure. If we become aware of a breach that affects your data, we will tell you."
+    },
+    "rights": {
+      "title": "Your rights and choices",
+      "p1": "Depending on where you live, you may have the right to:",
+      "b1": "Ask what personal data we hold about you.",
+      "b2": "Correct information that is wrong — most fields can be changed from your profile.",
+      "b3": "Delete your account and the personal data attached to it.",
+      "b4": "Object to certain processing, or ask us to restrict it.",
+      "b5": "Receive a copy of the data you gave us in a portable format.",
+      "p2": "You can do most of this directly in your profile settings. For anything else, contact us using the details below."
+    },
+    "children": {
+      "title": "Children’s privacy",
+      "p1": "The platform is not intended for children under 13 and we do not knowingly collect their data. If you believe a child has created an account, contact us and we will remove it."
+    },
+    "changes": {
+      "title": "Changes to this policy",
+      "p1": "We may update this policy as the platform changes. The “last updated” date above shows the current version, and significant changes will be announced in the app."
+    },
+    "contact": {
+      "title": "Contact",
+      "p1": "For privacy questions, or to exercise any of the rights above, contact the project operator through the Contact link in the footer."
+    }
   }
 }

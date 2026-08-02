@@ -37,6 +37,9 @@ func (r *Repository) GetFriends(userID int) ([]Friend, error) {
 		}
 		friends = append(friends, f)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	if friends == nil {
 		friends = []Friend{}
 	}

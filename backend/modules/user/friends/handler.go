@@ -44,20 +44,16 @@ func (h *Handler) GetFriends(c echo.Context) error {
 }
 
 func (h *Handler) AddFriend(c echo.Context) error {
-	log.Printf("in here1\n") //debug
 	id, ok := c.Get("userId").(int)
 	if !ok {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	}
 
-	log.Printf("in here2\n") //debug
 	friendId, err := strconv.Atoi(c.Param("friend_id"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid friend id format"})
 	}
 
-	log.Printf("in here3\n")                          //debug
-	log.Printf("id: %d, friend id: %d", id, friendId) //debug
 	var notificationID int64
 	if h.Notifications != nil {
 		notificationID, err = h.Repo.AddFriendWithNotification(id, friendId, h.Notifications.Repo)

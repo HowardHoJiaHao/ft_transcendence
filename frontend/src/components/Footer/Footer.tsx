@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function Footer() {
     return (
       <footer className="bg-[var(--dark)] text-white pt-10 pb-5 mt-10">
@@ -22,8 +24,8 @@ export default function Footer() {
             <div>
               <h4 className="text-white mb-3">Community</h4>
               <ul className="list-none p-0 m-0">
-                <li className="mb-2"><a href="#" className="text-[#aaa] no-underline hover:underline">Terms &amp; Conditions</a></li>
-                <li className="mb-2"><a href="#" className="text-[#aaa] no-underline hover:underline">Privacy Policy</a></li>
+                <li className="mb-2"><Link href="/terms" className="text-[#aaa] no-underline hover:underline">Terms &amp; Conditions</Link></li>
+                <li className="mb-2"><Link href="/privacy" className="text-[#aaa] no-underline hover:underline">Privacy Policy</Link></li>
                 <li className="mb-2"><a href="#" className="text-[#aaa] no-underline hover:underline">Careers</a></li>
               </ul>
             </div>
