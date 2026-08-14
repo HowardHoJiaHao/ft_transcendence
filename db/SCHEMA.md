@@ -22,6 +22,7 @@ Account records for every person on the platform.
 | `password_hash` | varchar(255) | bcrypt hash, checked at login — never the raw password |
 | `first_name`, `last_name` | varchar(50) | Display name |
 | `phone_no` | varchar(30) | Contact number, edited via `/profile/change-phoneNo` |
+| `address` | varchar(255) | Delivery address, one per account, edited on the profile page. Reaches only its owner (`GET /api/v1/me`) and the seller of an order that buyer placed (`GET /api/v1/seller/orders`, scoped to `o.seller_id = <caller>`) |
 | `date_of_birth` | date | Profile field |
 | `gender` | varchar(10) | Profile field, CHECK constrained to `Male`/`Female` |
 | `avatar_url` | varchar(255) | Link-based avatar (e.g. external URL) |
@@ -30,7 +31,7 @@ Account records for every person on the platform.
 | `bio` | text | Free-text profile blurb |
 | `is_verified` | boolean | Set true after email/OTP verification |
 | `requires_2fa` | boolean | Gates the OTP step in `Login()` — see `backend/modules/user/auth/handler.go` |
-| `oauth_id`, `oauth_provider` | varchar | **(unused)** — no OAuth handler exists in the codebase |
+| `oauth_id`, `oauth_provider` | varchar | Google OAuth identity. Unique together via the partial index `idx_users_oauth_identity` (only when both are non-NULL), so a Google account maps to exactly one user |
 | `created_at`, `updated_at` | timestamp | Audit timestamps |
 
 ---
@@ -61,7 +62,8 @@ secondhand item, sold at most once.
 | `rating`, `reviews` | numeric/int | Cached average rating + count shown on the card — **not** computed from the `reviews` table; static/seed values |
 | `is_new` | boolean | "Brand new" badge |
 | `is_featured` | boolean | Promotes to featured/homepage sections |
-| `status` | varchar(20), default `'active'` | **DB-level values are only** `active` / `sold` / `archived` (CHECK constraint) — drives My Shop tabs and the seller dashboard funnel. **Not stored in the DB:** the seller dashboard API (`getSellerDashboardItems` in `backend/seller_dashboard.go`) computes a fourth, display-only value — `pending` — at query time, overriding `active` whenever a listing has an order in `orders.status='pending'` against it. This lets a listing that's mid-sale show as "pending" in My Items/Analytics without ever writing that value to this column. |
+| `stock_quantity` | int NOT NULL, default 1, CHECK `>= 0` | Units available — the lot size. **Both** checkout paths require the buyer to take the whole lot (`item.Quantity != stockQuantity` → 409 "This listing must be bought in full") and zero it; a seller wanting to sell smaller amounts splits the lot into separate listings. Added to existing volumes by a `backend/db.go` migration, so it is not in every old dump |
+| `status` | varchar(20), default `'active'` | `active` / `pending` / `sold` / `archived` — all four are real stored values (CHECK `listings_status_allowed`; existing volumes get the fourth value via the migration at `backend/db.go` that drops the old three-value `listings_status_check`). Drives My Shop tabs and the seller dashboard funnel. `pending` is written at checkout — the item is reserved but not yet handed over — and becomes `sold` only when the seller confirms. **Also computed at display time:** `getSellerDashboardItems` in `backend/seller_dashboard.go` still overrides the stored value with `pending` for any non-archived listing that has an order in `orders.status='pending'`, so a listing that sold part of its stock and still owes a handover surfaces as needing action |
 | `views_count` | int, default 0 | Page-view counter, incremented by `recordListingView()` in `backend/products.go` on each `GET /products/:id` (skipped if the viewer is the seller) |
 | `created_at`, `updated_at` | timestamp | Audit timestamps; `created_at` is also "date posted" and the anchor for days-listed/time-to-sell calculations |
 
@@ -88,61 +90,136 @@ Meant to hold multiple photos per listing. **Effectively unused** —
 
 ## orders
 
-Purchase records — one row per transaction against a listing.
+Purchase records — **one row per listing bought**, not one row per checkout.
+See "One checkout creates many order rows" below before assuming an order can
+span several listings.
 
 | Column | Type | Use |
 |---|---|---|
-| `id` | serial PK | Order ID |
-| `buyer_id` | int FK → users | Who bought it |
-| `seller_id` | int FK → users | Who sold it (denormalized copy of the listing's seller) |
-| `listing_id` | int FK → listings | What was bought |
-| `quantity` | int, default 1 | Units in this order — decremented from `listings.stock_quantity` at checkout (`createOrders` in `backend/orders.go`) |
-| `total_price` | numeric(10,2) | Amount charged for this order |
-| `status` | varchar(20), default `'pending'` | `pending` / `completed` / `cancelled` / `refunded`. `pending` = created at checkout, awaiting the seller marking it complete (`PUT /orders/:id/complete`); only `completed` counts as real revenue on the seller dashboard, and only `pending` counts toward the dashboard's "Pending Orders" tile. |
-| `payment_method` | varchar(50) | Free text, e.g. "cash", "card"; defaults to `"meetup"` at checkout if omitted |
+| `id` | serial PK | Order ID. Unique per *line*, so a 3-item cart produces 3 different ids |
+| `buyer_id` | int FK → users, CASCADE | Who bought it |
+| `seller_id` | int FK → users, CASCADE | Who sold it (denormalized copy of the listing's seller, so dashboard queries don't have to join `listings`) |
+| `listing_id` | int FK → listings, **RESTRICT** | What was bought — exactly one listing per row. RESTRICT, not CASCADE: an order is financial history for both parties, so deleting a listing must not erase a buyer's purchase record or the revenue the seller dashboard reports |
+| `quantity` | int, default 1 | Units in this order, taken out of `listings.stock_quantity` at checkout |
+| `total_price` | numeric(10,2) | Amount charged for this line (unit price × quantity) |
+| `status` | varchar(20), default `'pending'` | `pending` / `completed` / `cancelled` / `refunded`. `pending` = created at checkout, awaiting the seller marking it complete (`PUT /orders/:id/complete`); only `completed` counts as real revenue on the seller dashboard, and only `pending` counts toward the dashboard's "Pending Orders" tile |
+| `payment_method` | varchar(50) | `"meetup"` (the default when the request omits it) or `"stripe"`; `createOrders` rejects anything else |
+| `payment_id` | bigint FK → payments, RESTRICT | Set only on the Stripe path. **This is the grouping key** — every line of one Stripe checkout shares it. NULL for meetup orders. Added by a `backend/db.go` migration, not present in `db/init.sql`; indexed by `idx_orders_payment_id` |
 | `created_at`, `updated_at` | timestamp | `created_at` anchors the monthly revenue chart and time-to-sell calc |
 
-**Live checkout flow (added since the schema doc's first pass):**
-`POST /api/v1/orders` (`createOrders`) locks the target listing row
-(`SELECT ... FOR UPDATE`), rejects self-purchases and out-of-stock/inactive
-listings, inserts the order as `status='pending'`, and decrements
-`listings.stock_quantity` — auto-flipping the listing to `status='sold'` if
-stock hits zero. The seller later confirms via
-`PUT /api/v1/orders/:id/complete` (`completeOrder`), which flips the order to
-`completed`. **Note:** the seller dashboard's *displayed* listing status
-(`getSellerDashboardItems`) shows `pending` — a value never written to
-`listings.status` — for any listing with a `pending` order against it; see
-the `listings.status` row above.
+### One checkout creates many order rows
+
+`POST /api/v1/orders` takes an `items` array, and the insert sits **inside a
+loop over that array** (`backend/orders.go`). One listing per row, one row per
+item, each with its own `id`. There is no `order_items` table and no
+"parent order" row.
+
+A cart of three listings from buyer 42, paid by meetup:
+
+| id | buyer_id | seller_id | listing_id | quantity | total_price | status | payment_method | payment_id |
+|---|---|---|---|---|---|---|---|---|
+| 1001 | 42 | 7 | 10 | 1 | 50.00 | pending | meetup | NULL |
+| 1002 | 42 | 7 | 17 | 1 | 120.00 | pending | meetup | NULL |
+| 1003 | 42 | 9 | 23 | 1 | 80.00 | pending | meetup | NULL |
+
+Three ids, not one. Note `seller_id` differs on the last row — a meetup cart
+may mix sellers, and each seller only ever sees their own line.
+
+The same cart paid by Stripe, which requires a single seller ("Stripe checkout
+supports items from one seller only", 409), so listing 23 has to be a separate
+checkout:
+
+| id | buyer_id | seller_id | listing_id | quantity | total_price | status | payment_method | payment_id |
+|---|---|---|---|---|---|---|---|---|
+| 1004 | 42 | 7 | 10 | 1 | 50.00 | pending | stripe | 900 |
+| 1005 | 42 | 7 | 17 | 1 | 120.00 | pending | stripe | 900 |
+
+Still two ids — but both carry `payment_id = 900`, so `WHERE payment_id = 900`
+reconstructs the basket. Meetup orders have no such key; the only thing tying
+1001–1003 together is the same `buyer_id` and a `created_at` from the same
+transaction.
+
+Consequences worth remembering:
+
+- **Completion is per line.** `PUT /orders/1001/complete` flips only 1001;
+  1002 stays `pending`. A buyer can end up with one line completed, one
+  cancelled, and one still pending out of a single checkout.
+- **The same `listing_id` cannot appear twice in one checkout** — `createOrders`
+  rejects a duplicate with 400 "duplicate listingId in checkout". Repeat units
+  go in `quantity`, not in a second item.
+- Revenue sums add up lines, never orders: `SUM(total_price) WHERE status='completed'`.
+
+### Checkout flow
+
+`POST /api/v1/orders` (`createOrders`) validates the items, then branches on
+`payment_method`:
+
+- **meetup** — opens one transaction, and per item locks the listing
+  (`SELECT ... FOR UPDATE`), rejects self-purchase (403) and non-`active`
+  listings (409), requires the buyer to take the **entire stock** (409 "This
+  listing must be bought in full"), inserts the order as `pending`, then sets
+  the listing to `stock_quantity = 0, status = 'pending'` — reserved, *not*
+  sold.
+- **stripe** — delegates to `stripePayments.CreateCheckout`
+  (`backend/stripe_payments.go`), which inserts a `payments` row first, then
+  one order per item carrying that `payment_id`. It enforces the same whole-lot
+  rule and leaves the listing at `stock_quantity = 0, status = 'pending'`, so
+  both paths reach an identical listing state. It additionally requires every
+  item to come from one seller (409). If the Checkout Session then fails,
+  `releaseReservedStock` returns the units and flips the listing back to
+  `active`.
+
+Either way the seller confirms with `PUT /api/v1/orders/:id/complete`
+(`completeOrder`), which flips that one order to `completed`.
 
 ### Why `orders.status` exists separately from `listings.status`
 
-These look redundant at first — `listings.status` is `active`/`sold`/`archived`,
-`orders.status` is `pending`/`completed`/`cancelled`/`refunded` — but they
-track two different things and **one listing can have many orders**:
+They overlap on the word `pending` but track two different things, and
+**one listing can have many orders**:
 
-- `listings.status` answers *"is this item still for sale?"* — necessarily
-  one value per listing.
-- `orders.status` answers *"what happened to this specific transaction?"* —
-  one value **per order**, and a listing can accumulate several orders over
-  time (e.g. `stock_quantity > 1`, or a cancelled/refunded attempt followed by
-  a successful one).
+- `listings.status` (`active`/`pending`/`sold`/`archived`) answers *"is this
+  item still for sale?"* — necessarily one value per listing.
+- `orders.status` (`pending`/`completed`/`cancelled`/`refunded`) answers
+  *"what happened to this specific transaction?"* — one value **per order**,
+  and a listing accumulates several over time.
 
-Concretely: a listing with `stock_quantity = 5` can have three different
-buyers order 1 unit each. The listing stays `status = 'active'` throughout
-(stock hasn't hit zero), but the three orders can independently be
-`completed`, `pending`, and `cancelled`. There's no way to encode that on the
-listing alone — `listings.status` would show the same single value ("active")
-for all three, telling you nothing about which specific order still needs
-the seller's attention. `orders.status` is also the only place `cancelled`
-and `refunded` can be represented at all — those are outcomes of one
-transaction, not states a listing itself can be in.
+Since listings sell whole, a listing has at most one *completed* order — but
+it still accumulates order rows, because cancelling frees it to be sold again.
 
-This is also exactly why `getSellerDashboardItems` counts **pending orders**
+That ceiling of one is enforced, not just conventional: `updateProduct`
+(`backend/products.go`) refuses to edit a `sold` listing, and refuses to move
+any listing back to `active` once it has a completed order — including the
+archive-then-Republish route round it. A seller with another of the same item
+posts a new listing, so the second sale gets its own row and its own history.
+
+| When | Event | `orders` rows | `listings.status` |
+|---|---|---|---|
+| Jan 2 | seller posts it | *(none)* | `active` |
+| Jan 5 | buyer A checks out | 1001 `pending` | `pending` |
+| Jan 7 | buyer A cancels | 1001 **`cancelled`** | `active` |
+| Jan 9 | buyer B checks out | 1001 `cancelled`, 1002 `pending` | `pending` |
+| Jan 14 | seller confirms | 1001 `cancelled`, 1002 **`completed`** | `sold` |
+
+One listing value at the end, two order values. There is nowhere on the
+listing for `cancelled` to live — `listings.status` says `sold`, which is
+true, but it cannot also record that a buyer backed out first. That history
+matters: buyer A needs the cancelled order in their purchase list, and the
+seller needs to tell a clean sale from a second attempt.
+
+The deeper split: **`listings.status` is state, `orders.status` is history.**
+The listing column only ever describes *now* and is overwritten four times
+above — it has no memory. Each order row is permanent; nothing ever rewrites
+1001. `orders.status` is also the only place `cancelled` and `refunded` can be
+represented at all; those are outcomes of one transaction, not states an item
+can be in. Conversely `archived` is a seller's shelf decision with no buyer
+involved, so it is meaningless as a transaction outcome.
+
+This is also why `getSellerDashboardItems` counts **pending orders**
 (`COUNT(*) FROM orders WHERE listing_id = ... AND status = 'pending'`) rather
-than reading anything off `listings.status` — the real, authoritative
-"pending" state lives only in the `orders` table, and the dashboard's display
-override is derived from it fresh on every request instead of being copied
-into `listings.status`.
+than trusting `listings.status` alone. `listings.status` can only say
+"something is pending on this item"; the per-transaction truth — how many, and
+which ones — lives only in the `orders` table, so the dashboard derives the
+override fresh on every request.
 
 ---
 
@@ -236,8 +313,8 @@ the original `db/init.sql`; created there now plus via runtime migration in
 
 ## analytics
 
-Legacy/duplicate event log. **Fully unused** — superseded by
-`analytics_events` below; left over from a merge. Candidate for dropping
+Legacy event log. **Fully unused** — left over from a merge. Its sibling
+`analytics_events` has been dropped; this one is a candidate for the same
 once the team agrees.
 
 | Column | Type | Use |
@@ -246,23 +323,6 @@ once the team agrees.
 | `event_type` | varchar(50) | e.g. would hold `"listing_viewed"` |
 | `listing_id` | int FK → listings | Which listing the event relates to |
 | `created_at` | timestamp | Audit timestamp |
-
----
-
-## analytics_events
-
-The event log that's **actually wired up**. Every non-seller view of a
-product detail page inserts a row here via `recordListingView()` in
-`backend/products.go`.
-
-| Column | Type | Use |
-|---|---|---|
-| `id` | serial PK | Row ID |
-| `user_id` | int FK → users, nullable | Who triggered the event; null if the viewer wasn't authenticated |
-| `event_type` | varchar(50) | e.g. `'listing_viewed'` |
-| `event_data` | json | Free-form extra context — not populated by current code |
-| `listing_id` | int, indexed | Which listing the event relates to — added this project session specifically to power the seller dashboard's "views in last 30 days" |
-| `created_at` | timestamp | Filtered on for the 30-day view-count window |
 
 ---
 
@@ -301,14 +361,15 @@ One-time passcodes for email verification / login 2FA. Not declared in
 
 **Fully wired and live:** `users`, `listings`, `orders` (real checkout via
 `POST /orders` + `PUT /orders/:id/complete`), `messages`, `friendships`,
-`otps`, `faq_embeddings`, `analytics_events`
+`otps`, `faq_embeddings`
 
 **Schema exists, nothing uses it yet:** `listing_images` (images tracked by
-filename convention instead), `reviews`, `analytics` (dead duplicate of
-`analytics_events`)
+filename convention instead), `reviews`, `analytics` (dead event log)
 
 **Public API (added this session):** `api_keys` + `api_request_logs` — see
 `API_DOCUMENTATION.md`
 
-**Columns that exist but nothing reads/writes them:** `users.oauth_id` /
-`users.oauth_provider`, `listings.currency` (hardcoded `'RM'` everywhere)
+**Columns that exist but nothing reads/writes them:** `listings.currency`
+(hardcoded `'RM'` everywhere). `users.oauth_id` / `users.oauth_provider` are
+no longer in this list — Google OAuth now writes them (`backend/modules/user/repository.go`,
+read back in `backend/admin.go`), with a partial unique index on the pair.

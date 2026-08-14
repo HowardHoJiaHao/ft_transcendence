@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useToast } from "@/components/Toast/ToastContext";
 import Header from "@/components/Header/Header";
-import { resolveAvatarUrl, PLACEHOLDER_AVATAR } from "@/lib/avatar";
+import { resolveAvatarUrl, PLACEHOLDER_AVATAR, avatarClass } from "@/lib/avatar";
 import { useI18n } from "@/context/LanguageContext";
 
 interface UserProfile {
@@ -15,6 +15,10 @@ interface UserProfile {
   firstName?: string;
   lastName?: string;
   phoneNo?: string;
+  // Delivery address, one per account. The seller sees it on a pending order
+  // so they know where to send the item, which is why it is edited here rather
+  // than being asked for at checkout.
+  address?: string;
   gender?: string;
   dateOfBirth?: string;
   avatarUrl?: string;
@@ -60,6 +64,7 @@ export default function ProfilePage() {
   const [inputData, setInputData] = useState({
     firstName: ctxUser?.firstName ?? "",
     lastName: ctxUser?.lastName ?? "",
+    address: "",
     gender: ctxUser?.gender ?? "",
     dateOfBirth: toDateInput(ctxUser?.dateOfBirth),
   });
@@ -211,6 +216,7 @@ export default function ProfilePage() {
       setInputData({
         firstName: user.firstName ?? "",
         lastName: user.lastName ?? "",
+        address: user.address ?? "",
         gender: user.gender ?? "",
         dateOfBirth: toDateInput(user.dateOfBirth),
       });
@@ -411,7 +417,7 @@ export default function ProfilePage() {
             <img
               src={resolveAvatarUrl(user.avatarUrl)}
               alt={t("profile.avatarAlt")}
-              className="w-[88px] h-[88px] shrink-0 rounded-full object-cover border border-[#e8e8e6] bg-[#f5f5f3] shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+              className={avatarClass('profile', 'border border-[#e8e8e6] shadow-[0_1px_3px_rgba(0,0,0,0.08)]')}
               onError={(event) => {
                 (event.currentTarget as HTMLImageElement).src = PLACEHOLDER_AVATAR;
               }}
@@ -521,6 +527,29 @@ export default function ProfilePage() {
             />
           </div>
 
+          {/* One address per account — the seller of an order you place sees
+              it, so they know where to send the item. Saved by the button at
+              the bottom of this section along with the fields around it. */}
+          <div className={ROW}>
+            <label className={LABEL} htmlFor="address">
+              {t("profile.address")}
+            </label>
+            <div className="flex-1 min-w-0">
+              <input
+                id="address"
+                name="address"
+                value={inputData.address}
+                onChange={handleChange}
+                placeholder={t("profile.addressPlaceholder")}
+                maxLength={255}
+                className={`${INPUT} w-full`}
+              />
+              <span className="block text-xs text-[#898781] mt-1.5">
+                {t("profile.addressHint")}
+              </span>
+            </div>
+          </div>
+
           <div className={ROW}>
             <div className={LABEL}>{t("profile.gender")}</div>
             <div className="flex-1 min-w-0 flex gap-2 items-center flex-wrap">
@@ -609,6 +638,7 @@ export default function ProfilePage() {
             </span>
           </div>
         </div>
+
       </div>
     </main>
   );

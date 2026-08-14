@@ -8,7 +8,7 @@ import OnlineStatus from '@/components/OnlineStatus';
 import Header from "@/components/Header/Header"
 import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
-import { DEFAULT_AVATAR, resolveAvatarUrl } from '@/lib/avatar';
+import { DEFAULT_AVATAR, resolveAvatarUrl, AVATAR_SIZE, avatarClass, avatarFallbackClass } from '@/lib/avatar';
 
 type Friend = {
 	id: number;
@@ -96,16 +96,16 @@ export default function FriendPage()
 				  {friendList.map((friend) => (
 				  	<li key={friend.id} className="flex items-center p-[10px] border-b border-[#eee] cursor-pointer">
 					  <Link href={`/user/${friend.id}`} className="flex items-center flex-1 no-underline text-inherit min-w-0">
-				        <div className="w-10 h-10 rounded-full mr-[10px]">
+				        <div className={`${AVATAR_SIZE.list} shrink-0 mr-[10px]`}>
 					      {friend.avatar ? (
 								<img
 									src={resolveAvatarUrl(friend.avatar)}
 									alt=""
-									className="w-full h-full rounded-full object-cover"
+									className={avatarClass('list')}
 									onError={(event) => { event.currentTarget.src = DEFAULT_AVATAR; }}
 								/>
 							) : (
-								<span className="w-full h-full rounded-full bg-[#ccc] flex items-center justify-center text-white font-bold">{friend.username[0]}</span>
+								<span className={avatarFallbackClass('list', 'text-lg')}>{friend.username[0]}</span>
 							)}
 					    </div>
 					    <div className="flex-1">

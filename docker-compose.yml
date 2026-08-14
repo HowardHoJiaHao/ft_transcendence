@@ -143,10 +143,11 @@ services:
     expose:
       - "8080"
     volumes:
-      - ./uploads:/app/uploads
-      - ./avatar:/app/avatar
-      - ./static/avatars:/app/static/avatars
-      - ./static/listings:/app/static/listings
+      # One mount for every user upload. storage/ is not served as a directory:
+      # listing files go out through /api/v1/files/:fileId/content and avatars
+      # through /api/v1/users/:id/avatar, so nothing here is reachable without
+      # a handler deciding to serve it. The former ./uploads, ./avatar and
+      # ./static mounts were removed with the endpoints that used them.
       - ./storage:/app/storage
     depends_on:
       db:

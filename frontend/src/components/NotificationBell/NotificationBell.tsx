@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import { useI18n } from '@/context/LanguageContext';
 import { useNotifications } from '@/context/NotificationContext';
-import { PLACEHOLDER_AVATAR, resolveAvatarUrl } from '@/lib/avatar';
+import { PLACEHOLDER_AVATAR, resolveAvatarUrl, AVATAR_SIZE, avatarClass } from '@/lib/avatar';
 import type { AppNotification } from '@/types/notifications';
 
 type NotificationBellProps = {
@@ -193,18 +193,18 @@ export default function NotificationBell({ onBeforeOpen }: NotificationBellProps
                           router.push(notificationTarget(item));
                         }}
                       >
-                        <span className="relative shrink-0 w-10 h-10">
+                        <span className={`relative shrink-0 ${AVATAR_SIZE.list}`}>
                           {item.actor?.avatarUrl ? (
                             <img
                               src={resolveAvatarUrl(item.actor.avatarUrl)}
                               alt=""
-                              className="w-10 h-10 rounded-full object-cover bg-[#f3f4f6]"
+                              className={avatarClass('list')}
                               onError={event => {
                                 event.currentTarget.src = PLACEHOLDER_AVATAR;
                               }}
                             />
                           ) : (
-                            <span className="w-10 h-10 rounded-full bg-[#f1f1ef] flex items-center justify-center text-lg">
+                            <span className={`${AVATAR_SIZE.list} shrink-0 rounded-full bg-[#f1f1ef] flex items-center justify-center text-lg`}>
                               {notificationIcon(item.type)}
                             </span>
                           )}

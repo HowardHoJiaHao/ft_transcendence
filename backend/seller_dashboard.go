@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"log"
+	"sort"
 	"strconv"
 	"time"
 
@@ -10,33 +12,35 @@ import (
 	"gorm.io/gorm"
 )
 
-// Listings on this marketplace are single secondhand items sold at most once,
-// so per-item stats are framed as sold-or-not + time-to-sell rather than
-// units/revenue-per-unit.
 type SellerItemStat struct {
-	ListingID       int     `json:"listingId"`
-	Title           string  `json:"title"`
-	Price           float64 `json:"price"`
-	Category        string  `json:"category"`
-	Status          string  `json:"status"`
-	DaysListed      int     `json:"daysListed"`
-	ViewsLast30Days int     `json:"viewsLast30Days"`
-	Sold            bool    `json:"sold"`
-	SoldAt          *string `json:"soldAt,omitempty"`
-	Revenue         float64 `json:"revenue"`
-	Stale           bool    `json:"stale"`
-}
-
-type SellerMonthlyStat struct {
-	Month      string  `json:"month"` // "YYYY-MM"
-	OrderCount int     `json:"orderCount"`
+	ListingID  int     `json:"listingId"`
+	Title      string  `json:"title"`
+	Price      float64 `json:"price"`
+	Category   string  `json:"category"`
+	Status     string  `json:"status"`
+	Quantity   int     `json:"quantity"`
+	DaysListed int     `json:"daysListed"`
+	Sold       bool    `json:"sold"`
+	SoldAt     *string `json:"soldAt,omitempty"`
 	Revenue    float64 `json:"revenue"`
 }
 
+// One sold listing inside a category group.
+type CategorySoldItem struct {
+	ListingID  int     `json:"listingId"`
+	Title      string  `json:"title"`
+	SoldAt     string  `json:"soldAt"`
+	DaysToSell float64 `json:"daysToSell"`
+	Revenue    float64 `json:"revenue"`
+}
+
+// A Sales-by-Category group: the summary row plus the sold listings behind it.
 type CategoryStat struct {
-	Category  string  `json:"category"`
-	ItemsSold int     `json:"itemsSold"`
-	Revenue   float64 `json:"revenue"`
+	Category      string             `json:"category"`
+	ItemsSold     int                `json:"itemsSold"`
+	Revenue       float64            `json:"revenue"`
+	AvgDaysToSell float64            `json:"avgDaysToSell"`
+	Items         []CategorySoldItem `json:"items"`
 }
 
 type MonthlyCategoryStat struct {
@@ -52,16 +56,96 @@ type SellerSummary struct {
 	ItemsSold         int                   `json:"itemsSold"`
 	ItemsActive       int                   `json:"itemsActive"`
 	ItemsArchived     int                   `json:"itemsArchived"`
-	SellThroughRate   float64               `json:"sellThroughRate"` // percent, 0-100
 	AvgDaysToSell     float64               `json:"avgDaysToSell"`
-	MonthlyRevenue    []SellerMonthlyStat   `json:"monthlyRevenue"`
 	MonthlyByCategory []MonthlyCategoryStat `json:"monthlyByCategory"`
-	CategoryBreakdown []CategoryStat        `json:"categoryBreakdown"`
+	// Echo of the resolved window so the client can label the chart with the
+	// range actually reported on, which may differ from what it asked for.
+	RangeFrom string `json:"rangeFrom"`
+	RangeTo   string `json:"rangeTo"`
 }
 
-const staleAfterDays = 30
+// build a default range
+// if the client sends from/to values, use them instead
+// validate that the start is not after the end
+func resolveReportRange(monthsParam, fromParam, toParam string, now time.Time) (time.Time, time.Time, error) {
+	months := 12
+	if monthsParam != "" {
+		// 36 month mean max 3 years
+		if parsed, err := strconv.Atoi(monthsParam); err == nil && parsed > 0 && parsed <= 36 {
+			months = parsed
+		}
+	}
 
-// getSellerDashboardItems returns per-listing stats for the authenticated seller.
+	// Default window: the first day of the month `months-1` back, through now.
+	from := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, -(months - 1), 0)
+	to := now
+
+	if fromParam != "" {
+		parsed, err := time.ParseInLocation("2006-01-02", fromParam, now.Location())
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("Invalid 'from' date; expected YYYY-MM-DD")
+		}
+		from = parsed
+	}
+	if toParam != "" {
+		parsed, err := time.ParseInLocation("2006-01-02", toParam, now.Location())
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("Invalid 'to' date; expected YYYY-MM-DD")
+		}
+		// Inclusive end date: cover the whole of the chosen day.
+		to = parsed.AddDate(0, 0, 1).Add(-time.Nanosecond)
+	}
+	if from.After(to) {
+		return time.Time{}, time.Time{}, errors.New("'from' must not be after 'to'")
+	}
+	return from, to, nil
+}
+
+type categorySoldRow struct {
+	CategorySoldItem
+	Category string
+}
+
+// groupByCategory turns a flat list of sold listings into category groups,
+// deriving each group's totals from the very rows it carries.
+func groupByCategory(sold []categorySoldRow) []CategoryStat {
+	groups := map[string]*CategoryStat{}
+	for _, row := range sold {
+		group, ok := groups[row.Category]
+		if !ok {
+			group = &CategoryStat{Category: row.Category, Items: []CategorySoldItem{}}
+			groups[row.Category] = group
+		}
+		group.Items = append(group.Items, row.CategorySoldItem)
+		group.Revenue += row.Revenue
+	}
+
+	categories := make([]CategoryStat, 0, len(groups))
+	for _, group := range groups {
+		var totalDays float64
+		for _, item := range group.Items {
+			totalDays += item.DaysToSell
+		}
+		// A group only exists because a row created it, so Items is never empty.
+		group.ItemsSold = len(group.Items)
+		group.AvgDaysToSell = totalDays / float64(group.ItemsSold)
+		categories = append(categories, *group)
+	}
+	sort.Slice(categories, func(i, j int) bool {
+		if categories[i].Revenue != categories[j].Revenue {
+			return categories[i].Revenue > categories[j].Revenue
+		}
+		return categories[i].Category < categories[j].Category
+	})
+	return categories
+}
+
+// getSellerDashboardItems returns per-listing stats for the authenticated
+// seller: every listing they own, newest first, unfiltered and unpaged.
+//
+// It takes no query parameters. Filtering, sorting and pagination all happen
+// client-side on the My Items table, and there is deliberately no date range —
+// this is an inventory list, not a report.
 func getSellerDashboardItems(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -72,6 +156,11 @@ func getSellerDashboardItems(c echo.Context, gormDB *gorm.DB) error {
 	if !ok {
 		return c.JSON(401, map[string]string{"error": "Unauthorized"})
 	}
+
+	// sold_at min is to that incase duplicate and it return some value rather thn nothing
+	// pending_orders use count actully it is just 1 or 0 as
+	// listing quantity - how many are there right now
+	// order quantity - how many in one transaction (history)
 
 	query := `
 		SELECT
@@ -84,14 +173,13 @@ func getSellerDashboardItems(c echo.Context, gormDB *gorm.DB) error {
 			l.updated_at,
 			(SELECT MIN(o.created_at) FROM orders o
 				WHERE o.listing_id = l.id AND o.status = 'completed') AS sold_at,
-			COALESCE((SELECT COUNT(*) FROM orders o
-				WHERE o.listing_id = l.id AND o.status = 'pending'), 0) AS pending_orders,
+			(SELECT COUNT(*) FROM orders o
+				WHERE o.listing_id = l.id AND o.status = 'pending') AS pending_orders,
 			COALESCE((SELECT SUM(o.total_price) FROM orders o
 				WHERE o.listing_id = l.id AND o.status = 'completed'), 0) AS revenue,
-			COALESCE((SELECT COUNT(*) FROM analytics_events ae
-				WHERE ae.listing_id = l.id
-				  AND ae.event_type = 'listing_viewed'
-				  AND ae.created_at >= NOW() - INTERVAL '30 days'), 0) AS views_last_30_days
+			l.stock_quantity + COALESCE((SELECT SUM(o.quantity) FROM orders o
+				WHERE o.listing_id = l.id
+				  AND o.status IN ('pending', 'completed')), 0) AS quantity
 		FROM listings l
 		WHERE l.seller_id = $1
 		ORDER BY l.created_at DESC`
@@ -112,7 +200,8 @@ func getSellerDashboardItems(c echo.Context, gormDB *gorm.DB) error {
 		var pendingOrders int
 		if err := rows.Scan(
 			&it.ListingID, &it.Title, &it.Price, &it.Category, &it.Status,
-			&createdAt, &updatedAt, &soldAt, &pendingOrders, &it.Revenue, &it.ViewsLast30Days,
+			&createdAt, &updatedAt, &soldAt, &pendingOrders, &it.Revenue,
+			&it.Quantity,
 		); err != nil {
 			log.Printf("Error scanning seller dashboard item: %v", err)
 			continue
@@ -141,8 +230,6 @@ func getSellerDashboardItems(c echo.Context, gormDB *gorm.DB) error {
 			it.DaysListed = 0
 		}
 
-		it.Stale = it.Status == "active" && !it.Sold && it.DaysListed >= staleAfterDays
-
 		items = append(items, it)
 	}
 	if err := rows.Err(); err != nil {
@@ -152,8 +239,16 @@ func getSellerDashboardItems(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(200, map[string]interface{}{"items": items})
 }
 
-// getSellerDashboardSummary returns account-level stats, a monthly revenue series,
-// and a category breakdown for the authenticated seller.
+// getSellerDashboardSummary returns the KPI tiles and the sales-trends chart
+// series for the authenticated seller.
+//
+// GET /api/v1/seller/dashboard/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
+// GET /api/v1/seller/dashboard/summary?months=N          (trailing window)
+//
+// Two queries:
+//
+//  1. one row of six scalars  → the KPI tiles
+//  2. month × category rows   → the stacked chart
 func getSellerDashboardSummary(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -165,88 +260,46 @@ func getSellerDashboardSummary(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(401, map[string]string{"error": "Unauthorized"})
 	}
 
-	months := 12
-	if m := c.QueryParam("months"); m != "" {
-		if parsed, err := strconv.Atoi(m); err == nil && parsed > 0 && parsed <= 36 {
-			months = parsed
-		}
+	rangeFrom, rangeTo, err := resolveReportRange(
+		c.QueryParam("months"), c.QueryParam("from"), c.QueryParam("to"), time.Now(),
+	)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
 
 	var summary SellerSummary
+	summary.RangeFrom = rangeFrom.Format("2006-01-02")
+	summary.RangeTo = rangeTo.Format("2006-01-02")
 
-	// Listing funnel: sold vs active vs archived, by listing status.
+	// Every KPI tile in one round trip. These six are all single-value aggregates
+	// EPOCH is in seconds and 86400 is seconds in a day
 	err = sqlDB.QueryRow(`
 		SELECT
-			COALESCE(COUNT(*) FILTER (WHERE status = 'sold'), 0),
-			COALESCE(COUNT(*) FILTER (WHERE status = 'active'), 0),
-			COALESCE(COUNT(*) FILTER (WHERE status = 'archived'), 0)
-		FROM listings WHERE seller_id = $1`, sellerID,
-	).Scan(&summary.ItemsSold, &summary.ItemsActive, &summary.ItemsArchived)
+			(SELECT COUNT(*) FILTER (WHERE status = 'sold')
+				FROM listings WHERE seller_id = $1),
+			(SELECT COUNT(*) FILTER (WHERE status = 'active')
+				FROM listings WHERE seller_id = $1),
+			(SELECT COUNT(*) FILTER (WHERE status = 'archived')
+				FROM listings WHERE seller_id = $1),
+			(SELECT COALESCE(SUM(total_price) FILTER (WHERE status = 'completed'), 0)
+				FROM orders WHERE seller_id = $1),
+			(SELECT COALESCE(COUNT(*) FILTER (WHERE status = 'pending'), 0)
+				FROM orders WHERE seller_id = $1),
+			(SELECT COALESCE(
+					AVG(EXTRACT(EPOCH FROM (o.created_at - l.created_at)) / 86400.0), 0)
+				FROM orders o
+				JOIN listings l ON l.id = o.listing_id
+				WHERE o.seller_id = $1 AND o.status = 'completed')`, sellerID,
+	).Scan(
+		&summary.ItemsSold, &summary.ItemsActive, &summary.ItemsArchived,
+		&summary.TotalRevenue, &summary.PendingOrders, &summary.AvgDaysToSell,
+	)
 	if err != nil {
-		log.Printf("Error querying seller listing funnel: %v", err)
-		return c.JSON(500, map[string]string{"error": "Failed to fetch seller summary"})
-	}
-
-	if summary.ItemsSold+summary.ItemsActive > 0 {
-		summary.SellThroughRate = float64(summary.ItemsSold) / float64(summary.ItemsSold+summary.ItemsActive) * 100
-	}
-
-	err = sqlDB.QueryRow(`
-		SELECT
-			COALESCE(SUM(total_price) FILTER (WHERE status = 'completed'), 0),
-			COALESCE(COUNT(*) FILTER (WHERE status = 'pending'), 0)
-		FROM orders WHERE seller_id = $1`, sellerID,
-	).Scan(&summary.TotalRevenue, &summary.PendingOrders)
-	if err != nil {
-		log.Printf("Error querying seller revenue: %v", err)
-		return c.JSON(500, map[string]string{"error": "Failed to fetch seller summary"})
-	}
-
-	// Average days from listing creation to the completed order.
-	err = sqlDB.QueryRow(`
-		SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (o.created_at - l.created_at)) / 86400.0), 0)
-		FROM orders o
-		JOIN listings l ON l.id = o.listing_id
-		WHERE o.seller_id = $1 AND o.status = 'completed'`, sellerID,
-	).Scan(&summary.AvgDaysToSell)
-	if err != nil {
-		log.Printf("Error querying seller avg time to sell: %v", err)
+		log.Printf("Error querying seller summary totals: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to fetch seller summary"})
 	}
 
 	rows, err := sqlDB.Query(`
-		SELECT
-			TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
-			COUNT(*) AS order_count,
-			SUM(total_price) AS revenue
-		FROM orders
-		WHERE seller_id = $1
-		  AND status = 'completed'
-		  AND created_at >= DATE_TRUNC('month', NOW()) - make_interval(months => $2)
-		GROUP BY month
-		ORDER BY month`, sellerID, months-1,
-	)
-	if err != nil {
-		log.Printf("Error querying seller monthly revenue: %v", err)
-		return c.JSON(500, map[string]string{"error": "Failed to fetch seller summary"})
-	}
-	defer rows.Close()
-
-	monthly := []SellerMonthlyStat{}
-	for rows.Next() {
-		var m SellerMonthlyStat
-		if err := rows.Scan(&m.Month, &m.OrderCount, &m.Revenue); err != nil {
-			log.Printf("Error scanning monthly revenue row: %v", err)
-			continue
-		}
-		monthly = append(monthly, m)
-	}
-	if err := rows.Err(); err != nil {
-		return c.JSON(500, map[string]string{"error": "Failed scanning seller monthly revenue"})
-	}
-	summary.MonthlyRevenue = monthly
-
-	mcRows, err := sqlDB.Query(`
 		SELECT
 			TO_CHAR(DATE_TRUNC('month', o.created_at), 'YYYY-MM') AS month,
 			COALESCE(l.category, 'Others') AS category,
@@ -256,60 +309,97 @@ func getSellerDashboardSummary(c echo.Context, gormDB *gorm.DB) error {
 		JOIN listings l ON l.id = o.listing_id
 		WHERE o.seller_id = $1
 		  AND o.status = 'completed'
-		  AND o.created_at >= DATE_TRUNC('month', NOW()) - make_interval(months => $2)
+		  AND o.created_at >= $2
+		  AND o.created_at <= $3
 		GROUP BY 1, 2
-		ORDER BY 1, 2`, sellerID, months-1,
+		ORDER BY 1, 2`, sellerID, rangeFrom, rangeTo,
 	)
 	if err != nil {
 		log.Printf("Error querying seller monthly category revenue: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to fetch seller summary"})
 	}
-	defer mcRows.Close()
+	defer rows.Close()
 
 	monthlyByCat := []MonthlyCategoryStat{}
-	for mcRows.Next() {
-		var mc MonthlyCategoryStat
-		if err := mcRows.Scan(&mc.Month, &mc.Category, &mc.OrderCount, &mc.Revenue); err != nil {
+	for rows.Next() {
+		var stat MonthlyCategoryStat
+		if err := rows.Scan(&stat.Month, &stat.Category, &stat.OrderCount, &stat.Revenue); err != nil {
 			log.Printf("Error scanning monthly category row: %v", err)
 			continue
 		}
-		monthlyByCat = append(monthlyByCat, mc)
+		monthlyByCat = append(monthlyByCat, stat)
 	}
-	if err := mcRows.Err(); err != nil {
+	if err := rows.Err(); err != nil {
 		return c.JSON(500, map[string]string{"error": "Failed scanning seller monthly categories"})
 	}
 	summary.MonthlyByCategory = monthlyByCat
 
-	catRows, err := sqlDB.Query(`
-		SELECT
-			COALESCE(l.category, 'Others'),
-			COUNT(o.id) AS items_sold,
-			COALESCE(SUM(o.total_price), 0) AS revenue
-		FROM orders o
-		JOIN listings l ON l.id = o.listing_id
-		WHERE o.seller_id = $1 AND o.status = 'completed'
-		GROUP BY 1
-		ORDER BY revenue DESC`, sellerID,
+	return c.JSON(200, summary)
+}
+
+// getSellerDashboardCategories returns the Sales-by-Category view in full: one
+// group per category, each carrying the sold listings behind its totals.
+//
+// GET /api/v1/seller/dashboard/categories?from=YYYY-MM-DD&to=YYYY-MM-DD
+// GET /api/v1/seller/dashboard/categories?months=N
+func getSellerDashboardCategories(c echo.Context, gormDB *gorm.DB) error {
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "Database connection error"})
+	}
+
+	sellerID, ok := c.Get("userId").(int)
+	if !ok {
+		return c.JSON(401, map[string]string{"error": "Unauthorized"})
+	}
+
+	rangeFrom, rangeTo, err := resolveReportRange(
+		c.QueryParam("months"), c.QueryParam("from"), c.QueryParam("to"), time.Now(),
 	)
 	if err != nil {
-		log.Printf("Error querying seller category breakdown: %v", err)
-		return c.JSON(500, map[string]string{"error": "Failed to fetch seller summary"})
+		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
-	defer catRows.Close()
 
-	categories := []CategoryStat{}
-	for catRows.Next() {
-		var cs CategoryStat
-		if err := catRows.Scan(&cs.Category, &cs.ItemsSold, &cs.Revenue); err != nil {
-			log.Printf("Error scanning category row: %v", err)
+	// One row per completed order in the window. Days-to-sell is measured the
+	// same way as the dashboard tile -- seconds between listing and sale over
+	// 86400 -- so the two figures are directly comparable.
+	rows, err := sqlDB.Query(`
+		SELECT
+			COALESCE(l.category, 'Others') AS category,
+			l.id,
+			l.title,
+			TO_CHAR(o.created_at, 'YYYY-MM-DD') AS sold_at,
+			EXTRACT(EPOCH FROM (o.created_at - l.created_at)) / 86400.0 AS days_to_sell,
+			o.total_price
+		FROM orders o
+		JOIN listings l ON l.id = o.listing_id
+		WHERE o.seller_id = $1
+		  AND o.status = 'completed'
+		  AND o.created_at >= $2
+		  AND o.created_at <= $3
+		ORDER BY o.created_at`, sellerID, rangeFrom, rangeTo,
+	)
+	if err != nil {
+		log.Printf("Error querying seller category sales: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to fetch category sales"})
+	}
+	defer rows.Close()
+
+	sold := []categorySoldRow{}
+	for rows.Next() {
+		var row categorySoldRow
+		if err := rows.Scan(
+			&row.Category, &row.ListingID, &row.Title,
+			&row.SoldAt, &row.DaysToSell, &row.Revenue,
+		); err != nil {
+			log.Printf("Error scanning category sale row: %v", err)
 			continue
 		}
-		categories = append(categories, cs)
+		sold = append(sold, row)
 	}
-	if err := catRows.Err(); err != nil {
-		return c.JSON(500, map[string]string{"error": "Failed scanning seller categories"})
+	if err := rows.Err(); err != nil {
+		return c.JSON(500, map[string]string{"error": "Failed scanning category sales"})
 	}
-	summary.CategoryBreakdown = categories
 
-	return c.JSON(200, summary)
+	return c.JSON(200, map[string]interface{}{"categories": groupByCategory(sold)})
 }

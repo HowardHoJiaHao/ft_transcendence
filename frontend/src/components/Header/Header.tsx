@@ -9,7 +9,7 @@ import { useAuth } from '@/context/AuthContext'; //import hook to access global 
 import { useI18n, LOCALES, type Locale } from '@/context/LanguageContext';
 import { useSearch } from '@/hooks/useSearch';
 import SearchBar from '@/components/SearchBar/SearchBar';
-import { resolveAvatarUrl, PLACEHOLDER_AVATAR } from '@/lib/avatar';
+import { resolveAvatarUrl, PLACEHOLDER_AVATAR, avatarClass } from '@/lib/avatar';
 import NotificationBell from '@/components/NotificationBell/NotificationBell';
 import { useNotifications } from '@/context/NotificationContext';
 
@@ -164,9 +164,12 @@ export default function Header({
                     <img
                       src={resolveAvatarUrl(user.avatarUrl)}
                       alt=""
-                      className={`w-12 h-12 rounded-full object-cover bg-[#f5f5f3] border-2 transition-colors duration-150 ${
-                        menuOpen ? 'border-[var(--primary)]' : 'border-[#e0e0e0] hover:border-[#888]'
-                      }`}
+                      className={avatarClass(
+                        'header',
+                        `border-2 transition-colors duration-150 ${
+                          menuOpen ? 'border-[var(--primary)]' : 'border-[#e0e0e0] hover:border-[#888]'
+                        }`,
+                      )}
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).src = PLACEHOLDER_AVATAR;
                       }}

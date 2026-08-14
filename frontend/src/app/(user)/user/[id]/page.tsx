@@ -9,8 +9,10 @@ import { useToast } from '@/components/Toast/ToastContext';
 import { useAuth } from '@/context/AuthContext';;
 import ChatModal from '@/app/(user)/chat/ChatModal';
 import { useWebSocketContext } from '@/context/WebSocketContext';
+import { useI18n } from '@/context/LanguageContext';
 import { PLACEHOLDER_LISTING_IMAGE } from '@/lib/listingImage';
 import ListingImage from '@/components/ListingImage/ListingImage';
+import { avatarClass } from '@/lib/avatar';
 
 interface Product
 {
@@ -25,8 +27,10 @@ interface Product
   location: string;
   sellerId: string;
   sellerName: string;
-  rating: number;
-  reviews: number;
+  // Both feed the one thing a buyer needs to know about availability: a
+  // listing sells as a whole lot, so it is gone or it is not.
+  stockQuantity: number;
+  status: string;
   isNew: boolean;
   isFeatured: boolean;
 }
@@ -69,6 +73,7 @@ export default function UserPage()
 	const [chatLoading, setChatLoading] = useState(false);
 
 	const { showToast } = useToast();
+	const { t } = useI18n();
 	const resolveAvatarUrl = (url?: string) => {
 		if (!url)
 			return defaultAvatarUrl;
@@ -116,16 +121,16 @@ export default function UserPage()
 			});
 			if (res.ok)
 			{
-				showToast("Friend added succesfully", "success")
+				showToast(t("userProfile.friendAdded"), "success")
 			}
 			else
 			{
-				showToast("Failed to add friend", "error")
+				showToast(t("userProfile.friendFailed"), "error")
 			}
 		}
 		catch(err)
 		{
-			showToast("Error adding friend", "error")
+			showToast(t("userProfile.friendError"), "error")
 		}
 	}
 
@@ -149,7 +154,7 @@ export default function UserPage()
 			}
 			catch (err)
 			{
-				const errorMsg = err instanceof Error ? err.message : 'Failed to fetch User';
+				const errorMsg = err instanceof Error ? err.message : t('userProfile.fetchUserFailed');
 				showToast(errorMsg,'error');
 			}
 			finally
@@ -190,8 +195,8 @@ export default function UserPage()
 			  location: p.location,
 			  sellerId: p.sellerId,
 			  sellerName: p.sellerName,
-			  rating: parseFloat(p.rating),
-			  reviews: p.reviews,
+			  stockQuantity: p.stockQuantity,
+			  status: p.status,
 			  isNew: p.isNew,
 			  isFeatured: p.isFeatured,
 			}));  
@@ -217,11 +222,11 @@ export default function UserPage()
 	  <main>
 	    <Header/>
 		<div className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex flex-col sm:flex-row w-[90%] max-w-[1138px] h-auto min-h-[150px] my-6 mx-auto gap-[30px]">
-		  <div className="w-40 h-40 sm:w-52 sm:h-52 shrink-0 overflow-hidden rounded-lg bg-[#f5f5f5]">
+		  <div className="shrink-0">
 			<img
 				src={resolveAvatarUrl(seller?.avatarUrl)}
 				alt="-Shop Picture-"
-				className="w-full h-full object-cover"
+				className={avatarClass('shop', 'border border-[#e8e8e6]')}
 				onError={(event) => {
 					(event.currentTarget as HTMLImageElement).src = placeholderAvatarUrl;
 				}}
@@ -238,7 +243,7 @@ export default function UserPage()
 			)}
 			<div className="flex gap-2.5 mt-2">
 			  <button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 hover:bg-[var(--primary-dark)]" onClick={openChat} disabled={chatLoading || !currentUser?.id}>
-			    {chatLoading ? 'Loading...' : 'Chat Seller'}
+			    {chatLoading ? t('userProfile.chatLoading') : t('userProfile.chatSeller')}
 			  </button>
 			  <button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 hover:bg-[var(--primary-dark)]" onClick={addFriend} disabled={!currentUser?.id || !seller?.id || seller.id === currentUser.id}>
 			    Add Friend
@@ -250,9 +255,9 @@ export default function UserPage()
 		<div className="block my-6 mx-auto max-w-[1200px] w-full px-5">
 		  <div>
            {loading ? (
-             <div className="text-center px-5 py-[60px] bg-white rounded-lg"><p className="text-base mb-5">Loading products...</p></div>
+             <div className="text-center px-5 py-[60px] bg-white rounded-lg"><p className="text-base mb-5">{t('userProfile.loadingProducts')}</p></div>
            ) : error ? (
-             <div className="text-center px-5 py-[60px] bg-white rounded-lg"><p className="text-base mb-5">Error: {error}</p>
+             <div className="text-center px-5 py-[60px] bg-white rounded-lg"><p className="text-base mb-5">{t('userProfile.errorPrefix', { message: error })}</p>
                <button className="btn btn-secondary" onClick={() => window.location.reload()}>
                  Retry
                </button>
@@ -290,9 +295,16 @@ export default function UserPage()
                          <span className="price-old">RM {product.originalPrice}</span>
                        )}
                      </div>
+                     {/* Same quantity label as the marketplace cards, so a
+                         listing reads identically wherever it appears. */}
                      <div className="flex items-center gap-1.5 mb-2 text-xs">
-                       <span className="inline-block tracking-[2px] text-[11px]">{'⭐'.repeat(Math.floor(product.rating))}</span>
-                       <span className="text-[var(--secondary)]">{product.rating} ({product.reviews} reviews)</span>
+                       {product.stockQuantity <= 0 || product.status === 'sold' ? (
+                         <span className="font-semibold text-red-600">{t('product.sold')}</span>
+                       ) : (
+                         <span className="font-semibold text-[#1a7f37]">
+                           {t('product.quantity', { count: product.stockQuantity })}
+                         </span>
+                       )}
                      </div>
                      <div className="py-2 border-t border-[var(--border)] text-xs text-[var(--secondary)]">
                        <span className="font-medium text-[var(--dark)]">{product.sellerName}</span>
@@ -307,7 +319,7 @@ export default function UserPage()
                ))}
              </div>
            ) : (
-             <div className="text-center px-5 py-[60px] bg-white rounded-lg"><p className="text-base mb-5">No products available</p></div>
+             <div className="text-center px-5 py-[60px] bg-white rounded-lg"><p className="text-base mb-5">{t('userProfile.noProducts')}</p></div>
            )}
        </div>
 	  {chatOpen && (
@@ -320,12 +332,13 @@ export default function UserPage()
 
 function OnlineStatus({ userId, showDot = true }: { userId: number, showDot?: boolean }) {
 	const { onlineUsers } = useWebSocketContext();
+	const { t } = useI18n();
 	const isOnline = onlineUsers.has(userId);
 
 	return (
 		<span className={isOnline ? 'text-[#22c55e]' : 'text-[var(--secondary)]'}>
 		  {showDot && (isOnline ? '●' : '○')}
-		  {isOnline ? 'Online' : 'Offline'}
+		  {isOnline ? t('userProfile.online') : t('userProfile.offline')}
 		</span>
 	)
 }

@@ -6,9 +6,14 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
+	"strconv"
 	"transcendence/modules/user"
+
+	"github.com/google/uuid"
 )
+
+const avatarsRoot = "storage/avatars"
 
 type Service struct {
 	repo *user.Repository
@@ -47,23 +52,45 @@ func (s *Service) SaveAvatar(userID int, fileHeader *multipart.FileHeader) (stri
 		return "", fmt.Errorf("only jpeg/png/webp allowed")
 	}
 
-	storageDir := "static/avatars"
-	if err := os.MkdirAll(storageDir, 0755); err != nil {
+	// One directory per user, mirroring storage/listings/<listingID>/. 0750 not
+	// 0755: nothing outside this process ever needs to read it.
+	userDir := filepath.Join(avatarsRoot, strconv.Itoa(userID))
+	if err := os.MkdirAll(userDir, 0750); err != nil {
 		return "", fmt.Errorf("failed to create storage dir")
 	}
 
-	filename := fmt.Sprintf("avatar=%d.%s", userID, ext)
-	fullpath := path.Join(storageDir, filename)
+	// A generated name, not "avatar=<userID>.<ext>". The old scheme was
+	// guessable and enumerable — anyone could walk /static/avatars/avatar=1..N
+	// and learn which accounts exist and harvest every profile picture. The
+	// name is also what defeats browser caching of a replaced avatar, so the
+	// frontend no longer needs its cache-busting query string.
+	filename := uuid.NewString() + "." + ext
+	fullpath := filepath.Join(userDir, filename)
 
-	if err := os.WriteFile(fullpath, data, 0644); err != nil {
+	if err := os.WriteFile(fullpath, data, 0640); err != nil {
 		return "", fmt.Errorf("failed to save avatar file")
 	}
 
-	publicUrl := fmt.Sprintf("/static/avatars/%s", filename)
+	// A controlled endpoint, not a static path. Constant per user, so nothing
+	// downstream has to be told the filename changed.
+	publicUrl := fmt.Sprintf("/api/v1/users/%d/avatar", userID)
 
-	// Update database
-	if err := s.repo.UpdateUserAvatarUrl(userID, publicUrl, detected); err != nil {
+	// Remember the previous file so it can be removed once the database points
+	// at the new one — dropping it earlier would blank the avatar of anyone
+	// mid-request if the update then failed.
+	previous, _, prevErr := s.repo.GetUserAvatarFile(userID)
+
+	if err := s.repo.UpdateUserAvatarUrl(userID, publicUrl, filename, detected); err != nil {
+		// The row still points at the old file, so remove the orphan we just
+		// wrote rather than leaving it behind forever.
+		_ = os.Remove(fullpath)
 		return "", fmt.Errorf("failed to update avatar in database")
+	}
+
+	// Best effort: an avatar is replaced, not accumulated. A failure here only
+	// wastes disk, so it must not fail an upload that already succeeded.
+	if prevErr == nil && previous != "" && previous != filename {
+		_ = os.Remove(filepath.Join(userDir, previous))
 	}
 
 	return publicUrl, nil
