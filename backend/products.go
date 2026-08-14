@@ -18,6 +18,8 @@ import (
 	"gorm.io/gorm"
 )
 
+// the struct is: a listing looks like in json and in the DB
+// this is what we send to the frontend
 type Product struct {
 	ID                  int       `json:"id"`
 	Title               string    `json:"title"`
@@ -46,6 +48,7 @@ type Product struct {
 	Description         string    `json:"description"`
 }
 
+// json thats for the new listing
 type CreateProductRequest struct {
 	SellerID            int      `json:"sellerId"`
 	SellerName          string   `json:"sellerName"`
@@ -67,6 +70,7 @@ type CreateProductRequest struct {
 	StockQuantity       *int     `json:"stockQuantity,omitempty"`
 }
 
+// json for the edit
 type UpdateProductRequest struct {
 	Category            string   `json:"category"`
 	Condition           string   `json:"condition"`
@@ -86,6 +90,7 @@ type UpdateProductRequest struct {
 
 const maxListingImageSize = 10 * 1024 * 1024
 
+// one single row in the table listing
 // listingRow is the listings table for GORM. Product stays the API/read model
 // (joins and derived rating) and is not used for inserts.
 type listingRow struct {
@@ -124,24 +129,30 @@ func gormNoTx(db *gorm.DB) *gorm.DB {
 	return db.Session(&gorm.Session{SkipDefaultTransaction: true})
 }
 
+//this part is for the communication to the postgres, handlers will call these
+
+// get username for user id
 func lookupUsername(db *gorm.DB, userID int) (string, error) {
 	var row usernameRow
 	err := db.Select("username").First(&row, userID).Error
 	return row.Username, err
 }
 
+// who owns this listing
 func loadListingSellerID(db *gorm.DB, listingID int) (int, error) {
 	var row listingRow
 	err := db.Select("seller_id").First(&row, listingID).Error
 	return row.SellerID, err
 }
 
+//owner + stock
 func loadListingSellerAndStock(db *gorm.DB, listingID int) (int, int, error) {
 	var row listingRow
 	err := db.Select("seller_id", "stock_quantity").First(&row, listingID).Error
 	return row.SellerID, row.StockQuantity, err
 }
 
+// insert one listing
 func createListingRow(db *gorm.DB, row *listingRow) error {
 	return gormNoTx(db).Select(
 		"SellerID", "Title", "Description", "WeightCategory", "FlexibilityCategory",
@@ -151,10 +162,12 @@ func createListingRow(db *gorm.DB, row *listingRow) error {
 	).Create(row).Error
 }
 
+// delete the listing
 func deleteListingByID(db *gorm.DB, id int) error {
 	return gormNoTx(db).Delete(&listingRow{}, id).Error
 }
 
+// update some columns
 func updateListingColumns(db *gorm.DB, id int, fields map[string]interface{}) error {
 	return gormNoTx(db).Model(&listingRow{}).Where("id = ?", id).Updates(fields).Error
 }
@@ -187,7 +200,8 @@ const listingFromClause = ` FROM listings l
 		GROUP BY listing_id
 	) lr ON lr.listing_id = l.id`
 
-// list all products with filters
+// below is about to read listing
+// list all products with filters, (home page)
 func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -355,6 +369,9 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	})
 }
 
+// turn sql rows into []product
+// this is a helper for getProducts
+// sql gives row. the frontend want go struct/json
 func scanProducts(rows *sql.Rows) ([]Product, error) {
 	products := []Product{}
 	for rows.Next() {
@@ -378,6 +395,7 @@ func scanProducts(rows *sql.Rows) ([]Product, error) {
 	return products, nil
 }
 
+// one product page
 func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -408,6 +426,7 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(200, product)
 }
 
+// + 1 view
 // recordListingView increments the listing's view counter and logs an analytics
 // event, skipping the seller viewing their own listing to avoid inflating counts.
 func recordListingView(sqlDB *sql.DB, listingID int, sellerID int, c echo.Context) {
@@ -449,6 +468,8 @@ func recordListingView(sqlDB *sql.DB, listingID int, sellerID int, c echo.Contex
 //	↓
 //
 // PostgreSQL
+
+// this is for create new product listing
 func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -550,6 +571,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(201, product)
 }
 
+// delete if the user own it, the product
 func deleteProduct(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -602,6 +624,7 @@ func deleteProduct(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(200, map[string]string{"message": "Product deleted"})
 }
 
+// edit if the user own it
 func updateProduct(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -681,6 +704,9 @@ func updateProduct(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(200, product)
 }
 
+// this block is about for the image + leftover
+
+// this is to save protos after create
 func uploadListingImages(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -776,6 +802,10 @@ func uploadListingImages(c echo.Context, gormDB *gorm.DB) error {
 	})
 }
 
+// return proto URLs
+// photos, which is bind mount live on disk
+// browser cannot read the server disk, it needs url
+// so this is about to return the URL
 func getListingImages(c echo.Context, gormDB *gorm.DB) error {
 	listingID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -837,6 +867,10 @@ func getListingImages(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(200, map[string]interface{}{"imageUrls": imageUrls})
 }
 
+// delete files on disk
+// if i need to delete the picture, then i am not only delete on the DB row,
+// i also need to delete the undelying picture on disk
+// another helper
 func clearStoredListingImages(listingID int) error {
 	entries, err := os.ReadDir("static/listings")
 	if err != nil {
@@ -858,6 +892,8 @@ func clearStoredListingImages(listingID int) error {
 	return nil
 }
 
+// load one listing after create/update
+// helper
 func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {
 	query := "SELECT " + listingSelectCols + listingFromClause + " WHERE l.id = $1"
 	var p Product
@@ -872,6 +908,7 @@ func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {
 }
 
 // extractUserID pulls the numeric user ID from the "Bearer token_<id>" auth header.
+// helper
 func extractUserID(c echo.Context) (int, error) {
 	auth := c.Request().Header.Get("Authorization")
 	if auth == "" || !strings.HasPrefix(auth, "Bearer token_") {
