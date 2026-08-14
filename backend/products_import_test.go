@@ -112,8 +112,8 @@ func TestApplyImportDefaultsPreservesProvidedListingValues(t *testing.T) {
 
 func TestImportProductsRollsBackEntireBatchWhenOneInsertFails(t *testing.T) {
 	gormDB, mock := newTestGormDB(t)
-	mock.ExpectQuery("SELECT username FROM users WHERE id").
-		WithArgs(42).
+	mock.ExpectQuery(`SELECT .*username.* FROM ["']?users["']?`).
+		WithArgs(42, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"username"}).AddRow("Trusted Seller"))
 	mock.ExpectBegin()
 	mock.ExpectQuery("INSERT INTO listings").

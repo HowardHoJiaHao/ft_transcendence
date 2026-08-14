@@ -31,6 +31,8 @@ type User struct {
 	AvatarData []byte `json:"-"`
 }
 
+func (User) TableName() string { return "users" }
+
 type RegisterRequest struct {
 	Username    string     `json:"username"`
 	Email       string     `json:"email"`

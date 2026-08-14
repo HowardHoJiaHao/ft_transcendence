@@ -7,7 +7,7 @@ package main
 // whole request is rejected with per-row errors so the client can fix and retry.
 
 import (
-	"database/sql"
+	"errors"
 	"log"
 	"strings"
 
@@ -105,8 +105,9 @@ func importProducts(c echo.Context, gormDB *gorm.DB) error {
 
 	// Default seller name for rows that do not carry one.
 	sellerName := "Unknown Seller"
-	if err := sqlDB.QueryRow(`SELECT username FROM users WHERE id = $1`, sellerID).
-		Scan(&sellerName); err != nil && err != sql.ErrNoRows {
+	if name, err := lookupUsername(gormDB, sellerID); err == nil {
+		sellerName = name
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		log.Printf("Error looking up seller name for import: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to validate seller"})
 	}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"gorm.io/gorm"
 	"transcendence/modules/user"
 	"transcendence/modules/user/notifications"
 )
@@ -122,10 +123,12 @@ func (r *Repository) AddFriendWithNotification(
 }
 
 func (r *Repository) RemoveFriend(userID, friendID int) error {
-	_, err := r.DB.Exec("DELETE FROM friendships WHERE user_id1 = $1 AND user_id2 = $2", userID, friendID)
-	if err != nil {
+	if r.GormDB == nil {
+		return fmt.Errorf("gorm db is not initialized")
+	}
+	db := r.GormDB.Session(&gorm.Session{SkipDefaultTransaction: true})
+	if err := db.Where("user_id1 = ? AND user_id2 = ?", userID, friendID).Delete(&Friendship{}).Error; err != nil {
 		return err
 	}
-	_, err = r.DB.Exec("DELETE FROM friendships WHERE user_id1 = $1 AND user_id2 = $2", friendID, userID)
-	return err
+	return db.Where("user_id1 = ? AND user_id2 = ?", friendID, userID).Delete(&Friendship{}).Error
 }

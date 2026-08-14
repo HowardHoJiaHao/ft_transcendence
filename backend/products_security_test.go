@@ -30,8 +30,8 @@ func TestDeleteProductEnforcesOwnership(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			gormDB, mock := newTestGormDB(t)
-			mock.ExpectQuery("SELECT seller_id FROM listings WHERE id").
-				WithArgs(10).
+			mock.ExpectQuery(`SELECT .*seller_id.* FROM ["']?listings["']?`).
+				WithArgs(10, 1).
 				WillReturnRows(sqlmock.NewRows([]string{"seller_id"}).AddRow(test.sellerID))
 			if test.checkOrders {
 				mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM orders WHERE listing_id").
@@ -39,7 +39,7 @@ func TestDeleteProductEnforcesOwnership(t *testing.T) {
 					WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(test.orderCount))
 			}
 			if test.allowDelete {
-				mock.ExpectExec("DELETE FROM listings WHERE id").
+				mock.ExpectExec(`DELETE FROM ["']?listings["']?`).
 					WithArgs(10).
 					WillReturnResult(sqlmock.NewResult(0, 1))
 			}
@@ -66,8 +66,8 @@ func TestDeleteProductEnforcesOwnership(t *testing.T) {
 
 func TestUpdateProductRejectsDifferentSellerBeforeMutation(t *testing.T) {
 	gormDB, mock := newTestGormDB(t)
-	mock.ExpectQuery("SELECT seller_id, stock_quantity FROM listings WHERE id").
-		WithArgs(10).
+	mock.ExpectQuery(`SELECT .*seller_id.*stock_quantity.* FROM ["']?listings["']?`).
+		WithArgs(10, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"seller_id", "stock_quantity"}).AddRow(7, 3))
 
 	e := echo.New()
@@ -95,14 +95,14 @@ func TestUpdateProductRejectsDifferentSellerBeforeMutation(t *testing.T) {
 
 func TestCreateProductUsesAuthenticatedSellerInsteadOfBodySellerID(t *testing.T) {
 	gormDB, mock := newTestGormDB(t)
-	mock.ExpectQuery("SELECT username FROM users WHERE id").
-		WithArgs(42).
+	mock.ExpectQuery(`SELECT .*username.* FROM ["']?users["']?`).
+		WithArgs(42, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"username"}).AddRow("Trusted Seller"))
-	mock.ExpectQuery("INSERT INTO listings").
+	mock.ExpectQuery(`INSERT INTO ["']?listings["']?`).
 		WithArgs(
 			42, "Racket", "", "4U", "Medium Flex", "Even Balance",
-			100.0, nil, "Malaysia", "", "Trusted Seller", false, false,
-			"Others", "Second-hand (Used)", "Meet Up", "", 1,
+			"Others", "Second-hand (Used)", "Meet Up", "",
+			100.0, nil, "Malaysia", "", "Trusted Seller", false, false, 1, "active",
 		).
 		WillReturnError(errors.New("stop after verifying trusted arguments"))
 

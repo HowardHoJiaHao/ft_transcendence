@@ -165,8 +165,16 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 }
 
 func (r *Repository) UpdatePassword(userID int, passwordHash string) error {
-	_, err := r.DB.Exec("UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", passwordHash, userID)
-	return err
+	if r.GormDB == nil {
+		return fmt.Errorf("gorm db is not initialized")
+	}
+	return r.GormDB.Session(&gorm.Session{SkipDefaultTransaction: true}).
+		Model(&User{}).
+		Where("id = ?", userID).
+		Updates(map[string]interface{}{
+			"password_hash": passwordHash,
+			"updated_at":    gorm.Expr("CURRENT_TIMESTAMP"),
+		}).Error
 }
 
 // use r.DB.exec when you dont care the information once you execute.use queryrow if you want to know some variables after you exec
@@ -185,11 +193,17 @@ func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
 }
 
 func (r *Repository) UpdateUserAvatarUrl(userID int, publicUrl string, mime string) error {
-	_, err := r.DB.Exec(
-		"UPDATE users SET avatar_url = $1, avatar_mime_type = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
-		publicUrl, mime, userID,
-	)
-	return err
+	if r.GormDB == nil {
+		return fmt.Errorf("gorm db is not initialized")
+	}
+	return r.GormDB.Session(&gorm.Session{SkipDefaultTransaction: true}).
+		Model(&User{}).
+		Where("id = ?", userID).
+		Updates(map[string]interface{}{
+			"avatar_url":       publicUrl,
+			"avatar_mime_type": mime,
+			"updated_at":       gorm.Expr("CURRENT_TIMESTAMP"),
+		}).Error
 }
 
 // Currently not being used

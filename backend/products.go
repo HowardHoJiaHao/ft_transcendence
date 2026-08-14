@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -84,6 +85,79 @@ type UpdateProductRequest struct {
 }
 
 const maxListingImageSize = 10 * 1024 * 1024
+
+// listingRow is the listings table for GORM. Product stays the API/read model
+// (joins and derived rating) and is not used for inserts.
+type listingRow struct {
+	ID                  int      `gorm:"primaryKey"`
+	SellerID            int      `gorm:"column:seller_id"`
+	Title               string   `gorm:"column:title"`
+	Description         string   `gorm:"column:description"`
+	WeightCategory      string   `gorm:"column:weight_category"`
+	FlexibilityCategory string   `gorm:"column:flexibility_category"`
+	BalanceCategory     string   `gorm:"column:balance_category"`
+	Category            string   `gorm:"column:category"`
+	Condition           string   `gorm:"column:condition"`
+	DealingMethod       string   `gorm:"column:dealing_method"`
+	PhoneNumber         string   `gorm:"column:phone_number"`
+	Price               float64  `gorm:"column:price"`
+	OriginalPrice       *float64 `gorm:"column:original_price"`
+	Location            string   `gorm:"column:location"`
+	Image               string   `gorm:"column:image"`
+	SellerName          string   `gorm:"column:seller_name"`
+	IsNew               bool     `gorm:"column:is_new"`
+	IsFeatured          bool     `gorm:"column:is_featured"`
+	StockQuantity       int      `gorm:"column:stock_quantity"`
+	Status              string   `gorm:"column:status"`
+}
+
+func (listingRow) TableName() string { return "listings" }
+
+type usernameRow struct {
+	ID       int    `gorm:"primaryKey"`
+	Username string `gorm:"column:username"`
+}
+
+func (usernameRow) TableName() string { return "users" }
+
+func gormNoTx(db *gorm.DB) *gorm.DB {
+	return db.Session(&gorm.Session{SkipDefaultTransaction: true})
+}
+
+func lookupUsername(db *gorm.DB, userID int) (string, error) {
+	var row usernameRow
+	err := db.Select("username").First(&row, userID).Error
+	return row.Username, err
+}
+
+func loadListingSellerID(db *gorm.DB, listingID int) (int, error) {
+	var row listingRow
+	err := db.Select("seller_id").First(&row, listingID).Error
+	return row.SellerID, err
+}
+
+func loadListingSellerAndStock(db *gorm.DB, listingID int) (int, int, error) {
+	var row listingRow
+	err := db.Select("seller_id", "stock_quantity").First(&row, listingID).Error
+	return row.SellerID, row.StockQuantity, err
+}
+
+func createListingRow(db *gorm.DB, row *listingRow) error {
+	return gormNoTx(db).Select(
+		"SellerID", "Title", "Description", "WeightCategory", "FlexibilityCategory",
+		"BalanceCategory", "Price", "OriginalPrice", "Location", "Image", "SellerName",
+		"IsNew", "IsFeatured", "Status", "Category", "Condition", "DealingMethod",
+		"PhoneNumber", "StockQuantity",
+	).Create(row).Error
+}
+
+func deleteListingByID(db *gorm.DB, id int) error {
+	return gormNoTx(db).Delete(&listingRow{}, id).Error
+}
+
+func updateListingColumns(db *gorm.DB, id int, fields map[string]interface{}) error {
+	return gormNoTx(db).Model(&listingRow{}).Where("id = ?", id).Updates(fields).Error
+}
 
 // listingSelectCols is the shared SELECT column list used in all product queries.
 //
@@ -406,9 +480,9 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	// looks up the seller username
-	var sellerName string
-	if err := sqlDB.QueryRow("SELECT username FROM users WHERE id = $1", sellerID).Scan(&sellerName); err != nil {
-		if err == sql.ErrNoRows {
+	sellerName, err := lookupUsername(gormDB, sellerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return c.JSON(404, map[string]string{"error": "Seller not found"})
 		}
 		log.Printf("Error fetching seller for product creation: %v", err)
@@ -440,26 +514,32 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		req.DealingMethod = "Meet Up"
 	}
 
-	// insert the listing into the listing table, saves the listing into the database
-	insertQuery := `INSERT INTO listings (
-		seller_id, title, description, weight_category, flexibility_category, balance_category,
-		price, original_price, location, image, seller_name, is_new, is_featured, status,
-		category, condition, dealing_method, phone_number, stock_quantity
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'active',$14,$15,$16,$17,$18)
-	RETURNING id`
-
-	// store the new row id. fetch the full product response
-	var productID int
-	err = sqlDB.QueryRow(insertQuery,
-		sellerID, req.Title, req.Description, req.WeightCategory, req.FlexibilityCategory,
-		req.BalanceCategory, req.Price, req.OriginalPrice, req.Location, req.Image, sellerName,
-		req.IsNew, req.IsFeatured, req.Category, req.Condition, req.DealingMethod, req.PhoneNumber,
-		stockQuantity,
-	).Scan(&productID)
-	if err != nil {
+	listing := listingRow{
+		SellerID:            sellerID,
+		Title:               req.Title,
+		Description:         req.Description,
+		WeightCategory:      req.WeightCategory,
+		FlexibilityCategory: req.FlexibilityCategory,
+		BalanceCategory:     req.BalanceCategory,
+		Price:               req.Price,
+		OriginalPrice:       req.OriginalPrice,
+		Location:            req.Location,
+		Image:               req.Image,
+		SellerName:          sellerName,
+		IsNew:               req.IsNew,
+		IsFeatured:          req.IsFeatured,
+		Status:              "active",
+		Category:            req.Category,
+		Condition:           req.Condition,
+		DealingMethod:       req.DealingMethod,
+		PhoneNumber:         req.PhoneNumber,
+		StockQuantity:       stockQuantity,
+	}
+	if err := createListingRow(gormDB, &listing); err != nil {
 		log.Printf("Error creating product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to create product"})
 	}
+	productID := listing.ID
 
 	// fetch the full product again, from the provided productID
 	product, err := fetchProductByID(sqlDB, productID)
@@ -486,9 +566,8 @@ func deleteProduct(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(401, map[string]string{"error": "Invalid authorization token"})
 	}
 
-	var sellerID int
-	qErr := sqlDB.QueryRow("SELECT seller_id FROM listings WHERE id = $1", id).Scan(&sellerID)
-	if qErr == sql.ErrNoRows {
+	sellerID, qErr := loadListingSellerID(gormDB, id)
+	if errors.Is(qErr, gorm.ErrRecordNotFound) {
 		return c.JSON(404, map[string]string{"error": "Product not found"})
 	} else if qErr != nil {
 		return c.JSON(500, map[string]string{"error": "Database error"})
@@ -510,7 +589,7 @@ func deleteProduct(c echo.Context, gormDB *gorm.DB) error {
 		})
 	}
 
-	if _, err := sqlDB.Exec("DELETE FROM listings WHERE id = $1", id); err != nil {
+	if err := deleteListingByID(gormDB, id); err != nil {
 		log.Printf("Error deleting product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to delete product"})
 	}
@@ -539,10 +618,8 @@ func updateProduct(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(401, map[string]string{"error": "Invalid authorization token"})
 	}
 
-	var sellerID int
-	var currentStockQuantity int
-	qErr := sqlDB.QueryRow("SELECT seller_id, stock_quantity FROM listings WHERE id = $1", id).Scan(&sellerID, &currentStockQuantity)
-	if qErr == sql.ErrNoRows {
+	sellerID, currentStockQuantity, qErr := loadListingSellerAndStock(gormDB, id)
+	if errors.Is(qErr, gorm.ErrRecordNotFound) {
 		return c.JSON(404, map[string]string{"error": "Product not found"})
 	} else if qErr != nil {
 		return c.JSON(500, map[string]string{"error": "Database error"})
@@ -575,14 +652,23 @@ func updateProduct(c echo.Context, gormDB *gorm.DB) error {
 		req.Status = "sold"
 	}
 
-	_, err = sqlDB.Exec(`UPDATE listings SET
-		title=$1, description=$2, price=$3, original_price=$4, location=$5,
-		category=$6, condition=$7, dealing_method=$8, phone_number=$9,
-		weight_category=$10, flexibility_category=$11, balance_category=$12,
-		status=$13, stock_quantity=$14, updated_at=CURRENT_TIMESTAMP WHERE id=$15`,
-		req.Title, req.Description, req.Price, req.OriginalPrice, req.Location,
-		req.Category, req.Condition, req.DealingMethod, req.PhoneNumber,
-		req.WeightCategory, req.FlexibilityCategory, req.BalanceCategory, req.Status, stockQuantity, id)
+	err = updateListingColumns(gormDB, id, map[string]interface{}{
+		"title":                req.Title,
+		"description":          req.Description,
+		"price":                req.Price,
+		"original_price":       req.OriginalPrice,
+		"location":             req.Location,
+		"category":             req.Category,
+		"condition":            req.Condition,
+		"dealing_method":       req.DealingMethod,
+		"phone_number":         req.PhoneNumber,
+		"weight_category":      req.WeightCategory,
+		"flexibility_category": req.FlexibilityCategory,
+		"balance_category":     req.BalanceCategory,
+		"status":               req.Status,
+		"stock_quantity":       stockQuantity,
+		"updated_at":           gorm.Expr("CURRENT_TIMESTAMP"),
+	})
 	if err != nil {
 		log.Printf("Error updating product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to update product"})
@@ -611,9 +697,8 @@ func uploadListingImages(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(401, map[string]string{"error": "Invalid authorization token"})
 	}
 
-	var sellerID int
-	qErr := sqlDB.QueryRow("SELECT seller_id FROM listings WHERE id = $1", listingID).Scan(&sellerID)
-	if qErr == sql.ErrNoRows {
+	sellerID, qErr := loadListingSellerID(gormDB, listingID)
+	if errors.Is(qErr, gorm.ErrRecordNotFound) {
 		return c.JSON(404, map[string]string{"error": "Listing not found"})
 	} else if qErr != nil {
 		return c.JSON(500, map[string]string{"error": "Database error"})
