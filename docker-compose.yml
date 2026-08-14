@@ -232,10 +232,12 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 15s
+      interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 15s
+      retries: 8
+      # Cold start imports pandas/sklearn before uvicorn listens. 15s was
+      # too short on first `make setup`; cached reruns then looked "flaky".
+      start_period: 120s
     networks:
       - transcendence-network
 
