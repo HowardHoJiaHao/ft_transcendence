@@ -59,7 +59,6 @@ func main() {
 	// Product routes
 	v1.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
 	v1.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
-	v1.GET("/products/:id/images", func(c echo.Context) error { return getListingImages(c, gormDB) })
 	v1.GET("/products/:id/files", func(c echo.Context) error { return listListingFiles(c, gormDB) })
 	v1.GET("/files/:fileId/content", func(c echo.Context) error { return serveListingFile(c, gormDB) })
 	v1.GET("/products/:id/reviews", func(c echo.Context) error { return getListingReviews(c, gormDB) })
@@ -104,7 +103,6 @@ func main() {
 	protected.POST("/products/import", func(c echo.Context) error { return importProducts(c, gormDB) })
 	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
 	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
-	protected.POST("/products/:id/images", func(c echo.Context) error { return uploadListingImages(c, gormDB) })
 	protected.POST("/products/:id/files", func(c echo.Context) error { return uploadListingFiles(c, gormDB) })
 	protected.DELETE("/products/:id/files/:fileId", func(c echo.Context) error {
 		return deleteListingFile(c, gormDB)
@@ -134,6 +132,7 @@ func main() {
 	protected.GET("/seller/orders", func(c echo.Context) error { return getSellerOrders(c, gormDB) })
 	protected.GET("/seller/dashboard/items", func(c echo.Context) error { return getSellerDashboardItems(c, gormDB) })
 	protected.GET("/seller/dashboard/summary", func(c echo.Context) error { return getSellerDashboardSummary(c, gormDB) })
+	protected.GET("/seller/dashboard/categories", func(c echo.Context) error { return getSellerDashboardCategories(c, gormDB) })
 
 	// API key management (JWT-authed): generate/list/revoke keys, view request logs
 	protected.POST("/api-keys", func(c echo.Context) error { return createAPIKey(c, gormDB) })
@@ -141,15 +140,27 @@ func main() {
 	protected.DELETE("/api-keys/:id", func(c echo.Context) error { return revokeAPIKey(c, gormDB) })
 	protected.GET("/api-keys/logs", func(c echo.Context) error { return getAPIKeyLogs(c, gormDB) })
 
-	// Public developer API: authenticated by X-API-Key header, rate limited
-	// per key, every request logged to api_request_logs.
+	// ─── PUBLIC DEVELOPER API ────────────────────────────────────────────────
+	//
+	// A key-authenticated REST surface over the products table, separate from
+	// the browser-facing /api/v1 group. Five endpoints covering all four verbs:
+	//
+	//	GET    /api/public/v1/products          list / search listings
+	//	GET    /api/public/v1/products/:id      fetch one listing
+	//	POST   /api/public/v1/products          create a listing
+	//	PUT    /api/public/v1/products/:id      update a listing
+	//	DELETE /api/public/v1/products/:id      delete a listing
+	//
+	// Bulk CSV import is deliberately NOT here. It stays a web-UI feature on
+	// the JWT group (POST /api/v1/products/import)
 	public := e.Group("/api/public/v1")
 	public.Use(myMiddleware.APIKeyAuth(rawDB))
-	public.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
-	public.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
+	public.GET("/products", func(c echo.Context) error { return getProductsForAPIKey(c, gormDB) })
+	public.GET("/products/:id", func(c echo.Context) error { return getProductByIDForAPIKey(c, gormDB) })
 	public.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
-	public.POST("/products/import", func(c echo.Context) error { return importProducts(c, gormDB) })
-	public.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
+	// Its own handler, not the JWT route's: the web edit form replaces a whole
+	// listing, while this surface stays a narrow six-field patch.
+	public.PUT("/products/:id", func(c echo.Context) error { return updateProductForAPIKey(c, gormDB) })
 	public.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
 
 	// Register routes
@@ -161,9 +172,6 @@ func main() {
 	chatHandler.RegisterRoutes(v1)
 	notificationHandler.RegisterRoutes(v1)
 	registerAdminRoutes(v1, rawDB)
-
-	// serve static files (avatars) from ./static mapped to /static URL
-	e.Static("/static", "static")
 
 	//start server
 	port := os.Getenv("SERVER_PORT")

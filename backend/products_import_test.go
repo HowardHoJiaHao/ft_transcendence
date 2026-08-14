@@ -12,11 +12,59 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// completeImportItem is a row with every required field supplied. Tests start
+// from it and break one thing at a time, so a new required field shows up as a
+// single fixture change rather than as noise in every case.
+func completeImportItem() CreateProductRequest {
+	return CreateProductRequest{
+		Title:               "Yonex Astrox",
+		Price:               200,
+		WeightCategory:      "4U",
+		FlexibilityCategory: "Medium Flex",
+		BalanceCategory:     "Even Balance",
+		Location:            "Kuala Lumpur",
+		Category:            "Rackets",
+		Condition:           "New",
+		DealingMethod:       "Meet Up",
+	}
+}
+
 func TestValidateImportRow(t *testing.T) {
 	validOriginalPrice := 250.0
 	validStock := 2
 	invalidOriginalPrice := -1.0
 	invalidStock := 0
+
+	validItem := completeImportItem()
+	validItem.OriginalPrice = &validOriginalPrice
+	validItem.StockQuantity = &validStock
+
+	badMoney := completeImportItem()
+	badMoney.Title = " "
+	badMoney.Price = 0
+	badMoney.OriginalPrice = &invalidOriginalPrice
+	badMoney.StockQuantity = &invalidStock
+
+	// A row carrying only the monetary fields. The dropdown attributes are
+	// defaulted exactly as createProduct defaults them, so only the two the
+	// sell form refuses to invent are left to report.
+	bareRow := CreateProductRequest{Title: "Yonex Astrox", Price: 200}
+
+	// Empty optional cells are the normal CSV shape once a seller deletes the
+	// columns they do not care about — they must import, not fail.
+	emptyOptionalCells := CreateProductRequest{
+		Title:         "Yonex AC102EX Grip",
+		Price:         12,
+		Location:      "Penang",
+		DealingMethod: "Mailing or Delivery",
+	}
+
+	// Whitespace-only cells are a real CSV shape. They count as empty, which
+	// now means "defaulted" for the dropdown columns and "missing" for the two
+	// that are never invented.
+	blankCells := completeImportItem()
+	blankCells.WeightCategory = "   "
+	blankCells.Location = "\t"
 
 	tests := []struct {
 		name       string
@@ -24,23 +72,27 @@ func TestValidateImportRow(t *testing.T) {
 		wantFields []string
 	}{
 		{
-			name: "accepts a valid listing",
-			item: CreateProductRequest{
-				Title:         "Yonex Astrox",
-				Price:         200,
-				OriginalPrice: &validOriginalPrice,
-				StockQuantity: &validStock,
-			},
+			name: "accepts a fully specified listing",
+			item: validItem,
 		},
 		{
-			name: "rejects all invalid monetary and stock fields",
-			item: CreateProductRequest{
-				Title:         " ",
-				Price:         0,
-				OriginalPrice: &invalidOriginalPrice,
-				StockQuantity: &invalidStock,
-			},
+			name:       "rejects all invalid monetary and stock fields",
+			item:       badMoney,
 			wantFields: []string{"title", "price", "originalPrice", "stockQuantity"},
+		},
+		{
+			name:       "requires only the attributes the sell form refuses to invent",
+			item:       bareRow,
+			wantFields: []string{"location", "dealingMethod"},
+		},
+		{
+			name: "accepts a row whose optional cells are all empty",
+			item: emptyOptionalCells,
+		},
+		{
+			name:       "defaults whitespace-only dropdown cells but still rejects a blank location",
+			item:       blankCells,
+			wantFields: []string{"location"},
 		},
 	}
 
@@ -75,14 +127,21 @@ func TestApplyImportDefaultsUsesTrustedSellerIdentity(t *testing.T) {
 	if item.SellerID != 42 || item.SellerName != "Trusted Seller" {
 		t.Fatalf("seller identity = (%d, %q), want (42, %q)", item.SellerID, item.SellerName, "Trusted Seller")
 	}
-	if item.Location != "Malaysia" ||
-		item.WeightCategory != "4U" ||
-		item.FlexibilityCategory != "Medium Flex" ||
-		item.BalanceCategory != "Even Balance" ||
-		item.Category != "Others" ||
-		item.Condition != "Second-hand (Used)" ||
-		item.DealingMethod != "Meet Up" {
-		t.Fatalf("defaults were not applied correctly: %+v", item)
+	// The dropdown attributes are defaulted, matching createProduct, so a blank
+	// optional cell imports as the value the sell form pre-selects.
+	if item.Category != defaultCategory || item.Condition != defaultCondition {
+		t.Fatalf("dropdown defaults = (%q, %q), want (%q, %q)",
+			item.Category, item.Condition, defaultCategory, defaultCondition)
+	}
+	// The category defaulted to "Others", so the racket specs must come out
+	// cleared rather than stamped with "4U / Medium Flex / Even Balance".
+	if item.WeightCategory != "" || item.FlexibilityCategory != "" || item.BalanceCategory != "" {
+		t.Fatalf("racket specs survived onto a non-racket listing: %+v", item)
+	}
+	// location and dealingMethod are never invented — validateImportRow rejects
+	// a row that omits them, so they must come out exactly as supplied.
+	if item.Location != "" || item.DealingMethod != "" {
+		t.Fatalf("location/dealingMethod were invented rather than left as supplied: %+v", item)
 	}
 }
 
@@ -119,27 +178,35 @@ func TestImportProductsRollsBackEntireBatchWhenOneInsertFails(t *testing.T) {
 	mock.ExpectQuery("INSERT INTO listings").
 		WithArgs(
 			42, "First", "", "4U", "Medium Flex", "Even Balance",
-			100.0, nil, "Malaysia", "", "Trusted Seller", false, false,
-			"Others", "Second-hand (Used)", "Meet Up", "", 1,
+			100.0, nil, "Kuala Lumpur", "", "Trusted Seller", false, false,
+			"Rackets", "New", "Meet Up", "", 1,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(101))
 	mock.ExpectQuery("INSERT INTO listings").
 		WithArgs(
 			42, "Second", "", "4U", "Medium Flex", "Even Balance",
-			200.0, nil, "Malaysia", "", "Trusted Seller", false, false,
-			"Others", "Second-hand (Used)", "Meet Up", "", 1,
+			200.0, nil, "Kuala Lumpur", "", "Trusted Seller", false, false,
+			"Rackets", "New", "Meet Up", "", 1,
 		).
 		WillReturnError(errors.New("second insert failed"))
 	mock.ExpectRollback()
 
+	// Both rows carry every required attribute so the batch reaches the inserts
+	// — this test is about transaction rollback, not validation.
 	e := echo.New()
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/products/import",
 		bytes.NewBufferString(`{
 			"items": [
-				{"sellerId": 999, "title": "First", "price": 100},
-				{"sellerId": 999, "title": "Second", "price": 200}
+				{"sellerId": 999, "title": "First", "price": 100,
+				 "weightCategory": "4U", "flexibilityCategory": "Medium Flex",
+				 "balanceCategory": "Even Balance", "location": "Kuala Lumpur",
+				 "category": "Rackets", "condition": "New", "dealingMethod": "Meet Up"},
+				{"sellerId": 999, "title": "Second", "price": 200,
+				 "weightCategory": "4U", "flexibilityCategory": "Medium Flex",
+				 "balanceCategory": "Even Balance", "location": "Kuala Lumpur",
+				 "category": "Rackets", "condition": "New", "dealingMethod": "Meet Up"}
 			]
 		}`),
 	)

@@ -27,6 +27,7 @@ func prepareUserForResponse(user *User) {
 	user.FirstName = ""
 	user.LastName = ""
 	user.PhoneNo = nil
+	user.Address = nil
 	user.DateOfBirth = nil
 	user.Gender = nil
 	user.AvatarURL = nil
@@ -95,9 +96,9 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, first_name, last_name, phone_no, address, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE id = $1",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.Address, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
 
 	if err != nil {
 		fmt.Printf("Scan error\n")
@@ -192,7 +193,14 @@ func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
 	return r.GormDB.Model(user).Updates(req).Error
 }
 
-func (r *Repository) UpdateUserAvatarUrl(userID int, publicUrl string, mime string) error {
+// storageName is written alongside the URL because GetUserAvatarFile below
+// selects only rows whose avatar_storage_name is non-null and non-blank, so a
+// row that never receives one can never have its avatar file served.
+//
+// Updates takes a map rather than a struct so the column can be written without
+// a matching field on the User model, which carries only AvatarURL and
+// AvatarMime.
+func (r *Repository) UpdateUserAvatarUrl(userID int, publicUrl, storageName, mime string) error {
 	if r.GormDB == nil {
 		return fmt.Errorf("gorm db is not initialized")
 	}
@@ -200,30 +208,30 @@ func (r *Repository) UpdateUserAvatarUrl(userID int, publicUrl string, mime stri
 		Model(&User{}).
 		Where("id = ?", userID).
 		Updates(map[string]interface{}{
-			"avatar_url":       publicUrl,
-			"avatar_mime_type": mime,
-			"updated_at":       gorm.Expr("CURRENT_TIMESTAMP"),
+			"avatar_url":          publicUrl,
+			"avatar_storage_name": storageName,
+			"avatar_mime_type":    mime,
+			"updated_at":          gorm.Expr("CURRENT_TIMESTAMP"),
 		}).Error
 }
 
-// Currently not being used
-func (r *Repository) GetUserAvatarBinary(userID int) ([]byte, string, error) {
-	var data []byte
-	var mime sql.NullString
-	err := r.DB.QueryRow(
-		"SELECT avatar_data, avatar_mime_type FROM users WHERE id = $1 AND avatar_data IS NOT NULL",
+func (r *Repository) GetUserAvatarFile(userID int) (storageName, mimeType string, err error) {
+	var name, mime sql.NullString
+	err = r.DB.QueryRow(
+		`SELECT avatar_storage_name, avatar_mime_type
+		 FROM users
+		 WHERE id = $1 AND avatar_storage_name IS NOT NULL AND btrim(avatar_storage_name) <> ''`,
 		userID,
-	).Scan(&data, &mime)
+	).Scan(&name, &mime)
 	if err != nil {
-		return nil, "", err
+		return "", "", err
 	}
 
 	contentType := "application/octet-stream"
 	if mime.Valid && strings.TrimSpace(mime.String) != "" {
 		contentType = mime.String
 	}
-
-	return data, contentType, nil
+	return name.String, contentType, nil
 }
 
 func (r *Repository) SaveOTP(tempToken, email, otpCode string) error {
