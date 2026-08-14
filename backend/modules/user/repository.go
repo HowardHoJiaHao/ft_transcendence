@@ -85,7 +85,6 @@ func (r *Repository) GetUserByEmailWithPassword(email string) (*User, error) {
 		user.OAuthProvider = oauthProvider.String
 	}
 	prepareUserForResponse(&user)
-	// user.IsOnline = true // For demo
 	return &user, nil
 }
 
@@ -123,7 +122,6 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 		user.OAuthProvider = oauthProvider.String
 	}
 	prepareUserForResponse(&user)
-	user.IsOnline = true // For demo
 	return &user, nil
 }
 
@@ -160,8 +158,6 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 		user.OAuthProvider = oauthProvider.String
 	}
 	prepareUserForResponse(&user)
-	user.IsOnline = true // For demo
-	//user.Requires2FA = true // For demo
 	return &user, nil
 }
 
@@ -181,11 +177,6 @@ func (r *Repository) UpdatePassword(userID int, passwordHash string) error {
 // use r.DB.exec when you dont care the information once you execute.use queryrow if you want to know some variables after you exec
 // in this case we ignore the sql result
 func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
-	// _, err := r.DB.Exec(
-	// 	"UPDATE users SET first_name = $1, last_name = $2, bio = $3, date_of_birth = $4, gender = $5, avatar_url = $6 WHERE id = $7",
-	// 	req.FirstName, req.LastName, req.Bio, req.DateOfBirth, req.Gender, req.AvatarURL, id,
-	// )
-	// err := r.DB.Model(user).Updates(req).Error
 	user, err := r.GetUserByID(id)
 	if err != nil {
 		return fmt.Errorf("Failed to fetch id in UpdateUserProfile")
@@ -285,7 +276,6 @@ func (r *Repository) CreateOAuthUser(req OAuthUserPayload) (int64, error) {
 	}
 
 	var id int64
-	// how to take from oauth user? is it in request?
 	query := `
 		INSERT INTO users (
 			username, email, first_name, last_name, avatar_url,
@@ -314,56 +304,3 @@ func (r *Repository) CreateOAuthUser(req OAuthUserPayload) (int64, error) {
 
 	return id, nil
 }
-
-// func (r *Repository) GetFriends(userID int) ([]Friend, error) {
-// 	rows, err := r.DB.Query(`
-// 		SELECT u.id, u.username, u.avatar_url, f.created_at
-// 		FROM friendships f
-// 		JOIN users u ON f.friend_id = u.id
-// 		WHERE f.user_id = $1
-// 		ORDER BY f.created_at DESC
-// 	`, userID)//--JOIN combine two table. ON only combine two rows w/ specific value match
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer rows.Close()
-
-// 	var friends []Friend
-// 	for rows.Next() {
-// 		var f Friend
-// 		var avatarURL sql.NullString
-// 		if err := rows.Scan(&f.ID, &f.Username, &avatarURL, &f.AddedAt); err != nil {
-// 			return nil, err
-// 		}
-// 		if avatarURL.Valid {
-// 			urlStr := avatarURL.String
-// 			f.AvatarURL = &urlStr
-// 		}
-// 		f.IsOnline = true
-// 		friends = append(friends, f)
-// 	}
-// 	if friends == nil {
-// 		friends = []Friend{}
-// 	}
-// 	return friends, nil
-// }
-
-// func (r *Repository) AddFriend(userID, friendID int) error {
-// 	//check if friend exists
-// 	var exists int
-// 	err := r.DB.QueryRow("SELECT id FROM users WHERE id = $1", friendID).Scan(&exists)
-// 	if err != nil {
-// 		return fmt.Errorf("friend user does not exist")
-// 	}
-
-// 	_, err = r.DB.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", userID, friendID)
-// 	//bidirectional for simplicirt
-// 	_, err = r.DB.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", friendID, userID)
-// 	return err
-// }
-
-// func (r *Repository) RemoveFriend(userID, friendID int) error {
-// 	_, err := r.DB.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", userID, friendID)
-// 	_, err = r.DB.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", friendID, userID)
-// 	return err
-// }
