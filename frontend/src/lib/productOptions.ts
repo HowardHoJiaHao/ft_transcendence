@@ -21,3 +21,13 @@ export const CATEGORIES = [
 export const CONDITIONS = ['Second-hand (Used)', 'New', 'Refurbished'] as const;
 
 export const DEALING_METHODS = ['Meet Up', 'Mailing or Delivery'] as const;
+
+export const WEIGHT_CATEGORIES = ['1U', '2U', '3U', '4U', '5U', '6U', '7U', '8U'] as const;
+
+export const FLEXIBILITY_CATEGORIES = [
+  'Stiff Shaft',
+  'Medium Flex',
+  'High Flexibility',
+] as const;
+
+export const BALANCE_CATEGORIES = ['Head Heavy', 'Even Balance', 'Head Light'] as const;

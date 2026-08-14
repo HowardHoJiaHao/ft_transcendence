@@ -24,6 +24,15 @@ describe('CSV helpers', () => {
     ]);
   });
 
+
+  it('strips a leading BOM off the first header cell', () => {
+    const bom = String.fromCharCode(0xfeff);
+    expect(parseCsv(`${bom}title,price\nRacket,100`)).toEqual([
+      ['title', 'price'],
+      ['Racket', '100'],
+    ]);
+  });
+
   it('keeps empty fields so required-column validation can detect them', () => {
     expect(parseCsv('title,price\n,100\nRacket,')).toEqual([
       ['title', 'price'],
