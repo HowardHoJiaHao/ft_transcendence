@@ -393,6 +393,8 @@ services:
     networks:
       - transcendence-network
   waf:
+    #crs is actually means core rule set, a big maintained list of ModSec rules
+    #mod security is the engine that inspect request
     image: owasp/modsecurity-crs:4.25.0-nginx-lts
     container_name: transcendence-waf
     ports:
@@ -403,14 +405,21 @@ services:
     environment:
       BACKEND: http://nginx:8081
       SERVER_NAME: localhost
+      #hardened rules are here
+      #redirection rules
       NGINX_ALWAYS_TLS_REDIRECT: "on"
+      #straight away block SQLI / xss
       MODSEC_RULE_ENGINE: "On"
+      #all illigal action will got audit log (make logs-waf)
       MODSEC_AUDIT_ENGINE: "RelevantOnly"
       BLOCKING_PARANOIA: "1"
       DETECTION_PARANOIA: "1"
       REPORTING_LEVEL: "2"
+      #limit the request method
       ALLOWED_METHODS: "GET HEAD POST PUT PATCH DELETE OPTIONS"
+      #liimit the body size limit, 72 mb
       MODSEC_REQ_BODY_LIMIT: "75497472"
+      # max file size, 10 mb
       MAX_FILE_SIZE: "10485760"
       COMBINED_FILE_SIZES: "73400320"
     volumes:

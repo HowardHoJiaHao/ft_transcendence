@@ -58,6 +58,7 @@ TEMP_FILE=$(mktemp "$PROJECT_ROOT/.env.infisical.tmp.XXXXXX") || {
 }
 chmod 600 "$TEMP_FILE"
 
+#
 if ! docker run --rm \
 	--env-file "$AUTH_FILE" \
 	--env INFISICAL_DISABLE_UPDATE_CHECK=true \
@@ -81,3 +82,11 @@ mv -f "$TEMP_FILE" "$ENV_FILE"
 trap - EXIT HUP INT TERM
 
 echo "✅ Infisical secrets were exported to a protected temporary environment file."
+
+
+
+#for this file, the roles is to fetch, which is talk to infiiscal and write a temp dotenv
+# the execution only happen in this @with-infisical-env.sh
+
+# Fetch only: talk to Infisical and write a temp dotenv.
+# Orchestration is scripts/with-infisical-env.sh (line 27). This comment is not a link.
