@@ -111,6 +111,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [viewerRole, setViewerRole] = useState<UserRole | null>(null);
+  const [viewerUsername, setViewerUsername] = useState("");
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"" | AccountStatus>("");
@@ -160,6 +161,7 @@ export default function AdminUsersPage() {
       if (!response.ok) throw new Error(data.error ?? t("admin.loadUsersFailed"));
       setUsers(data.users ?? []);
       setViewerRole(data.viewerRole ?? null);
+      setViewerUsername(typeof data.viewerUsername === "string" ? data.viewerUsername : "");
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("admin.networkError"));
@@ -360,7 +362,18 @@ export default function AdminUsersPage() {
     <main className="min-h-screen bg-[#f4f5f7] p-10 max-[700px]:px-3 max-[700px]:py-5">
       <div className="max-w-[1250px] mx-auto mb-6 flex items-center justify-between gap-5 max-[700px]:items-start">
         <div>
-          <h1>{t("admin.userManagement")}</h1>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="m-0">{t("admin.userManagement")}</h1>
+            {viewerUsername && viewerRole && (
+              <p className="m-0 text-[#555] text-base font-medium">
+                {t("admin.welcomeBack", { name: viewerUsername })}
+                <span className="text-[#888] font-normal">
+                  {" · "}
+                  {t(`admin.role${viewerRole[0].toUpperCase()}${viewerRole.slice(1)}`)}
+                </span>
+              </p>
+            )}
+          </div>
           <p>{isAdmin ? t("admin.adminDescription") : t("admin.moderatorDescription")}</p>
         </div>
         <div className="flex gap-2">

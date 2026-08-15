@@ -113,18 +113,21 @@ func gormNoTx(db *gorm.DB) *gorm.DB {
 	return db.Session(&gorm.Session{SkipDefaultTransaction: true})
 }
 
+// get username for user id
 func lookupUsername(db *gorm.DB, userID int) (string, error) {
 	var row usernameRow
 	err := db.Select("username").First(&row, userID).Error
 	return row.Username, err
 }
 
+// who owns this listing
 func loadListingSellerID(db *gorm.DB, listingID int) (int, error) {
 	var row listingRow
 	err := db.Select("seller_id").First(&row, listingID).Error
 	return row.SellerID, err
 }
 
+// owner + stock
 func loadListingSellerAndStock(db *gorm.DB, listingID int) (int, int, error) {
 	var row listingRow
 	err := db.Select("seller_id", "stock_quantity").First(&row, listingID).Error
@@ -142,6 +145,7 @@ func loadListingSellerAndStatus(db *gorm.DB, listingID int) (int, string, error)
 	return row.SellerID, row.Status, err
 }
 
+// insert one listing
 func createListingRow(db *gorm.DB, row *listingRow) error {
 	return gormNoTx(db).Select(
 		"SellerID", "Title", "Description", "WeightCategory", "FlexibilityCategory",
@@ -151,10 +155,12 @@ func createListingRow(db *gorm.DB, row *listingRow) error {
 	).Create(row).Error
 }
 
+// delete the listing
 func deleteListingByID(db *gorm.DB, id int) error {
 	return gormNoTx(db).Delete(&listingRow{}, id).Error
 }
 
+// update some columns
 func updateListingColumns(db *gorm.DB, id int, fields map[string]interface{}) error {
 	return gormNoTx(db).Model(&listingRow{}).Where("id = ?", id).Updates(fields).Error
 }
@@ -461,6 +467,7 @@ func getProductByIDForAPIKey(c echo.Context, gormDB *gorm.DB) error {
 	return getProductByID(c, gormDB)
 }
 
+// turn sql rows into []Product for getProducts
 func scanProducts(rows *sql.Rows) ([]Product, error) {
 	products := []Product{}
 	for rows.Next() {
@@ -514,7 +521,7 @@ func getProductByID(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(200, product)
 }
 
-// if is own view or api call self product view it dont count and return
+// +1 view, unless the seller is viewing their own listing
 func recordListingView(sqlDB *sql.DB, listingID int, sellerID int, c echo.Context) {
 	viewerID, err := extractUserID(c)
 	if err == nil && viewerID == sellerID {
@@ -664,6 +671,7 @@ func bindStrictJSON(c echo.Context, dest any) error {
 	return errResponseWritten
 }
 
+// createProduct: parse JSON → seller from JWT → validate → insert → return the listing
 func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -675,12 +683,15 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	if err := bindStrictJSON(c, &req); err != nil {
 		return err
 	}
+	// seller identity from the JWT
 	sellerID, ok := c.Get("userId").(int)
 	if !ok || sellerID <= 0 {
 		return c.JSON(401, map[string]string{"error": "Unauthorized"})
 	}
+	// create must not accept an image URL in JSON; photos go through the file upload path
 	req.Image = ""
 
+	// field validation
 	if req.Title == "" {
 		return c.JSON(400, map[string]string{"error": "title is required"})
 	}
@@ -839,6 +850,8 @@ type currentListing struct {
 	Price               float64
 	StockQuantity       int
 }
+
+// edit only if the caller owns the listing (shared by web and API-key update)
 
 // updateTarget resolves which listing is being edited and who is asking.
 //

@@ -118,3 +118,5 @@ for stripe_url_name in STRIPE_SUCCESS_URL STRIPE_CANCEL_URL; do
 done
 
 echo "✅ Required Infisical secrets are available and valid."
+
+#this is about 

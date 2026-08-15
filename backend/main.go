@@ -54,6 +54,7 @@ func main() {
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 	v1 := e.Group("/api/v1")
 	v1.GET("/status", statusHandler)
+	// ai chat route, this is a public route, no auth required, but if the user is logged in, then we will pass the userId and authToken to the AI chat service
 	v1.POST("/ai/chat", func(c echo.Context) error { return handleAIChat(c, rawDB) })
 
 	// Product routes
@@ -64,6 +65,7 @@ func main() {
 	v1.GET("/products/:id/reviews", func(c echo.Context) error { return getListingReviews(c, gormDB) })
 
 	// protected product routes
+	// concatenate for example "/api/v1" + "/product" = "/api/v1/products"
 	protected := e.Group("/api/v1")
 	protected.Use(myMiddleware.JWTAuth(rawDB))
 
@@ -99,6 +101,10 @@ func main() {
 	chatHandler.Notifications = notificationService
 	friendsHandler.Notifications = notificationService
 
+	// protected means this route is logged-in only
+	// this is to create new products, will be concatenate with the /api/v1/ as suffix
+	// when a post request to /api/v1/products reach echo
+	// then it will call this createProduct handler
 	protected.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
 	protected.POST("/products/import", func(c echo.Context) error { return importProducts(c, gormDB) })
 	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
