@@ -470,21 +470,28 @@ func recordListingView(sqlDB *sql.DB, listingID int, sellerID int, c echo.Contex
 // PostgreSQL
 
 // this is for create new product listing
+// parse json -> get seller identity -> get required fields and validate -> get seller name -> fill up the default
+//  -> insert the row to postgres -> return the created product object back to the frontend
+// this ask the gorm for the real database connection
 func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
-	}
+	}// grab raw SQL connection
 
 	// error handling, if json malformed
+	// bind json body to the struct
+	// turn the request body into the struct
 	var req CreateProductRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "Invalid request body"})
 	}
+	//get the seller identity from the JWT, if not found, return 401
 	sellerID, ok := c.Get("userId").(int)
 	if !ok || sellerID <= 0 {
 		return c.JSON(401, map[string]string{"error": "Unauthorized"})
 	}
+	// field validation
 	if req.Title == "" {
 		return c.JSON(400, map[string]string{"error": "title is required"})
 	}
@@ -534,7 +541,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	if req.DealingMethod == "" {
 		req.DealingMethod = "Meet Up"
 	}
-
+	//build the listingRow struct to insert into the DB
 	listing := listingRow{
 		SellerID:            sellerID,
 		Title:               req.Title,
@@ -556,13 +563,14 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		PhoneNumber:         req.PhoneNumber,
 		StockQuantity:       stockQuantity,
 	}
+	// insert the row into the DB
 	if err := createListingRow(gormDB, &listing); err != nil {
 		log.Printf("Error creating product: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to create product"})
 	}
 	productID := listing.ID
 
-	// fetch the full product again, from the provided productID
+	// fetch the full product again, from the provided productID, display to frontend
 	product, err := fetchProductByID(sqlDB, productID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Product created, but failed to fetch response"})
