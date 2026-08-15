@@ -32,8 +32,10 @@ type EnrichedOrder struct {
 	ListingCategory               string  `json:"listingCategory"`
 	ListingPrice                  float64 `json:"listingPrice"`
 	SellerName                    string  `json:"sellerName,omitempty"`
+	SellerPhone                   string  `json:"sellerPhone,omitempty"`
 	BuyerUsername                 string  `json:"buyerUsername,omitempty"`
 	BuyerEmail                    string  `json:"buyerEmail,omitempty"`
+	BuyerAddress                  string  `json:"buyerAddress,omitempty"`
 	RecommendationSurveySubmitted bool    `json:"recommendationSurveySubmitted"`
 	ListingReviewSubmitted        bool    `json:"listingReviewSubmitted"`
 }
@@ -290,6 +292,10 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 			o.status, o.payment_method, o.created_at, o.updated_at,
 			COALESCE(l.title, ''), COALESCE(l.image, ''), COALESCE(l.category, 'Others'),
 			COALESCE(l.price, 0), COALESCE(l.seller_name, ''),
+			-- The listing's own contact number first, since that is what the
+			-- seller published for this item; their account number is the
+			-- fallback for a listing created without one.
+			COALESCE(NULLIF(l.phone_number, ''), su.phone_no, ''),
 			EXISTS (
 				SELECT 1 FROM recommendation_training_feedback feedback
 				WHERE feedback.order_id = o.id
@@ -304,6 +310,7 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 			END
 		FROM orders o
 		JOIN listings l ON l.id = o.listing_id
+		LEFT JOIN users su ON su.id = o.seller_id
 		LEFT JOIN payments p ON p.id = o.payment_id
 		WHERE o.buyer_id = $1`
 	args := []interface{}{userID}
@@ -329,6 +336,7 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 			&o.ID, &o.BuyerID, &o.SellerID, &o.ListingID, &o.Quantity,
 			&o.TotalPrice, &o.Status, &paymentMethod, &o.CreatedAt, &o.UpdatedAt,
 			&o.ListingTitle, &o.ListingImage, &o.ListingCategory, &o.ListingPrice, &o.SellerName,
+			&o.SellerPhone,
 			&o.RecommendationSurveySubmitted,
 			&o.ListingReviewSubmitted,
 			&paymentStatus,
@@ -380,6 +388,7 @@ func getSellerOrders(c echo.Context, gormDB *gorm.DB) error {
 			COALESCE(l.price, 0), COALESCE(l.seller_name, ''),
 				CASE WHEN u.deleted_at IS NOT NULL THEN 'Deleted user' ELSE COALESCE(u.username, '') END,
 				CASE WHEN u.deleted_at IS NOT NULL THEN '' ELSE COALESCE(u.email, '') END,
+				CASE WHEN u.deleted_at IS NOT NULL THEN '' ELSE COALESCE(u.address, '') END,
 				CASE
 					WHEN p.status IN ('initializing', 'pending') THEN 'awaiting_payment'
 					ELSE p.status
@@ -408,7 +417,7 @@ func getSellerOrders(c echo.Context, gormDB *gorm.DB) error {
 			&o.ID, &o.BuyerID, &o.SellerID, &o.ListingID, &o.Quantity,
 			&o.TotalPrice, &o.Status, &paymentMethod, &o.CreatedAt, &o.UpdatedAt,
 			&o.ListingTitle, &o.ListingImage, &o.ListingCategory, &o.ListingPrice, &o.SellerName,
-			&o.BuyerUsername, &o.BuyerEmail, &paymentStatus,
+			&o.BuyerUsername, &o.BuyerEmail, &o.BuyerAddress, &paymentStatus,
 		)
 		if err != nil {
 			log.Printf("Error scanning seller order: %v", err)
@@ -562,6 +571,7 @@ func completeOrderWithoutNotifications(c echo.Context, gormDB *gorm.DB) error {
 				OR EXISTS (
 					SELECT 1 FROM payments
 					WHERE payments.id = orders.payment_id AND payments.status = 'paid'
+				)
 			)
 		RETURNING listing_id`,
 		orderID, sellerID,

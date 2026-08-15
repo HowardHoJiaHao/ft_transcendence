@@ -10,7 +10,7 @@ import { useToast } from '@/components/Toast/ToastContext';
 import Header from '@/components/Header/Header';
 import ChatModal from './ChatModal';
 import type { Conversation, DirectoryUser, PrivateMessage } from '@/types/websocket';
-import { DEFAULT_AVATAR, resolveAvatarUrl } from '@/lib/avatar';
+import { DEFAULT_AVATAR, resolveAvatarUrl, AVATAR_SIZE, AVATAR_FILL, avatarClass, avatarFallbackClass } from '@/lib/avatar';
 
 const PEOPLE_PAGE_SIZE = 40;
 type RoleFilter = '' | 'seller' | 'buyer';
@@ -220,16 +220,16 @@ export default function ChatPage() {
 						<ul className="list-none p-0 m-0 bg-white rounded-xl border border-[#eee] overflow-hidden">
 							{conversations.map((conversation) => (
 								<li key={conversation.partner_id} onClick={() => void openChat(conversation.partner_id)} className="flex items-center p-3 border-b last:border-b-0 border-[#eee] cursor-pointer hover:bg-[#f5f5f5]">
-									<div className="w-10 h-10 rounded-full mr-2.5 shrink-0">
+									<div className="mr-2.5">
 										{conversation.partner_avatar_url ? (
 											<img
 												src={resolveAvatarUrl(conversation.partner_avatar_url)}
 												alt=""
-												className="w-full h-full rounded-full object-cover"
+												className={avatarClass('list')}
 												onError={(event) => { event.currentTarget.src = DEFAULT_AVATAR; }}
 											/>
 										) : (
-											<span className="w-full h-full rounded-full bg-[#ccc] flex items-center justify-center text-white font-bold">{conversation.partner_username[0]}</span>
+											<span className={avatarFallbackClass('list', 'text-lg')}>{conversation.partner_username[0]}</span>
 										)}
 									</div>
 									<div className="flex-1 font-bold truncate">{conversation.partner_username}</div>
@@ -265,15 +265,15 @@ export default function ChatPage() {
 										<li key={person.id} className="border-b last:border-b-0 border-[#f0f0f0]">
 											<div className="flex items-center gap-2 px-3 py-2.5 hover:bg-[#f8fafc]">
 												<button onClick={() => void openChat(person.id)} onContextMenu={(event) => { event.preventDefault(); openContextMenu(person, event.clientX, event.clientY); }} onKeyDown={(event) => { if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); openContextMenu(person, rect.right, rect.bottom); } }} className="flex items-center gap-2 min-w-0 flex-1 text-left bg-transparent border-0 p-0 cursor-pointer">
-													<span className="relative shrink-0 w-10 h-10">
+													<span className={`relative shrink-0 block ${AVATAR_SIZE.list}`}>
 														{person.avatar_url ? (
 															<img
 																src={resolveAvatarUrl(person.avatar_url)}
-																alt=""
-																className="w-full h-full rounded-full object-cover"
+																																	alt=""
+																className={AVATAR_FILL}
 																onError={(event) => { event.currentTarget.src = DEFAULT_AVATAR; }}
 															/>
-														) : <span className="w-full h-full rounded-full bg-[#9ca3af] flex items-center justify-center text-white font-bold">{person.username[0]?.toUpperCase()}</span>}
+														) : <span className={`${AVATAR_FILL} bg-[#9ca3af] text-white font-bold text-lg flex items-center justify-center`}>{person.username[0]?.toUpperCase()}</span>}
 														<span className={`absolute right-0 bottom-0 w-3 h-3 rounded-full border-2 border-white ${isOnline ? 'bg-[#22c55e]' : 'bg-[#9ca3af]'}`} aria-label={isOnline ? t('chat.online') : t('chat.offline')} />
 													</span>
 													<span className="min-w-0 flex-1">

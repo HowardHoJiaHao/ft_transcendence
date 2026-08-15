@@ -124,6 +124,9 @@ func (r *Repository) GetConversations(userId int) ([]Conversation, error) {
 		conv.LastMessageAt = lastMsgTime
 		conversations = append(conversations, conv)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed reading conversations: %w", err)
+	}
 	return conversations, nil
 }
 
@@ -139,7 +142,6 @@ func (r *Repository) GetMessagesBetween(user1Id, user2Id int) ([]Message, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch messages: %w", err)
 	}
-
 	return messages, nil
 }
 

@@ -318,7 +318,6 @@ func (s *StripePaymentService) reserveCheckout(
 		request CreateOrderItemRequest
 		seller  int
 		unit    int64
-		stock   int
 	}
 	locked := make([]lockedItem, 0, len(items))
 
@@ -355,8 +354,16 @@ func (s *StripePaymentService) reserveCheckout(
 		if status != "active" {
 			return nil, &checkoutHTTPError{Status: 409, Message: "Listing is not available"}
 		}
-		if stockQuantity < item.Quantity {
-			return nil, &checkoutHTTPError{Status: 409, Message: "Insufficient stock for listing"}
+		// Listings sell as a whole lot on every payment path, so this mirrors the
+		// meetup rule in createOrders: the buyer takes the entire stock or
+		// nothing. Allowing Stripe to take a slice would leave a
+		// partially-depleted listing that never surfaces on the Sold tab, and
+		// would let one listing accumulate several completed orders.
+		if item.Quantity != stockQuantity {
+			return nil, &checkoutHTTPError{
+				Status:  409,
+				Message: "This listing must be bought in full",
+			}
 		}
 		if unitAmountMinor <= 0 || int64(item.Quantity) > math.MaxInt64/unitAmountMinor {
 			return nil, &checkoutHTTPError{Status: 400, Message: "Listing amount is invalid"}
@@ -379,7 +386,6 @@ func (s *StripePaymentService) reserveCheckout(
 			request: item,
 			seller:  itemSellerID,
 			unit:    unitAmountMinor,
-			stock:   stockQuantity,
 		})
 		lineItems = append(lineItems, StripeCheckoutLineItem{
 			ListingID:      item.ListingID,
@@ -452,11 +458,11 @@ func (s *StripePaymentService) reserveCheckout(
 		if err != nil {
 			return nil, databaseCheckoutError(err)
 		}
-		remainingStock := item.stock - item.request.Quantity
-		listingStatus := "active"
-		if remainingStock == 0 {
-			listingStatus = "sold"
-		}
+		// The whole lot is taken, so the listing leaves the marketplace -- but it
+		// is only reserved, not sold. It becomes 'sold' when the seller confirms
+		// delivery, exactly as on the meetup path.
+		remainingStock := 0
+		listingStatus := "pending"
 		if _, err = tx.ExecContext(ctx, `
 			UPDATE listings
 			SET stock_quantity = $1, status = $2, updated_at = CURRENT_TIMESTAMP
@@ -854,7 +860,7 @@ func releaseReservedStockTx(
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE listings
 			SET stock_quantity = stock_quantity + $1,
-				status = CASE WHEN status = 'sold' THEN 'active' ELSE status END,
+				status = CASE WHEN status IN ('pending', 'sold') THEN 'active' ELSE status END,
 				updated_at = CURRENT_TIMESTAMP
 			WHERE id = $2`,
 			release.quantity, release.listingID,

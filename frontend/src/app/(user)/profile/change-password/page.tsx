@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/Toast/ToastContext";
+import { useI18n } from "@/context/LanguageContext";
 
 const inputClass = "p-3 border border-[#ccc] rounded-md text-base";
 const buttonClass =
@@ -13,6 +14,7 @@ export default function ChangePasswordPage() {
   const router = useRouter();
   const { logout } = useAuth();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -28,7 +30,7 @@ export default function ChangePasswordPage() {
   const requestOtp = async (event: FormEvent) => {
     event.preventDefault();
     if (newPassword !== confirmPassword) {
-      showToast("New passwords do not match", "error");
+      showToast(t("changePassword.mismatch"), "error");
       return;
     }
     setLoading(true);
@@ -39,11 +41,11 @@ export default function ChangePasswordPage() {
         body: JSON.stringify({ currentPassword }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Failed to send OTP");
+      if (!response.ok) throw new Error(data.error ?? t("changePassword.otpFailed"));
       setTempToken(data.tempToken);
-      showToast("OTP sent to your registered email", "success");
+      showToast(t("changePassword.otpSent"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Network error", "error");
+      showToast(error instanceof Error ? error.message : t("changePassword.networkError"), "error");
     } finally {
       setLoading(false);
     }
@@ -59,12 +61,12 @@ export default function ChangePasswordPage() {
         body: JSON.stringify({ tempToken, otpCode, newPassword, confirmPassword }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Failed to change password");
-      showToast(data.message ?? "Password changed", "success");
+      if (!response.ok) throw new Error(data.error ?? t("changePassword.changeFailed"));
+      showToast(data.message ?? t("changePassword.changed"), "success");
       logout();
       router.push("/login");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Network error", "error");
+      showToast(error instanceof Error ? error.message : t("changePassword.networkError"), "error");
     } finally {
       setLoading(false);
     }
@@ -76,19 +78,19 @@ export default function ChangePasswordPage() {
         className="w-full max-w-[430px] p-8 bg-white rounded-[10px] shadow-[var(--shadow)] flex flex-col gap-4"
         onSubmit={tempToken ? confirmChange : requestOtp}
       >
-        <h1>Change password</h1>
+        <h1>{t("changePassword.title")}</h1>
         {!tempToken ? (
           <>
-            <input type="password" placeholder="Current password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className={inputClass} />
-            <input type="password" placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required className={inputClass} />
-            <input type="password" placeholder="Confirm new password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className={inputClass} />
-            <button disabled={loading} className={buttonClass}>{loading ? "Sending..." : "Send OTP"}</button>
+            <input type="password" placeholder={t("changePassword.currentPassword")} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className={inputClass} />
+            <input type="password" placeholder={t("changePassword.newPassword")} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required className={inputClass} />
+            <input type="password" placeholder={t("changePassword.confirmPassword")} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className={inputClass} />
+            <button disabled={loading} className={buttonClass}>{loading ? t("changePassword.sending") : t("changePassword.sendOtp")}</button>
           </>
         ) : (
           <>
-            <p>Enter the OTP sent to your registered email.</p>
-            <input inputMode="numeric" placeholder="6-digit OTP" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} required className={inputClass} />
-            <button disabled={loading} className={buttonClass}>{loading ? "Changing..." : "Change password"}</button>
+            <p>{t("changePassword.otpPrompt")}</p>
+            <input inputMode="numeric" placeholder={t("changePassword.otpPlaceholder")} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} required className={inputClass} />
+            <button disabled={loading} className={buttonClass}>{loading ? t("changePassword.changing") : t("changePassword.submit")}</button>
           </>
         )}
         <button
@@ -96,7 +98,7 @@ export default function ChangePasswordPage() {
           className="p-3 border-0 rounded-md text-white bg-[#666] cursor-pointer font-semibold"
           onClick={() => router.push("/profile")}
         >
-          Cancel
+          {t("changePassword.cancel")}
         </button>
       </form>
     </main>

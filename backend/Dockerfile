@@ -33,8 +33,10 @@ WORKDIR /app
 # Copy binary from builder, from the previous newly created program
 COPY --from=builder /app/main .
 
-# Create static directories so volume mounts work properly
-RUN mkdir -p /app/static/avatars /app/static/listings
+# User uploads live under storage/, which is never served as a directory —
+# listing files and avatars each go out through their own handler instead.
+# Created here so the compose volume mount lands on an existing path.
+RUN mkdir -p /app/storage/listings /app/storage/avatars
 
 EXPOSE 8080
 

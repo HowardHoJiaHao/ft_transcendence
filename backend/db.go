@@ -34,9 +34,9 @@ func initDB() (*sql.DB, *gorm.DB, func(), error) {
 		return nil, nil, nil, fmt.Errorf("listing files migration failed: %w", err)
 	}
 
-	if err := runAnalyticsEventsMigration(rawDB); err != nil {
+	if err := runAPIRequestLogsMigration(rawDB); err != nil {
 		_ = rawDB.Close()
-		return nil, nil, nil, fmt.Errorf("analytics_events migration failed: %w", err)
+		return nil, nil, nil, fmt.Errorf("api_request_logs migration failed: %w", err)
 	}
 
 	if err := runUsersMigration(rawDB); err != nil {
@@ -156,6 +156,16 @@ func runUsersMigration(db *sql.DB) error {
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id VARCHAR(255)`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(50)`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS address VARCHAR(255)`,
+		// Avatars moved out of the publicly served static/ directory and into
+		// storage/avatars/<user_id>/, reachable only through the controlled
+		// endpoint. This column holds the generated filename inside that folder.
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_storage_name VARCHAR(255)`,
+		// Any avatar_url still pointing into /static is from before that move.
+		// The file behind it is no longer served, so blank the column rather
+		// than leave the UI requesting a URL that now 404s — the frontend falls
+		// back to the bundled default avatar when this is NULL.
+		`UPDATE users SET avatar_url = NULL WHERE avatar_url LIKE '/static/%'`,
 		`ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`,
 		`DO $$
 		BEGIN
@@ -279,10 +289,9 @@ func runListingFilesMigration(db *sql.DB) error {
 	return nil
 }
 
-func runAnalyticsEventsMigration(db *sql.DB) error {
+func runAPIRequestLogsMigration(db *sql.DB) error {
 	migrations := []string{
-		`ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS listing_id INT`,
-		`CREATE INDEX IF NOT EXISTS idx_analytics_events_listing_id ON analytics_events(listing_id)`,
+		`DROP TABLE IF EXISTS analytics_events`,
 		`CREATE TABLE IF NOT EXISTS api_request_logs (
 			id SERIAL PRIMARY KEY,
 			api_key_id INT,
@@ -300,7 +309,7 @@ func runAnalyticsEventsMigration(db *sql.DB) error {
 			return fmt.Errorf("migration failed: %w", err)
 		}
 	}
-	log.Println("analytics_events migration completed")
+	log.Println("api_request_logs migration completed")
 	return nil
 }
 
@@ -397,25 +406,9 @@ func runRelationalIntegrityMigration(db *sql.DB) error {
 			END IF;
 		END $$`,
 
-		// analytics_events.listing_id and the api_request_logs columns were
-		// plain integers, free to hold ids of rows that no longer exist.
-		// Orphans are nulled first, otherwise adding the key would fail.
-		`UPDATE analytics_events SET listing_id = NULL
-		 WHERE listing_id IS NOT NULL
-		   AND listing_id NOT IN (SELECT id FROM listings)`,
-		`DO $$
-		BEGIN
-			IF NOT EXISTS (
-				SELECT 1 FROM pg_constraint
-				WHERE conname = 'analytics_events_listing_fk'
-				  AND conrelid = 'analytics_events'::regclass
-			) THEN
-				ALTER TABLE analytics_events
-				ADD CONSTRAINT analytics_events_listing_fk
-				FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL;
-			END IF;
-		END $$`,
-
+		// The api_request_logs columns were plain integers, free to hold ids
+		// of rows that no longer exist. Orphans are nulled first, otherwise
+		// adding the key would fail.
 		`UPDATE api_request_logs SET api_key_id = NULL
 		 WHERE api_key_id IS NOT NULL
 		   AND api_key_id NOT IN (SELECT id FROM api_keys)`,

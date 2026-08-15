@@ -13,6 +13,7 @@ import Header from '@/components/Header/Header'
 import ListingImage from '@/components/ListingImage/ListingImage';
 import { resolveListingImageUrl } from '@/lib/listingImage';
 import { formatFileSize, type ListingFile } from '@/lib/listingFiles';
+import { avatarClass } from '@/lib/avatar';
 
 interface Product {
 	id: number;
@@ -208,20 +209,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 				setLoading(false);
 			}
 		};
-		const fetchImages = async () => {
-			try {
-				const res = await fetch(`${apiBaseUrl}/api/v1/products/${productId}/images`);
-				if (!res.ok)
-					return;
-				const data = await res.json();
-				if (Array.isArray(data.imageUrls) && data.imageUrls.length > 0) {
-					setImageUrls(previous => previous.length > 0 ? previous : data.imageUrls);
-					setImageIndex(0);
-				}
-			} catch (err) {
-				return;
-			}
-		};
 		const fetchFiles = async () => {
 			try {
 				const response = await fetch(`${apiBaseUrl}/api/v1/products/${productId}/files`);
@@ -242,7 +229,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		};
 		if(!isNaN(productId)) {
 			fetchProduct();
-			fetchImages();
 			fetchFiles();
 		}
 	}, [productId, apiBaseUrl]);
@@ -386,19 +372,17 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 
 		  	  <div className="flex-[0_0_50%]">
 			    <div className="text-[40px] font-bold text-[var(--dark)] mb-2.5">{product.title}</div>
-		  	    {/* reviews is the review count, not a sales figure -- it used to
-			        be labelled "sold", which was simply the wrong number. */}
-		  	    <p className="text-muted">
-				  {product.reviews === 1 ? '1 review' : `${product.reviews} reviews`}
-				</p>
-				{/* The whole listing is bought at once, so this is what you get,
-				    not a pool to draw from. */}
+				{/* Quantity is shown as a count, matching the marketplace cards.
+				    "Unavailable" still covers a listing that has stock but is
+				    not active (archived, or reserved by a pending order). The
+				    review count is left out — the reviews section further down
+				    already carries it. */}
 				<p className="text-muted">
 				  {!isAvailable
 					? (availableStock <= 0 || product.status === 'sold'
-						? <span className="font-bold text-red-600">{t('cart.sold')}</span>
+						? <span className="font-bold text-red-600">{t('product.sold')}</span>
 						: 'Unavailable')
-					: `Quantity: ${availableStock}`}
+					: <span className="font-bold text-[#1a7f37]">{t('product.quantity', { count: availableStock })}</span>}
 				  {alreadyInCart && isAvailable ? ' · in your cart' : ''}
 				</p>
 		  	    <p className="text-2xl font-bold text-[var(--primary)] mb-5">${product.price.toFixed(2)}
@@ -435,9 +419,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		    </div>
 
 			<div className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex w-[90%] max-w-[1138px] h-auto min-h-[150px] my-6 mx-auto gap-[30px]">
-			  <div className="flex-[0_0_30%] overflow-hidden rounded-lg aspect-square max-h-[160px]">
+			  <div className="shrink-0">
 					<img
-						className="w-full h-full object-cover block"
+						className={avatarClass('shop', 'border border-[#e8e8e6]')}
 						src={resolveAvatarUrl(product.sellerAvatar)}
 						alt={product.sellerName ? `${product.sellerName} shop` : 'Shop picture'}
 						onError={(event) => {
@@ -593,7 +577,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 								<img
 									src={resolveAvatarUrl(review.reviewer.avatarUrl)}
 									alt=""
-									className="w-10 h-10 shrink-0 rounded-full object-cover bg-[#f3f4f6]"
+									className={avatarClass('list')}
 									onError={event => { event.currentTarget.src = defaultAvatarUrl; }}
 								/>
 								<div className="min-w-0 flex-1">

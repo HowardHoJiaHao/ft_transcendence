@@ -6,14 +6,15 @@
 // Every label goes through t() (src/i18n) so the whole page — charts included —
 // re-renders in the language picked in the header.
 
-import { Fragment, Suspense, useEffect, useMemo, useState } from 'react';
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Bar,
-  BarChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -25,7 +26,7 @@ import { useI18n } from '@/context/LanguageContext';
 import Header from '@/components/Header/Header';
 import ShopTabs, { type ShopListTab } from '@/components/ShopTabs/ShopTabs';
 import ShopHeader from '@/components/ShopTabs/ShopHeader';
-import { downloadCsv } from '@/lib/csv';
+import { downloadData, EXPORT_FORMATS, type ExportFormat } from '@/lib/csv';
 import { PLACEHOLDER_LISTING_IMAGE } from '@/lib/listingImage';
 
 // A seller listing as returned by GET /api/v1/products.
@@ -59,6 +60,10 @@ interface SellerOrder {
   listingPrice: number;
   buyerUsername: string;
   buyerEmail: string;
+  // The buyer's delivery address, one per account. Sent only on this
+  // seller-scoped endpoint. Absent when the buyer has never saved one, or when
+  // their account was deleted.
+  buyerAddress?: string;
 }
 
 // Per-listing analytics row (GET /api/v1/seller/dashboard/items).
@@ -68,26 +73,34 @@ interface SellerItemStat {
   price: number;
   category: string;
   status: string;
+  // Lot size. Listings sell whole, so this is the number of units the ad
+  // offers — the backend adds any reserved/sold units back onto the remaining
+  // stock, which checkout zeroes.
+  quantity: number;
   daysListed: number;
-  viewsLast30Days: number;
   sold: boolean;
   soldAt?: string;
   revenue: number;
-  stale: boolean;
 }
 
-// Revenue/order totals for one "YYYY-MM" month.
-interface SellerMonthlyStat {
-  month: string;
-  orderCount: number;
+// One sold listing inside a category group.
+interface CategorySoldItem {
+  listingId: number;
+  title: string;
+  soldAt: string;
+  daysToSell: number;
   revenue: number;
 }
 
-// Lifetime sales totals for one category.
+// A Sales-by-Category group (GET /api/v1/seller/dashboard/categories).
+// The totals are computed server-side from `items`, so the summary row and the
+// rows revealed by expanding it always agree.
 interface CategoryStat {
   category: string;
   itemsSold: number;
   revenue: number;
+  avgDaysToSell: number;
+  items: CategorySoldItem[];
 }
 
 // One month × category cell — the raw rows behind the stacked bar chart.
@@ -105,19 +118,33 @@ interface SellerSummary {
   itemsSold: number;
   itemsActive: number;
   itemsArchived: number;
-  sellThroughRate: number;
   avgDaysToSell: number;
-  monthlyRevenue: SellerMonthlyStat[];
   monthlyByCategory: MonthlyCategoryStat[];
-  categoryBreakdown: CategoryStat[];
+  // Resolved reporting window echoed back by the API — what the figures
+  // actually cover, which may differ from what was asked for.
+  rangeFrom?: string;
+  rangeTo?: string;
 }
 
 // Sortable columns of the My Items and Sales by Category tables.
-type ItemSortKey = 'title' | 'price' | 'category' | 'status' | 'daysListed' | 'viewsLast30Days' | 'soldAt';
-type CategorySortKey = 'category' | 'itemsSold' | 'revenue' | 'avgDays';
+type ItemSortKey =
+  | 'title' | 'price' | 'quantity' | 'category' | 'status'
+  | 'daysListed' | 'soldAt' | 'revenue';
+type CategorySortKey = 'category' | 'itemsSold' | 'revenue' | 'avgDaysToSell';
 
-// Which measure the sales chart plots.
-type ChartMetric = 'revenue' | 'orderCount';
+// One X-axis tick of the sales chart. Category-named keys hold that month's
+// revenue and are what the stacked Bars read. The double-underscore keys are
+// not plotted as bars: `__total` drives the trend Line, and the counts ride
+// along so the tooltip can show units sold beside each revenue figure without
+// a second chart or a metric toggle. Double underscores keep them from ever
+// colliding with a real category name.
+interface ChartRow {
+  month: string;
+  __total: number;
+  __totalCount: number;
+  __counts: Record<string, number>;
+  [categoryOrKey: string]: number | string | Record<string, number>;
+}
 
 // Categorical palette slots in fixed order (validated for CVD-safe adjacency);
 // categories map to slots by stable alphabetical order, never by rank.
@@ -176,12 +203,32 @@ function MyAdsPageInner() {
 
   // Analytics data — fetched lazily the first time the Analytics tab opens;
   // analyticsLoaded doubles as the cache flag (reset after an order completes).
+  // One piece of state per view, each filled by the endpoint that owns it:
+  // summary → tiles + chart, categoryStats → Sales by Category, itemStats → My Items.
   const [itemStats, setItemStats] = useState<SellerItemStat[]>([]);
   const [summary, setSummary] = useState<SellerSummary | null>(null);
+  const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
   const [itemSort, setItemSort] = useState<{ key: ItemSortKey; dir: 1 | -1 } | null>(null);
   const [catSort, setCatSort] = useState<{ key: CategorySortKey; dir: 1 | -1 } | null>(null);
+  // Chosen download format, shared by all three analytics exports.
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
+
+  // Custom reporting window sent to the summary endpoint as ?from=&to=.
+  // Empty strings mean "unset", in which case the backend applies its
+  // default trailing-12-month window.
+  const [dateRange, setDateRange] = useState({ from: '', to: '' });
+  // The range actually applied to the loaded data; committed on "Apply" so
+  // typing a half-finished date doesn't re-query on every keystroke.
+  const [appliedRange, setAppliedRange] = useState({ from: '', to: '' });
+
+  // Live updates: poll the analytics endpoints on an interval while the tab
+  // is open and the document is visible.
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const ANALYTICS_POLL_MS = 30000;
 
   // First click on a column header sorts ascending; a second click flips direction.
   const toggleItemSort = (key: ItemSortKey) =>
@@ -200,7 +247,6 @@ function MyAdsPageInner() {
     search: '',
     priceMin: '', priceMax: '',
     daysMin: '', daysMax: '',
-    viewsMin: '', viewsMax: '',
     cats: null as string[] | null,      // null = all categories
     statuses: null as string[] | null,  // null = all statuses
     sold: 'all' as 'all' | 'sold' | 'unsold',
@@ -228,7 +274,6 @@ function MyAdsPageInner() {
     (itemFilters.search ? 1 : 0) +
     (itemFilters.priceMin || itemFilters.priceMax ? 1 : 0) +
     (itemFilters.daysMin || itemFilters.daysMax ? 1 : 0) +
-    (itemFilters.viewsMin || itemFilters.viewsMax ? 1 : 0) +
     (itemFilters.cats !== null ? 1 : 0) +
     (itemFilters.statuses !== null ? 1 : 0) +
     (itemFilters.sold !== 'all' ? 1 : 0);
@@ -236,7 +281,7 @@ function MyAdsPageInner() {
   const clearItemFilters = () =>
     setItemFilters({
       search: '', priceMin: '', priceMax: '', daysMin: '', daysMax: '',
-      viewsMin: '', viewsMax: '', cats: null, statuses: null, sold: 'all',
+      cats: null, statuses: null, sold: 'all',
     });
 
   // Numeric range check; blank min/max inputs mean unbounded.
@@ -259,8 +304,6 @@ function MyAdsPageInner() {
           return false;
         if (!inRange(it.price, itemFilters.priceMin, itemFilters.priceMax)) return false;
         if (!inRange(it.daysListed, itemFilters.daysMin, itemFilters.daysMax)) return false;
-        if (!inRange(it.viewsLast30Days, itemFilters.viewsMin, itemFilters.viewsMax))
-          return false;
         if (itemFilters.cats !== null && !itemFilters.cats.includes(it.category)) return false;
         if (itemFilters.statuses !== null && !itemFilters.statuses.includes(it.status))
           return false;
@@ -302,25 +345,18 @@ function MyAdsPageInner() {
     clampedItemPage * ITEMS_PER_PAGE,
   );
 
-  // Sales-by-Category rows: the backend breakdown plus an average days-to-sell
-  // derived client-side from each category's sold items.
+  // Sales-by-Category rows come whole from their own endpoint — totals and the
+  // sold listings behind them in one payload — so nothing is merged in here.
+  // Sorting is the only thing left to do client-side.
   const sortedCategories = useMemo(() => {
-    const rows = (summary?.categoryBreakdown ?? []).map((cs) => {
-      const soldIn = itemStats.filter((it) => it.category === cs.category && it.sold);
-      const avgDays = soldIn.length
-        ? soldIn.reduce((s, it) => s + it.daysListed, 0) / soldIn.length
-        : 0;
-      return { ...cs, avgDays };
-    });
-    if (!catSort) return rows;
+    if (!catSort) return categoryStats;
     const { key, dir } = catSort;
-    return [...rows].sort((a, b) => {
+    return [...categoryStats].sort((a, b) => {
       if (key === 'category') return a.category.localeCompare(b.category) * dir;
       return (a[key] - b[key]) * dir;
     });
-  }, [summary, itemStats, catSort]);
+  }, [categoryStats, catSort]);
 
-  const [chartMetric, setChartMetric] = useState<ChartMetric>('revenue');
   // null = all on; otherwise the explicit ON set
   const [selectedYears, setSelectedYears] = useState<string[] | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<string[] | null>(null);
@@ -338,8 +374,45 @@ function MyAdsPageInner() {
       return base.includes(value) ? base.filter((v) => v !== value) : [...base, value];
     });
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ANALYTICS DASHBOARD — DATA PIPELINE
+  //
+  // Raw API rows become chart bars through three memoised stages. Each stage
+  // has one job, and each is recomputed only when its own inputs change:
+  //
+  //   summary.monthlyByCategory        one row per (month, category) from the API
+  //        ↓  STAGE 1  chartCategories / chartYears / chartMonthParts
+  //           derive the distinct values that become the filter chips
+  //        ↓  STAGE 2  filteredChartRows
+  //           drop rows the user has unchecked (year / month / category)
+  //        ↓  STAGE 3  chartData
+  //           pivot to one row per month — the shape Recharts stacked bars need
+  //        ↓  <ComposedChart>
+  //
+  // WHY MEMOISE: this component re-renders on every keystroke in the date
+  // inputs and on every 30s background refresh. Without useMemo the whole
+  // pipeline would rerun each time, and — worse — `chartData` would be a new
+  // array identity on every render, making Recharts re-animate the bars
+  // constantly. The dependency arrays are what keep the chart stable.
+  //
+  // THE null-MEANS-ALL CONVENTION: the three filter states (selectedYears,
+  // selectedMonths, selectedCats) hold `null` when no explicit choice has been
+  // made, which reads as "everything". This matters because new data can
+  // introduce a category that did not exist when the page loaded; with an
+  // explicit list it would arrive pre-unchecked and silently vanish from the
+  // chart, whereas `null` picks it up automatically. The activeXxx values
+  // below resolve the convention into concrete lists exactly once.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // STAGE 1 — Distinct values behind the filter chips.
+  //
   // Stable category → color-slot assignment (alphabetical, over the FULL data —
-  // filtering must never repaint the surviving categories)
+  // filtering must never repaint the surviving categories).
+  //
+  // Derived from the unfiltered dataset on purpose: if colours were assigned
+  // over the *filtered* rows, unchecking one category would shift every other
+  // category onto a different colour, making the chart look like the data
+  // changed when only the selection did.
   const chartCategories = useMemo(() => {
     const set = new Set<string>();
     (summary?.monthlyByCategory ?? []).forEach((r) => set.add(r.category));
@@ -390,7 +463,19 @@ function MyAdsPageInner() {
       return next;
     });
 
-  // Rows surviving the year/month/category chips; feeds the chart and its CSV export.
+  // STAGE 2 — Apply the year / month / category chips.
+  //
+  // Rows surviving all three filters. This is also exactly what the chart's
+  // export writes, which is what keeps the downloaded file agreeing with the
+  // bars on screen.
+  //
+  // The month field is "YYYY-MM", so slice(0,4) is the year and slice(5,7) the
+  // month number — cheaper and timezone-proof compared with parsing a Date.
+  //
+  // Note this filters the CLIENT-side chips only. The date range is a separate,
+  // server-side filter: it changes which rows the API returns at all. The two
+  // compose — the range decides what is fetched, the chips decide what of that
+  // is drawn.
   const filteredChartRows = useMemo(
     () =>
       (summary?.monthlyByCategory ?? []).filter(
@@ -402,51 +487,94 @@ function MyAdsPageInner() {
     [summary, activeYears, activeMonths, activeCats],
   );
 
-  // Pivot to one row per month ({ month, [category]: value }) — the shape
-  // recharts stacked bars expect.
+  // STAGE 3 — Pivot into the shape Recharts needs.
+  //
+  // The API returns one row per (month, category):
+  //     { month: '2026-01', category: 'Rackets', revenue: 120, orderCount: 2 }
+  //     { month: '2026-01', category: 'Shoes',   revenue:  80, orderCount: 1 }
+  //
+  // A stacked bar chart instead wants one row per X-axis tick, with each
+  // stacked series as its own key:
+  //     { month: '2026-01', Rackets: 120, Shoes: 80 }
+  //
+  // The Map groups by month in a single pass. The bars always plot revenue;
+  // each month also carries its per-category order counts so the tooltip can
+  // report money and units together, which is why there is no Revenue / Items
+  // Sold toggle — both numbers are always one hover away.
+  //
+  // Sorting is by the raw "YYYY-MM" string: because the format is zero-padded
+  // and fixed-width, lexicographic order is already chronological order.
+  // `__total` is the sum of every visible category in that month, and is what
+  // the trend Line plots on top of the stacked bars.
   const chartData = useMemo(() => {
-    const byMonth = new Map<string, Record<string, number | string>>();
+    const byMonth = new Map<string, ChartRow>();
     filteredChartRows.forEach((r) => {
-      if (!byMonth.has(r.month)) byMonth.set(r.month, { month: r.month });
-      byMonth.get(r.month)![r.category] = r[chartMetric];
+      if (!byMonth.has(r.month)) {
+        byMonth.set(r.month, {
+          month: r.month, __total: 0, __totalCount: 0, __counts: {},
+        });
+      }
+      const bucket = byMonth.get(r.month)!;
+      bucket[r.category] = r.revenue;
+      bucket.__counts[r.category] = r.orderCount;
+      bucket.__total += r.revenue;
+      bucket.__totalCount += r.orderCount;
     });
     return Array.from(byMonth.values()).sort((a, b) =>
-      String(a.month).localeCompare(String(b.month)),
+      a.month.localeCompare(b.month),
     );
-  }, [filteredChartRows, chartMetric]);
+  }, [filteredChartRows]);
 
   const visibleCategories = chartCategories.filter((c) => activeCats.includes(c));
 
-  // CSV of every sold item, grouped by category.
-  const exportCategoryCsv = () =>
-    downloadCsv(
-      'seller-category-sales.csv',
+  // ─── EXPORTS ────────────────────────────────────────────────────────────────  
+  // The "Sold" cell, shared by the table and the items export so the two can
+  // never disagree. A listing marked sold by hand has no completed order to
+  // date it, hence a bare tick.
+  const soldCell = (it: SellerItemStat) =>
+    it.sold ? `✓${it.soldAt ? ` ${it.soldAt}` : ''}` : '—';
+
+  // downloadData( basename , header , rows , format )
+  // The only difference between them is which slice of already-loaded state
+  // becomes rows — and each draws on the endpoint that owns its table.
+
+  // Sales by Category — the groups flattened back to one row per sold listing,
+  // in the order the table currently shows them. Days are rounded to the one
+  // decimal the table renders, but stay numeric so a spreadsheet still sums
+  // and sorts the column.
+  const exportCategoryData = () =>
+    downloadData(
+      'seller-category-sales',
       ['category', 'item', 'soldAt', 'daysToSell', 'revenue'],
-      itemStats
-        .filter((it) => it.sold)
-        .sort((a, b) => a.category.localeCompare(b.category))
-        .map((it) => [
-          it.category, it.title, it.soldAt ?? '', it.daysListed, it.revenue,
+      sortedCategories.flatMap((cs) =>
+        cs.items.map((it) => [
+          cs.category, it.title, it.soldAt, Number(it.daysToSell.toFixed(1)), it.revenue,
         ]),
+      ),
+      exportFormat,
     );
 
-  // CSV of the chart's currently filtered rows.
-  const exportChartCsv = () =>
-    downloadCsv(
-      'seller-monthly-sales.csv',
+  // Sales Trends
+  const exportChartData = () =>
+    downloadData(
+      'seller-monthly-sales',
       ['month', 'category', 'itemsSold', 'revenue'],
       filteredChartRows.map((r) => [r.month, r.category, r.orderCount, r.revenue]),
+      exportFormat,
     );
 
-  // CSV of the item table in its current sort order (all pages, not just the visible one).
-  const exportItemsCsv = () =>
-    downloadCsv(
-      'seller-items.csv',
-      ['item', 'category', 'price', 'status', 'daysListed', 'views30d', 'sold', 'soldAt', 'revenue'],
+  // The "My Items" table in its current sort order — same columns, same order,
+  // same cell text as the table on screen, so the file matches what was
+  // exported from. A separate yes/no `sold` column would duplicate this one.
+  const exportItemsData = () =>
+    downloadData(
+      'seller-items',
+      ['item', 'price', 'quantity', 'category', 'status', 'daysListed', 'sold', 'revenue'],
       sortedItems.map((it) => [
-        it.title, it.category, it.price, it.status, it.daysListed,
-        it.viewsLast30Days, it.sold ? 'yes' : 'no', it.soldAt ?? '', it.revenue,
+        it.title, it.price, it.quantity, it.category, it.status,
+        it.daysListed, soldCell(it), it.revenue,
       ]),
+      exportFormat,
     );
 
   // Initial load once auth resolves: the seller's listings per status + pending orders.
@@ -484,34 +612,144 @@ function MyAdsPageInner() {
       .finally(() => setLoading(false));
   }, [authLoading, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ANALYTICS — LOADING, DATE RANGE, AND REAL-TIME UPDATES
+  //
+  // Three effects drive the analytics tab, all routed through this one fetch:
+  //
+  //   1. FIRST OPEN   lazy-loads when the tab is first shown (analyticsLoaded
+  //                   acts as the cache flag, so switching tabs is free)
+  //   2. RANGE CHANGE re-queries when the user applies a new from/to window
+  //   3. POLLING      refreshes every 30s while the tab is open and visible
+  //
+  // FOREGROUND vs BACKGROUND is the key distinction. A foreground load shows
+  // the skeleton and surfaces errors; a background one does neither. Without
+  // that split, the 30s poll would flash the loading state over a working
+  // dashboard every half minute, and one dropped packet would raise an error
+  // toast over data that is still perfectly good on screen.
+  //
+  // WHY POLLING AND NOT WEBSOCKETS: the app has a WebSocket channel (used by
+  // chat), but seller analytics are aggregate figures that only change when an
+  // order completes — rare, and never urgent to the second. Polling needs no
+  // server-side push infrastructure, and the visibility check below means a
+  // backgrounded tab costs nothing at all.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // One fetch per view — each of the three blocks on this tab is served by the
+  // endpoint that owns it end to end:
+  //
+  //   /summary?from&to      tiles + the sales-trends chart
+  //   /categories?from&to   Sales by Category, totals and their sold listings
+  //   /items                My Items
+  //
+  // They go out together via Promise.all so all three reflect the same instant;
+  // fetching in sequence could interleave with a completing order and render
+  // blocks that disagree. Only the two reporting views take from/to — My Items
+  // is an inventory list, not a report, so it is never time-bounded.
+  //
+  // `background` drives a silent refresh (no skeleton, no error toast) so
+  // polling never flashes the UI or nags on a transient network blip.
+  const fetchAnalytics = useCallback(
+    async (background = false) => {
+      const token = localStorage.getItem('token') || '';
+      const params = new URLSearchParams();
+      if (appliedRange.from) params.set('from', appliedRange.from);
+      if (appliedRange.to) params.set('to', appliedRange.to);
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const auth = { headers: { Authorization: `Bearer ${token}` } };
+
+      if (background) setRefreshing(true);
+      else setAnalyticsLoading(true);
+
+      try {
+        const [itemsRes, summaryRes, categoriesRes] = await Promise.all([
+          fetch(`${API_BASE}/api/v1/seller/dashboard/items`, auth),
+          fetch(`${API_BASE}/api/v1/seller/dashboard/summary${qs}`, auth),
+          fetch(`${API_BASE}/api/v1/seller/dashboard/categories${qs}`, auth),
+        ]);
+        if (!itemsRes.ok) throw new Error('Failed to load item stats');
+        // The ranged endpoints 400 on a bad window; surface their message
+        // rather than a generic one so the date pickers can be corrected.
+        for (const res of [summaryRes, categoriesRes]) {
+          if (!res.ok) {
+            const body = (await res.json().catch(() => ({}))) as { error?: string };
+            throw new Error(body.error || 'Failed to load analytics');
+          }
+        }
+        const [itemsData, summaryData, categoriesData] = await Promise.all([
+          itemsRes.json(),
+          summaryRes.json(),
+          categoriesRes.json(),
+        ]);
+        setItemStats(itemsData.items || []);
+        setSummary(summaryData);
+        setCategoryStats(categoriesData.categories || []);
+        setAnalyticsLoaded(true);
+        setLastUpdated(new Date());
+      } catch (err) {
+        if (!background) {
+          showToast(
+            err instanceof Error ? err.message : 'Failed to load analytics',
+            'error',
+          );
+        }
+      } finally {
+        if (background) setRefreshing(false);
+        else setAnalyticsLoading(false);
+      }
+    },
+    [appliedRange.from, appliedRange.to], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   // Lazy-load analytics on the first visit to the tab; skipped afterwards
   // until analyticsLoaded is reset (e.g. after completing an order).
   useEffect(() => {
     if (authLoading || activeTab !== 'analytics' || analyticsLoaded || !user) return;
-    const token = localStorage.getItem('token') || '';
-    setAnalyticsLoading(true);
-    Promise.all([
-      fetch(`${API_BASE}/api/v1/seller/dashboard/items`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then((r) => {
-        if (!r.ok) throw new Error('Failed to load item stats');
-        return r.json();
-      }),
-      fetch(`${API_BASE}/api/v1/seller/dashboard/summary`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then((r) => {
-        if (!r.ok) throw new Error('Failed to load summary');
-        return r.json();
-      }),
-    ])
-      .then(([itemsData, summaryData]) => {
-        setItemStats(itemsData.items || []);
-        setSummary(summaryData);
-        setAnalyticsLoaded(true);
-      })
-      .catch(() => showToast('Failed to load analytics', 'error'))
-      .finally(() => setAnalyticsLoading(false));
-  }, [authLoading, activeTab, analyticsLoaded, user]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchAnalytics();
+  }, [authLoading, activeTab, analyticsLoaded, user, fetchAnalytics]);
+
+  // Re-query whenever the applied date range changes and data is already shown.
+  useEffect(() => {
+    if (activeTab !== 'analytics' || !analyticsLoaded || !user) return;
+    fetchAnalytics(true);
+    // Deliberately keyed on the range only: fetchAnalytics already closes over it.
+  }, [appliedRange.from, appliedRange.to]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Real-time updates: poll while the Analytics tab is open, the toggle is on,
+  // and the tab is actually visible.
+  //
+  // FOUR GUARDS, each closing off a way to waste requests:
+  //   activeTab       — don't poll analytics while the user reads another tab
+  //   autoRefresh     — the user can switch live updates off entirely
+  //   analyticsLoaded — never poll before the first real load has landed
+  //   user            — never poll while logged out
+  //
+  // TWO TRIGGERS work together:
+  //   the interval  — the steady 30s heartbeat, skipped when the document is
+  //                   hidden so a backgrounded tab issues zero requests
+  //   visibilitychange — fires the moment the user comes back, so returning to
+  //                   a tab left open overnight shows current figures
+  //                   immediately instead of up-to-30s-stale ones
+  //
+  // The cleanup clears both. Without it, every dependency change would stack
+  // another interval and another listener on top of the last.
+  useEffect(() => {
+    if (activeTab !== 'analytics' || !autoRefresh || !analyticsLoaded || !user) return;
+
+    const tick = () => {
+      if (document.visibilityState === 'visible') fetchAnalytics(true);
+    };
+    const id = window.setInterval(tick, ANALYTICS_POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchAnalytics(true);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [activeTab, autoRefresh, analyticsLoaded, user, fetchAnalytics]);
 
   // Tallies for the shared header and tab row. This page already holds the
   // real lists, so it never needs useShopCounts.
@@ -777,10 +1015,6 @@ function MyAdsPageInner() {
                   <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">{t('analytics.overview')}</h2>
                   <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3 mb-6">
                     <div className="bg-[#fafafa] border border-[#eee] rounded-lg px-4 py-3.5">
-                      <p className="text-xs text-[#888] mt-0 mx-0 mb-1.5 uppercase tracking-[0.3px]">{t('analytics.sellThroughRate')}</p>
-                      <p className="text-xl font-bold text-[#111] m-0">{(summary?.sellThroughRate ?? 0).toFixed(0)}%</p>
-                    </div>
-                    <div className="bg-[#fafafa] border border-[#eee] rounded-lg px-4 py-3.5">
                       <p className="text-xs text-[#888] mt-0 mx-0 mb-1.5 uppercase tracking-[0.3px]">{t('analytics.totalRevenue')}</p>
                       <p className="text-xl font-bold text-[#111] m-0">RM {(summary?.totalRevenue ?? 0).toFixed(2)}</p>
                     </div>
@@ -816,23 +1050,109 @@ function MyAdsPageInner() {
                   <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">{t('analytics.salesTrends')}</h2>
                   <div className="border border-[#ececec] rounded-[10px] pt-4 px-3.5 pb-2 mb-7 bg-[#fdfdfc]">
                     <div className="flex justify-between items-center gap-3 flex-wrap mt-0 mx-0 mb-3.5">
-                      <div className="inline-flex bg-[#f1f1ef] border border-[#e3e2dd] rounded-[10px] p-[3px] gap-0.5">
-                        <button
-                          className={`border-none px-4 py-[7px] rounded-lg text-[13.5px] font-semibold cursor-pointer transition-all duration-150 ${chartMetric === 'revenue' ? 'bg-white text-[#111] shadow-[0_1px_2px_rgba(0,0,0,0.12)]' : 'bg-transparent text-[#666] hover:text-[#222]'}`}
-                          onClick={() => setChartMetric('revenue')}
+                      {/* The bars are always revenue, so the chart says so
+                          rather than making the reader infer it from the axis.
+                          Units sold are in the hover card, not a second tab. */}
+                      <p className="text-[13.5px] font-semibold text-[#333] m-0">
+                        {t('analytics.monthlyRevenue')}
+                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <label className="sr-only" htmlFor="chart-export-format">
+                          {t('analytics.exportFormat')}
+                        </label>
+                        <select
+                          id="chart-export-format"
+                          className="border border-[#ccc] rounded-lg px-2 py-[7px] text-[13px] font-semibold bg-white text-[#333] cursor-pointer hover:border-[#888]"
+                          value={exportFormat} // Makes the dropdown display whatever is currently in React state 
+                          onChange={(e) => setExportFormat(e.target.value as ExportFormat)}
+                          aria-label={t('analytics.exportFormat')}
                         >
-                          {t('analytics.monthlyRevenue')}
-                        </button>
-                        <button
-                          className={`border-none px-4 py-[7px] rounded-lg text-[13.5px] font-semibold cursor-pointer transition-all duration-150 ${chartMetric === 'orderCount' ? 'bg-white text-[#111] shadow-[0_1px_2px_rgba(0,0,0,0.12)]' : 'bg-transparent text-[#666] hover:text-[#222]'}`}
-                          onClick={() => setChartMetric('orderCount')}
-                        >
-                          {t('analytics.itemsSold')}
+                          {EXPORT_FORMATS.map((f) => (
+                            <option key={f.value} value={f.value}>{f.label}</option>
+                          ))}
+                        </select>
+                        <button className="border rounded-lg px-3.5 py-[7px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-white border-[#ccc] text-[#333] hover:border-[#888]" onClick={exportChartData}>
+                          {t('analytics.export')}
                         </button>
                       </div>
-                      <button className="border rounded-lg px-3.5 py-[7px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-white border-[#ccc] text-[#333] hover:border-[#888]" onClick={exportChartCsv}>
-                        {t('analytics.exportCsv')}
+                    </div>
+
+                    {/* Custom reporting window + live-refresh controls */}
+                    <div className="flex items-center gap-2 flex-wrap mt-0 mx-0 mb-3.5 pb-3.5 border-b border-[#ececec]">
+                      <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mr-0.5">
+                        {t('analytics.dateRange')}
+                      </span>
+                      <label className="sr-only" htmlFor="range-from">{t('analytics.from')}</label>
+                      <input
+                        id="range-from"
+                        type="date"
+                        className="border border-[#ddd] rounded-lg px-2.5 py-[6px] text-[13px] bg-white text-[#333] hover:border-[#999]"
+                        value={dateRange.from}
+                        max={dateRange.to || undefined}
+                        onChange={(e) => setDateRange((r) => ({ ...r, from: e.target.value }))}
+                      />
+                      <span className="text-[13px] text-[#777]">–</span>
+                      <label className="sr-only" htmlFor="range-to">{t('analytics.to')}</label>
+                      <input
+                        id="range-to"
+                        type="date"
+                        className="border border-[#ddd] rounded-lg px-2.5 py-[6px] text-[13px] bg-white text-[#333] hover:border-[#999]"
+                        value={dateRange.to}
+                        min={dateRange.from || undefined}
+                        onChange={(e) => setDateRange((r) => ({ ...r, to: e.target.value }))}
+                      />
+                      <button
+                        className="border rounded-lg px-3 py-[6px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-[#111] border-[#111] text-white hover:bg-[#333] disabled:opacity-40 disabled:cursor-not-allowed"
+                        onClick={() => setAppliedRange({ ...dateRange })}
+                        disabled={
+                          dateRange.from === appliedRange.from && dateRange.to === appliedRange.to
+                        }
+                      >
+                        {t('analytics.applyRange')}
                       </button>
+                      <button
+                        className="border rounded-lg px-3 py-[6px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-white border-[#ccc] text-[#333] hover:border-[#888] disabled:opacity-40 disabled:cursor-not-allowed"
+                        onClick={() => {
+                          setDateRange({ from: '', to: '' });
+                          setAppliedRange({ from: '', to: '' });
+                        }}
+                        disabled={!dateRange.from && !dateRange.to && !appliedRange.from && !appliedRange.to}
+                      >
+                        {t('analytics.resetRange')}
+                      </button>
+
+                      <div className="flex items-center gap-2 ml-auto">
+                        <label className="inline-flex items-center gap-1.5 text-[13px] text-[#444] cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            className="cursor-pointer"
+                            checked={autoRefresh}
+                            onChange={(e) => setAutoRefresh(e.target.checked)}
+                          />
+                          {t('analytics.autoRefresh')}
+                        </label>
+                        <button
+                          className="border rounded-lg px-3 py-[6px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-white border-[#ccc] text-[#333] hover:border-[#888] disabled:opacity-40 disabled:cursor-not-allowed"
+                          onClick={() => fetchAnalytics(true)}
+                          disabled={refreshing}
+                          aria-label={t('analytics.refreshNow')}
+                        >
+                          {refreshing ? t('analytics.refreshing') : '⟳'}
+                        </button>
+                        <span className="text-[12px] text-[#898781]" aria-live="polite">
+                          {summary?.rangeFrom && summary?.rangeTo
+                            ? t('analytics.showingRange', {
+                                from: summary.rangeFrom,
+                                to: summary.rangeTo,
+                              })
+                            : ''}
+                          {lastUpdated
+                            ? ` · ${t('analytics.lastUpdated', {
+                                time: lastUpdated.toLocaleTimeString(),
+                              })}`
+                            : ''}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-1.5 flex-wrap mt-0 mx-0 mb-4">
@@ -912,27 +1232,77 @@ function MyAdsPageInner() {
                     {chartData.length > 0 ? (
                       <div className="w-full h-[280px] mb-8">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={chartData}>
+                          {/* ComposedChart (not BarChart) so the stacked
+                              category bars and the total-trend Line can share
+                              one set of axes. */}
+                          <ComposedChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e1e0d9" vertical={false} />
                             <XAxis
                               dataKey="month"
                               tick={{ fill: '#898781', fontSize: 12 }}
                               tickFormatter={formatChartMonth}
                             />
-                            <YAxis
-                              allowDecimals={chartMetric === 'revenue'}
-                              tick={{ fill: '#898781', fontSize: 12 }}
-                            />
+                            <YAxis tick={{ fill: '#898781', fontSize: 12 }} />
+                            {/* Hover card carries both measures per category —
+                                revenue and units — so neither needs its own
+                                view of the chart. Built by hand rather than via
+                                `formatter` because that only ever sees one
+                                series' value at a time. */}
                             <Tooltip
-                              labelFormatter={(label) => formatChartMonth(String(label))}
-                              formatter={(value, name) => {
-                                const n = Number(Array.isArray(value) ? value[0] : value ?? 0);
-                                return [
-                                  chartMetric === 'revenue'
-                                    ? `RM ${n.toFixed(2)}`
-                                    : t('analytics.itemsTooltip', { count: n }),
-                                  String(name),
-                                ];
+                              cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                              content={(props) => {
+                                const { active, payload, label } = props as {
+                                  active?: boolean;
+                                  label?: string;
+                                  payload?: ReadonlyArray<{
+                                    dataKey?: string | number;
+                                    color?: string;
+                                  }>;
+                                };
+                                if (!active || !payload?.length) return null;
+                                const row = chartData.find((r) => r.month === label);
+                                if (!row) return null;
+                                // The trend Line rides in the same payload; it
+                                // becomes the footer instead of a category row.
+                                const bars = payload.filter(
+                                  (p) => p.dataKey !== '__total' && row[String(p.dataKey)] != null,
+                                );
+                                return (
+                                  <div className="bg-white border border-[#e0dfda] rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.12)] px-3 py-2.5 text-[13px]">
+                                    <p className="font-bold text-[#111] m-0 mb-1.5">
+                                      {formatChartMonth(String(label))}
+                                    </p>
+                                    {bars.map((p) => {
+                                      const cat = String(p.dataKey);
+                                      return (
+                                        <p key={cat} className="flex items-center gap-1.5 m-0 mb-1 last:mb-0 whitespace-nowrap">
+                                          <span
+                                            className="inline-block w-2 h-2 rounded-full shrink-0"
+                                            style={{ background: p.color }}
+                                          />
+                                          <span className="text-[#444]">{cat}</span>
+                                          <span className="ml-auto pl-3 font-semibold text-[#111]">
+                                            RM {Number(row[cat]).toFixed(2)}
+                                          </span>
+                                          <span className="text-[#898781]">
+                                            · {t('analytics.itemsTooltip', { count: row.__counts[cat] ?? 0 })}
+                                          </span>
+                                        </p>
+                                      );
+                                    })}
+                                    <p className="flex items-center gap-1.5 m-0 mt-1.5 pt-1.5 border-t border-[#ececec] whitespace-nowrap">
+                                      <span className="font-semibold text-[#444]">
+                                        {t('analytics.totalTrend')}
+                                      </span>
+                                      <span className="ml-auto pl-3 font-bold text-[#111]">
+                                        RM {row.__total.toFixed(2)}
+                                      </span>
+                                      <span className="text-[#898781]">
+                                        · {t('analytics.itemsTooltip', { count: row.__totalCount })}
+                                      </span>
+                                    </p>
+                                  </div>
+                                );
                               }}
                             />
                             <Legend />
@@ -947,7 +1317,21 @@ function MyAdsPageInner() {
                                 maxBarSize={48}
                               />
                             ))}
-                          </BarChart>
+                            {/* Total trend line drawn over the stack. The bars
+                                show the category split; this shows the shape of
+                                the month-to-month total, which a stacked chart
+                                alone makes hard to read.
+                                Declared after the Bars so it renders on top. */}
+                            <Line
+                              type="monotone"
+                              dataKey="__total"
+                              name={t('analytics.totalTrend')}
+                              stroke="#111"
+                              strokeWidth={2}
+                              dot={{ r: 3, fill: '#111' }}
+                              activeDot={{ r: 5 }}
+                            />
+                          </ComposedChart>
                         </ResponsiveContainer>
                       </div>
                     ) : (
@@ -961,8 +1345,8 @@ function MyAdsPageInner() {
                     <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
                       <div className="flex justify-between items-center gap-3 mt-0 mx-0 mb-3">
                         <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-0">{t('analytics.salesByCategory')}</h2>
-                        <button className="border rounded-lg px-3.5 py-[7px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-white border-[#ccc] text-[#333] hover:border-[#888]" onClick={exportCategoryCsv}>
-                          {t('analytics.exportCsv')}
+                        <button className="border rounded-lg px-3.5 py-[7px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-white border-[#ccc] text-[#333] hover:border-[#888]" onClick={exportCategoryData}>
+                          {t('analytics.export')}
                         </button>
                       </div>
                       <div className="w-full overflow-x-auto">
@@ -975,8 +1359,8 @@ function MyAdsPageInner() {
                               <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleCatSort('itemsSold')}>
                                 {t('analytics.itemsSold')}{sortArrow(catSort?.key === 'itemsSold', catSort?.dir ?? 1)}
                               </th>
-                              <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleCatSort('avgDays')}>
-                                {t('analytics.avgDaysToSell')}{sortArrow(catSort?.key === 'avgDays', catSort?.dir ?? 1)}
+                              <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleCatSort('avgDaysToSell')}>
+                                {t('analytics.avgDaysToSell')}{sortArrow(catSort?.key === 'avgDaysToSell', catSort?.dir ?? 1)}
                               </th>
                               <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleCatSort('revenue')}>
                                 {t('analytics.totalRevenue')}{sortArrow(catSort?.key === 'revenue', catSort?.dir ?? 1)}
@@ -986,9 +1370,9 @@ function MyAdsPageInner() {
                           <tbody>
                             {sortedCategories.map((cs) => {
                               const expanded = expandedCats.has(cs.category);
-                              const soldInCat = itemStats.filter(
-                                (it) => it.category === cs.category && it.sold,
-                              );
+                              // The group's own items — the same rows its
+                              // totals were computed from.
+                              const soldInCat = cs.items;
                               return (
                                 <Fragment key={cs.category}>
                                   <tr
@@ -1004,7 +1388,7 @@ function MyAdsPageInner() {
                                       {cs.category}
                                     </td>
                                     <td>{cs.itemsSold}</td>
-                                    <td>{cs.avgDays > 0 ? cs.avgDays.toFixed(1) : '—'}</td>
+                                    <td>{cs.avgDaysToSell > 0 ? cs.avgDaysToSell.toFixed(1) : '—'}</td>
                                     <td>RM {cs.revenue.toFixed(2)}</td>
                                   </tr>
                                   {expanded && (
@@ -1037,8 +1421,8 @@ function MyAdsPageInner() {
                                                       {it.title}
                                                     </Link>
                                                   </td>
-                                                  <td>{it.soldAt ?? '—'}</td>
-                                                  <td>{it.daysListed}</td>
+                                                  <td>{it.soldAt}</td>
+                                                  <td>{it.daysToSell.toFixed(1)}</td>
                                                   <td>RM {it.revenue.toFixed(2)}</td>
                                                 </tr>
                                               ))}
@@ -1059,14 +1443,6 @@ function MyAdsPageInner() {
 
                   {/* My Items — filterable, sortable, paginated table of every listing */}
                   <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
-                  {itemStats.some((it) => it.stale) && (
-                    <p className="bg-[#fff8e1] border border-[#ffe082] rounded-md text-[#8d6e00] text-sm px-3.5 py-2.5 mt-0 mx-0 mb-5">
-                      {t('analytics.staleBanner', {
-                        count: itemStats.filter((it) => it.stale).length,
-                      })}
-                    </p>
-                  )}
-
                   <div className="flex justify-between items-center gap-3 mt-0 mx-0 mb-3">
                     <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-0">{t('analytics.myItems')}</h2>
                     {itemStats.length > 0 && (
@@ -1077,8 +1453,8 @@ function MyAdsPageInner() {
                         >
                           {t('analytics.filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                         </button>
-                        <button className="border rounded-lg px-3.5 py-[7px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-white border-[#ccc] text-[#333] hover:border-[#888]" onClick={exportItemsCsv}>
-                          {t('analytics.exportCsv')}
+                        <button className="border rounded-lg px-3.5 py-[7px] text-[13px] font-semibold cursor-pointer transition-[border-color] duration-150 bg-white border-[#ccc] text-[#333] hover:border-[#888]" onClick={exportItemsData}>
+                          {t('analytics.export')}
                         </button>
                       </div>
                     )}
@@ -1147,32 +1523,6 @@ function MyAdsPageInner() {
                               value={itemFilters.daysMax}
                               onChange={(e) =>
                                 setItemFilters((f) => ({ ...f, daysMax: e.target.value.replace(/-/g, '') }))
-                              }
-                            />
-                          </span>
-                        </label>
-                        <label className="flex flex-col gap-1">
-                          <span className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold">{t('analytics.views30d')}</span>
-                          <span className="flex items-center gap-1.5">
-                            <input
-                              type="number"
-                              min="0"
-                              className="border border-[#ddd] rounded-lg px-2.5 py-1.5 text-[13px] text-[#333] w-full min-w-0 bg-white focus:outline-none focus:border-[#888]"
-                              placeholder={t('analytics.min')}
-                              value={itemFilters.viewsMin}
-                              onChange={(e) =>
-                                setItemFilters((f) => ({ ...f, viewsMin: e.target.value.replace(/-/g, '') }))
-                              }
-                            />
-                            <span className="text-[#aaa]">–</span>
-                            <input
-                              type="number"
-                              min="0"
-                              className="border border-[#ddd] rounded-lg px-2.5 py-1.5 text-[13px] text-[#333] w-full min-w-0 bg-white focus:outline-none focus:border-[#888]"
-                              placeholder={t('analytics.max')}
-                              value={itemFilters.viewsMax}
-                              onChange={(e) =>
-                                setItemFilters((f) => ({ ...f, viewsMax: e.target.value.replace(/-/g, '') }))
                               }
                             />
                           </span>
@@ -1280,6 +1630,9 @@ function MyAdsPageInner() {
                             <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('price')}>
                               {t('analytics.price')}{sortArrow(itemSort?.key === 'price', itemSort?.dir ?? 1)}
                             </th>
+                            <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('quantity')}>
+                              {t('analytics.quantity')}{sortArrow(itemSort?.key === 'quantity', itemSort?.dir ?? 1)}
+                            </th>
                             <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('category')}>
                               {t('analytics.category')}{sortArrow(itemSort?.key === 'category', itemSort?.dir ?? 1)}
                             </th>
@@ -1289,17 +1642,17 @@ function MyAdsPageInner() {
                             <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('daysListed')}>
                               {t('analytics.daysListedCol')}{sortArrow(itemSort?.key === 'daysListed', itemSort?.dir ?? 1)}
                             </th>
-                            <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('viewsLast30Days')}>
-                              {t('analytics.views30d')}{sortArrow(itemSort?.key === 'viewsLast30Days', itemSort?.dir ?? 1)}
-                            </th>
                             <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('soldAt')}>
                               {t('analytics.sold')}{sortArrow(itemSort?.key === 'soldAt', itemSort?.dir ?? 1)}
+                            </th>
+                            <th className="cursor-pointer select-none hover:text-[#222]" onClick={() => toggleItemSort('revenue')}>
+                              {t('analytics.revenue')}{sortArrow(itemSort?.key === 'revenue', itemSort?.dir ?? 1)}
                             </th>
                           </tr>
                         </thead>
                         <tbody>
                           {pagedItems.map((it, idx) => (
-                            <tr key={it.listingId} className={it.stale ? '[&>td]:bg-[#fffdf5]' : ''}>
+                            <tr key={it.listingId}>
                               <td className="w-9 text-[#898781] text-xs text-right">
                                 {(clampedItemPage - 1) * ITEMS_PER_PAGE + idx + 1}
                               </td>
@@ -1307,18 +1660,14 @@ function MyAdsPageInner() {
                                 <Link href={`/products/${it.listingId}`} className="text-sm text-[#2563eb] no-underline font-medium hover:underline">
                                   {it.title}
                                 </Link>
-                                {it.stale && <span className="inline-block ml-1.5 px-2 py-px rounded-[10px] bg-[#fff3cd] text-[#8d6e00] text-[11px] font-semibold uppercase tracking-[0.3px]"> {t('analytics.stale')}</span>}
                               </td>
                               <td>RM {it.price.toFixed(2)}</td>
+                              <td>{it.quantity}</td>
                               <td>{it.category}</td>
                               <td>{t(`status.${it.status}`)}</td>
                               <td>{it.daysListed}</td>
-                              <td>{it.viewsLast30Days}</td>
-                              <td>
-                                {it.sold
-                                  ? `✓${it.soldAt ? ` ${it.soldAt}` : ''}`
-                                  : '—'}
-                              </td>
+                              <td>{soldCell(it)}</td>
+                              <td>RM {it.revenue.toFixed(2)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1382,15 +1731,31 @@ function MyAdsPageInner() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[17px] font-bold text-[#111] mt-0 mx-0 mb-1">RM {order.totalPrice.toFixed(2)}</p>
-                      <Link href={`/products/${order.listingId}`} className="block text-[15px] font-medium text-[#333] no-underline mb-1 whitespace-nowrap overflow-hidden text-ellipsis hover:text-[#2563eb] hover:underline">
+                      {/* Plain text, not a link, unlike every other row on this
+                          page. The listing page offers its owner an Edit button,
+                          and a listing with a pending order cannot be edited —
+                          updateProduct answers 409 while a buyer is waiting on
+                          delivery, since the terms are already agreed and the
+                          order state machine matches on status = 'pending'.
+                          Linking here just routed the seller to a form that
+                          could not be saved. Use View Details for this order. */}
+                      <p className="block text-[15px] font-medium text-[#333] mt-0 mx-0 mb-1 whitespace-nowrap overflow-hidden text-ellipsis" title={order.listingTitle}>
                         {order.listingTitle}
-                      </Link>
+                      </p>
                       <p className="text-[13px] text-[#888] mt-0 mx-0 mb-[3px]">
                         Buyer: {order.buyerUsername || order.buyerEmail || 'Buyer'}
                       </p>
-                      <p className="text-[13px] text-[#888] mt-0 mx-0 mb-2.5">
+                      <p className="text-[13px] text-[#888] mt-0 mx-0 mb-[3px]">
                         Ordered {formatDate(order.createdAt)} · Qty {order.quantity} · {order.paymentMethod || 'meetup'}
                       </p>
+                      {/* The whole point of a pending order is that it still
+                          has to be sent, so the destination belongs on the row
+                          rather than one click away in the details dialog. */}
+                      {order.buyerAddress && (
+                        <p className="text-[13px] text-[#888] mt-0 mx-0 mb-2.5 truncate" title={order.buyerAddress}>
+                          Deliver to: {order.buyerAddress}
+                        </p>
+                      )}
                     </div>
                     {/* Same shape as the listing rows: status, age, actions. */}
                     <div className="ml-auto flex flex-col items-end gap-1.5 shrink-0 min-w-[130px]">
@@ -1477,7 +1842,7 @@ function MyAdsPageInner() {
                     Posted {formatDate(ad.createdAt)} · {ad.location}
                   </p>
                   <p className="text-[13px] text-[#888] mt-0 mx-0 mb-2.5">
-                    👁 {ad.viewsCount} views in the last 30 days
+                    👁 {ad.viewsCount} views
                   </p>
                 </div>
                 <div className="ml-auto flex flex-col items-end gap-1.5 shrink-0 min-w-[130px]">
@@ -1773,12 +2138,23 @@ function MyAdsPageInner() {
               </dd>
             </dl>
 
-            {/* Checkout never collects a delivery address, so there is none to
-                show. Saying so beats leaving the seller hunting for it. */}
-            <p className="text-[13px] text-[#898781] bg-[#faf9f7] border border-[#eee] rounded-lg px-3 py-2.5 mt-4 mb-0">
-              No delivery address is recorded — checkout does not collect one. Arrange
-              handover with the buyer using the contact above.
-            </p>
+            {/* Where to send it: the buyer's address from their profile.
+                Checkout does not ask for one, so an account that never saved
+                an address has none to show — say so rather than leave the
+                seller hunting for it. */}
+            {orderDetails.buyerAddress ? (
+              <div className="text-[13px] bg-[#faf9f7] border border-[#eee] rounded-lg px-3 py-2.5 mt-4 mb-0">
+                <span className="block text-[#898781] uppercase tracking-[0.3px] text-[11px] mb-1">
+                  Deliver to
+                </span>
+                <span className="block text-[#222] break-words">{orderDetails.buyerAddress}</span>
+              </div>
+            ) : (
+              <p className="text-[13px] text-[#898781] bg-[#faf9f7] border border-[#eee] rounded-lg px-3 py-2.5 mt-4 mb-0">
+                This buyer has not saved a delivery address. Arrange handover with them
+                using the contact above.
+              </p>
+            )}
 
             <div className="flex gap-2.5 justify-end flex-wrap mt-5">
               <button

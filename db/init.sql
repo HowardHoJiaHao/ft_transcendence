@@ -10,10 +10,23 @@ CREATE TABLE IF NOT EXISTS users (
     first_name VARCHAR(50),
     last_name VARCHAR(50),
 	phone_no VARCHAR(30),
+	-- Where this account's orders get delivered. One per account, edited from
+	-- the profile page. Shown to the SELLER on a pending order so they know
+	-- where to send the item, and to nobody else — it is never part of a public
+	-- profile or listing response.
+	address VARCHAR(255),
 	date_of_birth DATE,
 	gender VARCHAR(10) CHECK (gender IN ('Male', 'Female')),
-    avatar_url VARCHAR(255), --link to the avatar
-    avatar_data BYTEA,
+    -- The URL the frontend renders. For an uploaded avatar this is always
+    -- /api/v1/users/<id>/avatar (a controlled endpoint), never a path under
+    -- /static — nothing user-uploaded is served straight off disk. It may also
+    -- hold an external URL for seeded or OAuth accounts.
+    avatar_url VARCHAR(255),
+    -- Generated filename inside storage/avatars/<user_id>/. Paired with
+    -- avatar_mime_type, which is what the serving endpoint sends as
+    -- Content-Type rather than trusting the file extension.
+    avatar_storage_name VARCHAR(255),
+    avatar_data BYTEA, -- legacy, unused: nothing writes it (see AGENTS notes)
     avatar_mime_type VARCHAR(50),
     bio TEXT,
     is_verified BOOLEAN DEFAULT FALSE,
@@ -342,20 +355,6 @@ CREATE TABLE IF NOT EXISTS api_request_logs (
 CREATE INDEX IF NOT EXISTS idx_api_request_logs_key
 ON api_request_logs(api_key_id, created_at);
 
--- Create analytics table
-CREATE TABLE IF NOT EXISTS analytics_events (
-    id SERIAL PRIMARY KEY,
-    user_id INT,
-    event_type VARCHAR(50) NOT NULL,
-    event_data JSON,
-    listing_id INT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_analytics_events_listing_id ON analytics_events(listing_id);
-
 -- Create friendships table
 CREATE TABLE IF NOT EXISTS friendships (
     id SERIAL PRIMARY KEY,
@@ -436,18 +435,6 @@ INSERT INTO listings (seller_id, title, description, weight_category, flexibilit
 (7, 'Kawasaki Hyper Nano 7U', 'Very light frame built for speed, great for beginner and junior players.', '7U', 'Medium Flex', 'Even Balance', 220, NULL, 'Cyberjaya', 'https://images.unsplash.com/photo-1584270354949-c26b0d5b4a0c?w=400&h=300&fit=crop', 'Gaming Masters', 4.8, 124, TRUE, TRUE, 'active'),
 (8, 'Fleet Nano Power 8U', 'Extremely agile racket for rapid net play and easy maneuverability.', '8U', 'High Flexibility', 'Head Light', 180, NULL, 'Mid Valley', 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=400&h=300&fit=crop', 'Furniture Palace', 4.4, 56, FALSE, FALSE, 'active'),
 (9, 'Racket Pro Attack', 'Can smash with steep angle and strong follow-through. Ideal for attacking style.', '3U', 'Stiff Shaft', 'Head Heavy', 150, NULL, 'Subang Jaya', 'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=400&h=300&fit=crop', 'Sport Master', 4.4, 56, TRUE, TRUE, 'active')
-ON CONFLICT DO NOTHING;
-
--- Seed basic dummy data for analytics
-INSERT INTO analytics_events (user_id, event_type, event_data) VALUES
-(1, 'user_signup', '{"method":"email"}'),
-(2, 'user_login', '{"success":true}'),
-(3, 'password_change', '{"strength":"strong"}'),
-(4, 'listing_created', '{"title":"iPhone 14 Pro - Excellent Condition"}'),
-(5, 'listing_viewed', '{"title":"MacBook Air M1 2020"}'),
-(6, 'order_placed', '{"listing_id":1,"quantity":1}'),
-(7, 'order_status_updated', '{"order_id":1,"status":"shipped"}'),
-(8, 'review_submitted', '{"listing_id":1,"rating":5}')
 ON CONFLICT DO NOTHING;
 
 -- Create analytics table
@@ -622,22 +609,39 @@ FROM (VALUES
   (8, 55, 950, 'pending',   'card', 1)
 ) AS v(buyer, listing, price, status, method, days);
 
--- Recent listing views for seller dashboard demo data
-INSERT INTO analytics_events (user_id, event_type, listing_id, created_at)
-SELECT viewer, 'listing_viewed', listing_id, NOW() - (days * INTERVAL '1 day')
-FROM (VALUES
-    (2, 20, 5),
-    (3, 21, 4),
-    (4, 22, 3),
-    (5, 23, 2),
-    (6, 24, 8),
-    (7, 25, 1),
-    (8, 26, 12),
-    (2, 27, 6),
-    (3, 28, 9),
-    (4, 29, 10),
-    (5, 30, 11),
-    (6, 31, 7),
-    (7, 32, 14),
-    (8, 33, 15)
-) AS v(viewer, listing_id, days);
+-- Reconcile the seeded listings with the seeded orders above.
+--
+-- Checkout takes the whole lot: it sets stock_quantity = 0 and moves the
+-- listing to 'pending', and confirming delivery then flips it to 'sold'. The
+-- inserts above list no stock_quantity, so every seeded listing keeps the
+-- column default of 1, and the orders are written straight into their final
+-- state -- nothing ever performs that write.
+--
+-- Left alone, the seller dashboard double-counts. It reports a listing's
+-- quantity as remaining stock plus ordered units, so a one-unit listing that
+-- earned one unit of revenue shows quantity 2, and price x quantity never
+-- tallies with revenue on the My Items table.
+--
+-- Scoped to the id range seeded above so re-running this file against a live
+-- database (make db-migrate) cannot touch listings created through the app --
+-- a seller may legitimately re-list a sold item with fresh stock, and there
+-- price x quantity is *meant* to differ from historical revenue.
+--
+-- 'archived' is preserved: archiving is a deliberate seller action, and the
+-- dashboard already counts an archived listing with a completed order as sold.
+UPDATE listings l
+SET stock_quantity = 0,
+    status = CASE
+        WHEN l.status = 'archived' THEN 'archived'
+        WHEN EXISTS (
+            SELECT 1 FROM orders o
+            WHERE o.listing_id = l.id AND o.status = 'completed'
+        ) THEN 'sold'
+        ELSE 'pending'
+    END
+WHERE l.id BETWEEN 20 AND 59
+  AND l.stock_quantity <> 0
+  AND EXISTS (
+      SELECT 1 FROM orders o
+      WHERE o.listing_id = l.id AND o.status IN ('pending', 'completed')
+  );

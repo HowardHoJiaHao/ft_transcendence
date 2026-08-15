@@ -31,6 +31,10 @@ interface PurchaseOrder {
 	listingTitle: string;
 	listingImage: string;
 	sellerName: string;
+	// Only ever sent for orders the caller placed, so this arrives populated
+	// here and nowhere else. Optional because a seller may have published
+	// neither a listing contact number nor an account one.
+	sellerPhone?: string;
 	recommendationSurveySubmitted: boolean;
 	listingReviewSubmitted: boolean;
 }
@@ -421,6 +425,18 @@ export default function CartPage() {
 						<div className="flex-1">
 							<h3 className="text-base mb-1">{order.listingTitle}</h3>
 							<p className="text-[#666] text-[13px] mt-1 mb-0">{t('cart.seller', { name: order.sellerName || t('cart.sellerFallback') })}</p>
+							{/* Contact details for an order you actually placed. Rendered
+							    as a tel: link so a phone can dial it straight from the
+							    purchase, and hidden entirely when the seller published no
+							    number rather than showing an empty label. */}
+							{order.sellerPhone && (
+								<p className="text-[#666] text-[13px] mt-1 mb-0">
+									{t('cart.sellerPhone')}{' '}
+									<a href={`tel:${order.sellerPhone}`} className="text-[var(--primary)] font-semibold no-underline hover:underline">
+										{order.sellerPhone}
+									</a>
+								</p>
+							)}
 							<p className="text-[#666] text-[13px] mt-1 mb-0">{t('cart.orderedOn', { date: formatDate(order.createdAt), quantity: order.quantity })}</p>
 						</div>
 						<div className="flex flex-col items-end gap-2 ml-auto min-w-[160px] max-[768px]:items-start max-[768px]:ml-0 max-[768px]:w-full">

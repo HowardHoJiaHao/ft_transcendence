@@ -477,10 +477,12 @@ func deleteAdminUser(c echo.Context, db *sql.DB) error {
 			first_name = '',
 			last_name = '',
 			phone_no = NULL,
+			address = NULL,
 			date_of_birth = NULL,
 			gender = NULL,
 			avatar_url = NULL,
 			avatar_data = NULL,
+			avatar_storage_name = NULL,
 			avatar_mime_type = NULL,
 			bio = '',
 			requires_2fa = false,
@@ -499,14 +501,8 @@ func deleteAdminUser(c echo.Context, db *sql.DB) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to complete deletion"})
 	}
 
-	// Database references are already removed. Best-effort cleanup prevents a
-	// previously known local avatar URL from continuing to expose personal data.
-	if avatarURL.Valid && strings.HasPrefix(avatarURL.String, "/static/avatars/") {
-		name := filepath.Base(avatarURL.String)
-		if name != "." && name != string(filepath.Separator) {
-			_ = os.Remove(filepath.Join("static", "avatars", name))
-		}
-	}
+	// Delete the stored profile
+	_ = os.RemoveAll(filepath.Join("storage", "avatars", strconv.Itoa(userID)))
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message":        "User deleted and anonymized",

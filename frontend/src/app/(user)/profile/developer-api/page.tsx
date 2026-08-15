@@ -34,6 +34,12 @@ type Endpoint = {
   method: HttpMethod;
   path: string;
   auth: string;
+  // Short label shown on the collapsed row, so the closed accordion still
+  // reads as an index of what each endpoint does without opening anything.
+  // The full `description` is a sentence or two and is far too long for that
+  // line. Optional so the commented-out managementEndpoints array below still
+  // compiles if it is ever restored.
+  summary?: string;
   description: string;
   params?: string[];
   request: string;
@@ -125,15 +131,14 @@ const publicEndpoints: Endpoint[] = [
     method: 'GET',
     path: '/api/public/v1/products',
     auth: 'X-API-Key: <your key>',
-    description: 'List marketplace listings, with the same filters the site itself uses.',
+    summary: 'List your listings',
+    description:
+      'List YOUR listings. This API only serves the account the key belongs to',
     params: [
-      'limit (max 100), offset — pagination',
-      'search — title contains',
-      'sort — price-low | price-high | newest | rating',
-      'minPrice, maxPrice — price range',
-      'sellerId — only one seller’s listings',
+      'limit — page size, 1-100. Defaults to 20.',
+      'sort — price-low | price-high | newest',
       'status — active | sold | archived',
-      'weightCategory, flexibilityCategory, balanceCategory — racket specs',
+      'Any other parameter returns 400 naming it.',
     ],
     request: `curl -k "https://localhost/api/public/v1/products?limit=2&sort=price-high" \\
   -H "X-API-Key: sk_live_..."`,
@@ -148,7 +153,9 @@ const publicEndpoints: Endpoint[] = [
     method: 'GET',
     path: '/api/public/v1/products/:id',
     auth: 'X-API-Key: <your key>',
-    description: 'Fetch one listing by id. Returns 404 if it does not exist.',
+    summary: 'Fetch one listing',
+    description:
+      'Fetch one of your listings by id. Returns 404 if it does not exist or belongs to another account.',
     request: `curl -k https://localhost/api/public/v1/products/55 \\
   -H "X-API-Key: sk_live_..."`,
     response: `{ "id": 55, "title": "Yonex Astrox 100ZZ 4U", "price": 950, "sellerId": 10, "...": "..." }`,
@@ -157,74 +164,60 @@ const publicEndpoints: Endpoint[] = [
     method: 'POST',
     path: '/api/public/v1/products',
     auth: 'X-API-Key: <your key>',
+    summary: 'Create a listing',
     description:
-      'Create a listing. It is always owned by the key’s account — any sellerId in the body is ignored and replaced with yours.',
+      'Create a listing owned by the key’s account. Any sellerId in the body is ignored and replaced with yours. This is the public API equivalent of the sell form, with the same required fields and defaults.',
     params: [
-      'title (required, non-empty), price (required, > 0)',
-      'category — default "Others"; site uses: Rackets, Footwear, Apparel, Strings, Accessories, Bags, Others',
-      'condition — default "Second-hand (Used)"; site uses: New, Second-hand (Used)',
-      'dealingMethod — default "Meet Up"; site uses: Meet Up, Delivery',
-      'weightCategory — default "4U"; site uses: 1U–8U',
-      'flexibilityCategory — default "Medium Flex"; site uses: Stiff Shaft, Medium Flex, High Flexibility',
-      'balanceCategory — default "Even Balance"; site uses: Head Heavy, Even Balance, Head Light',
-      'phoneNumber, location (default "Malaysia"), description — free text, not validated',
-      'originalPrice (number|null), stockQuantity (integer, default 1, must be ≥ 1 if given)',
-      'isNew, isFeatured — boolean',
+      'title (required): listing headline, non-empty. Example: "Yonex Astrox 100ZZ"',
+      'price (required): asking price, must be > 0. Example: 950',
+      'location (required): where the item is, non-empty. Example: "Kuala Lumpur"',
+      'dealingMethod (required): how the item changes hands, non-empty. All values: "Meet Up", "Mailing or Delivery", "Meet Up, Mailing or Delivery"',
+      'category (optional): product type. Default: "Others". All values: "Rackets", "Grips", "Shuttlecocks", "Racket Bags & Covers", "Strings", "Shoes", "Apparel", "Accessories", "Others"',
+      'condition (optional): item condition. Default: "Second-hand (Used)". All values: "Second-hand (Used)", "New", "Refurbished"',
+      'weightCategory (optional): racket weight class, kept only when category = "Rackets". Default: "4U". All values: "1U", "2U", "3U", "4U", "5U", "6U", "7U", "8U"',
+      'flexibilityCategory (optional): shaft flex, kept only when category = "Rackets". Default: "Medium Flex". All values: "Stiff Shaft", "Medium Flex", "High Flexibility"',
+      'balanceCategory (optional): balance point, kept only when category = "Rackets". Default: "Even Balance". All values: "Head Heavy", "Even Balance", "Head Light"',
+      'description (optional): free text detail. Default: "". Example: "Used but well maintained, 2 months old"',
+      'phoneNumber (optional): contact number shown on the listing. Default: "". Example: "0123456789"',
+      'originalPrice (optional): pre-discount price, shown struck through. Default: null. Example: 1200',
+      'stockQuantity (optional): units available, must be >= 1 if given. Default: 1. Example: 3',
+      'image (ignored): accepted in the body but discarded — upload covers afterwards with POST /api/v1/products/:id/files',
+      'sellerId / sellerName (ignored): always overwritten with your own account id and username',
+      'Rule: if category is not "Rackets", then weightCategory, flexibilityCategory and balanceCategory are stored as empty strings whatever you send.',
+      'Rule: any field not listed above is rejected with 400 "invalid field: <name>".',
     ],
     request: `curl -k -X POST https://localhost/api/public/v1/products \\
   -H "X-API-Key: sk_live_..." \\
   -H "Content-Type: application/json" \\
-  -d '{"title":"My Racket","price":123,"category":"Rackets","stockQuantity":1}'`,
-    response: `201 Created
-{ "id": 60, "title": "My Racket", "price": 123, "status": "active", "...": "..." }`,
-  },
-  {
-    method: 'POST',
-    path: '/api/public/v1/products/import',
-    auth: 'X-API-Key: <your key>',
-    description:
-      'Bulk create up to 500 listings in one call. Every item is validated first; if ANY item is invalid, nothing is created and you get per-row errors back (all-or-nothing, one database transaction). All listings are owned by the key’s account — sellerId in items is ignored.',
-    params: [
-      'items (required) — array of 1–500 listing objects',
-      'each item takes the same fields as POST /products: title (required), price (required, > 0), and optional description, category, condition, dealingMethod, phoneNumber, location, weightCategory, flexibilityCategory, balanceCategory, originalPrice (> 0 if given), stockQuantity (integer ≥ 1, default 1), isNew, isFeatured',
-      'omitted optional fields get the same defaults as the single-product POST',
-      'on success: 201 with { imported, ids } — ids are the new listing ids in item order',
-      'on validation failure: 400 with { imported: 0, errors: [{ row, field, message }] } — row is the 1-based position in items',
-    ],
-    request: `curl -k -X POST https://localhost/api/public/v1/products/import \\
-  -H "X-API-Key: sk_live_..." \\
-  -H "Content-Type: application/json" \\
   -d '{
-    "items": [
-      { "title": "Yonex Astrox 88D Pro", "price": 450, "category": "Rackets", "stockQuantity": 1 },
-      { "title": "Victor Thruster K9900", "price": 380, "category": "Rackets", "condition": "New" }
-    ]
+    "title": "My Racket",
+    "price": 123,
+    "location": "Kuala Lumpur",
+    "dealingMethod": "Meet Up"
   }'`,
     response: `201 Created
-{ "imported": 2, "ids": [61, 62] }
-
-# If any row is invalid, NOTHING is imported:
-400 Bad Request
-{
-  "imported": 0,
-  "errors": [
-    { "row": 2, "field": "price", "message": "price must be greater than 0" }
-  ]
-}`,
+{ "id": 60, "title": "My Racket", "price": 123, "status": "active", "...": "..." }`,
   },
   {
     method: 'PUT',
     path: '/api/public/v1/products/:id',
     auth: 'X-API-Key: <your key>',
+    summary: 'Update a listing',
     description:
-      'Update a listing you own (else 403, 404 if missing). ⚠ FULL REPLACE, not a patch — any field you omit is saved as empty/zero, except stockQuantity which keeps its current value if omitted.',
+      'Update a listing you own (else 403, 404 if missing). Partial update: omitted fields keep their current value. Six fields are editable and at least one of them must be present; status is not among them, so the listing keeps whatever status it has.',
     params: [
-      'title (required, non-empty), price (required, > 0)',
-      'description, category, condition, dealingMethod, phoneNumber, location, weightCategory, flexibilityCategory, balanceCategory, originalPrice — same free-text fields as POST, omitted = saved empty',
-      'status — active | sold | archived (default "active" if omitted)',
-      'stockQuantity — integer ≥ 0; omitted keeps current stock; setting it to 0 auto-flips status to "sold" even if you sent "active"',
+      'At least one of the six fields below must be present, else 400 "At least one field must be provided to update".',
+      'title (optional): new headline; if sent it must be non-empty. Example: "Yonex Astrox 100ZZ (price drop)"',
+      'price (optional): new price; if sent it must be > 0. Example: 99',
+      'description (optional): replaces the description; send "" to clear it. Example: "Lightly used, great condition"',
+      'category (optional): new product type. All values: "Rackets", "Grips", "Shuttlecocks", "Racket Bags & Covers", "Strings", "Shoes", "Apparel", "Accessories", "Others"',
+      'location (optional): new location. Example: "Petaling Jaya"',
+      'stockQuantity (optional): units available, must be >= 0 if given; 0 is allowed and does not change the status. Example: 0',
+      'Not accepted — each returns 400 "invalid field: <name>": weightCategory, flexibilityCategory, balanceCategory, status, condition, dealingMethod, phoneNumber, originalPrice, isNew, isFeatured, image, sellerId.',
+      'The racket specs are derived, not sent: they keep their stored values while the category is "Rackets", and are cleared to empty strings the moment the listing moves to any other category.',
+      'A listing in pending or sold state cannot be edited (409).',
     ],
-    request: `# Full update — always resend every field you want kept
+    request: `# Partial update — only the fields you send are changed
 curl -k -X PUT https://localhost/api/public/v1/products/60 \\
   -H "X-API-Key: sk_live_..." \\
   -H "Content-Type: application/json" \\
@@ -233,22 +226,22 @@ curl -k -X PUT https://localhost/api/public/v1/products/60 \\
     "price": 99,
     "description": "Lightly used, great condition",
     "category": "Rackets",
-    "location": "Kuala Lumpur",
-    "status": "active"
+    "location": "Kuala Lumpur"
   }'
 
-# Zero out stock -> status auto-flips to "sold"
+# stockQuantity can be updated, but the listing status itself stays as-is
 curl -k -X PUT https://localhost/api/public/v1/products/60 \\
   -H "X-API-Key: sk_live_..." -H "Content-Type: application/json" \\
   -d '{"title":"My Racket","price":99,"stockQuantity":0}'`,
-    response: `{ "id": 60, "title": "My Racket", "price": 99, "status": "sold", "stockQuantity": 0, "...": "..." }`,
+    response: `{ "id": 60, "title": "My Racket", "price": 99, "status": "active", "stockQuantity": 0, "...": "..." }`,
   },
   {
     method: 'DELETE',
     path: '/api/public/v1/products/:id',
     auth: 'X-API-Key: <your key>',
+    summary: 'Delete a listing',
     description:
-      'Delete a listing you own (else 403, 404 if missing). No request body. Permanent — there is no undo.',
+      'Delete a listing you own (else 403, 404 if missing). Only active and archived listings can be deleted. Pending and sold listings are blocked. No request body. Permanent — there is no undo.',
     request: `curl -k -X DELETE https://localhost/api/public/v1/products/60 \\
   -H "X-API-Key: sk_live_..."`,
     response: `{ "message": "Product deleted" }`,
@@ -262,6 +255,7 @@ const statusCodes: Array<[string, string]> = [
   ['401', 'Missing or invalid API key / JWT'],
   ['403', 'Key revoked, or you don’t own the target listing'],
   ['404', 'Not found'],
+  ['409', 'Conflict — the listing is pending or sold, or still has orders'],
   ['429', 'Rate limit exceeded — wait for the next minute window'],
   ['500', 'Server error'],
 ];
@@ -426,39 +420,63 @@ export default function DeveloperApiPage() {
     clampedLogPage * LOGS_PER_PAGE,
   );
 
+  // One collapsible endpoint. Native <details>/<summary> rather than useState:
+  // it starts closed on its own, toggles on click AND on Enter/Space, is
+  // announced correctly by screen readers, and survives Ctrl+F — the browser
+  // opens a closed <details> when the match is inside it. None of that has to
+  // be written or tested here.
+  //
+  // Closed, the rows form the index: method, path, and what the endpoint does.
   const renderEndpoint = (ep: Endpoint) => (
-    <div key={ep.method + ep.path} className="border border-[#eee] rounded-[10px] p-4 mb-3.5 bg-[#fdfdfc] last:mb-0">
-      <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
-        <span className={`inline-block px-2.5 py-[3px] rounded-[10px] text-[11.5px] font-bold tracking-[0.3px] ${methodClass(ep.method)}`}>{ep.method}</span>
-        <code className="text-sm font-bold text-[#222]">{ep.path}</code>
-      </div>
-      <p className="text-xs text-[#898781] mt-0 mx-0 mb-2">{ep.auth}</p>
-      <p className="text-[13.5px] text-[#444] leading-[1.55] mt-0 mx-0 mb-2.5">{ep.description}</p>
-      {ep.params && (
-        <ul className="mt-0 mx-0 mb-3 pl-[18px] text-[#555] text-[13px] leading-[1.65]">
-          {ep.params.map((p) => (
-            <li key={p}>{p}</li>
-          ))}
-        </ul>
-      )}
-      <div className="mb-2.5 last:mb-0">
-        <div className="flex justify-between items-center mb-1.5 [&_span]:text-[11px] [&_span]:text-[#898781] [&_span]:uppercase [&_span]:tracking-[0.4px] [&_span]:font-bold">
-          <span>Example request</span>
-          <button className="border border-[#ddd] bg-white rounded-md px-2.5 py-[3px] text-xs font-semibold text-[#444] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]" type="button" onClick={() => copyText(ep.request)}>
-            {t('devApi.copy')}
-          </button>
-        </div>
-        <pre className="m-0 px-3.5 py-3 bg-[#1c1c1a] text-[#e8e6df] rounded-lg overflow-x-auto text-[12.5px] leading-[1.6]">{ep.request}</pre>
-      </div>
-      {ep.response && (
+    <details key={ep.method + ep.path} className="group border border-[#eee] rounded-[10px] mb-2.5 bg-[#fdfdfc] last:mb-0">
+      <summary className="flex items-center gap-2.5 px-4 py-3 cursor-pointer select-none rounded-[10px] list-none hover:bg-[#f5f4f1] [&::-webkit-details-marker]:hidden">
+        {/* Fixed width so the paths line up in a column rather than stepping
+            right by method length — wide enough for DELETE, the longest. */}
+        <span className={`inline-block shrink-0 w-[60px] text-center px-1.5 py-[3px] rounded-[10px] text-[10.5px] font-bold tracking-[0.3px] ${methodClass(ep.method)}`}>
+          {ep.method}
+        </span>
+        <code className="text-[13px] font-bold text-[#222] truncate">{ep.path}</code>
+        {/* Hidden on narrow screens, where the path alone already fills the row. */}
+        {ep.summary && (
+          <span className="text-[12.5px] text-[#898781] truncate ml-auto pl-2 max-[640px]:hidden">{ep.summary}</span>
+        )}
+        <span
+          aria-hidden="true"
+          className={`shrink-0 text-[11px] text-[#898781] transition-transform duration-150 group-open:rotate-90 ${ep.summary ? 'max-[640px]:ml-auto' : 'ml-auto'}`}
+        >
+          ▶
+        </span>
+      </summary>
+
+      <div className="px-4 pt-3 pb-4 border-t border-[#f0efec]">
+        <p className="text-xs text-[#898781] mt-0 mx-0 mb-2">{ep.auth}</p>
+        <p className="text-[13.5px] text-[#444] leading-[1.55] mt-0 mx-0 mb-2.5">{ep.description}</p>
+        {ep.params && (
+          <ul className="mt-0 mx-0 mb-3 pl-[18px] text-[#555] text-[13px] leading-[1.65]">
+            {ep.params.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        )}
         <div className="mb-2.5 last:mb-0">
           <div className="flex justify-between items-center mb-1.5 [&_span]:text-[11px] [&_span]:text-[#898781] [&_span]:uppercase [&_span]:tracking-[0.4px] [&_span]:font-bold">
-            <span>Example response</span>
+            <span>Example request</span>
+            <button className="border border-[#ddd] bg-white rounded-md px-2.5 py-[3px] text-xs font-semibold text-[#444] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]" type="button" onClick={() => copyText(ep.request)}>
+              {t('devApi.copy')}
+            </button>
           </div>
-          <pre className="m-0 px-3.5 py-3 bg-[#1c1c1a] text-[#e8e6df] rounded-lg overflow-x-auto text-[12.5px] leading-[1.6]">{ep.response}</pre>
+          <pre className="m-0 px-3.5 py-3 bg-[#1c1c1a] text-[#e8e6df] rounded-lg overflow-x-auto text-[12.5px] leading-[1.6]">{ep.request}</pre>
         </div>
-      )}
-    </div>
+        {ep.response && (
+          <div className="mb-2.5 last:mb-0">
+            <div className="flex justify-between items-center mb-1.5 [&_span]:text-[11px] [&_span]:text-[#898781] [&_span]:uppercase [&_span]:tracking-[0.4px] [&_span]:font-bold">
+              <span>Example response</span>
+            </div>
+            <pre className="m-0 px-3.5 py-3 bg-[#1c1c1a] text-[#e8e6df] rounded-lg overflow-x-auto text-[12.5px] leading-[1.6]">{ep.response}</pre>
+          </div>
+        )}
+      </div>
+    </details>
   );
 
   return (
@@ -563,9 +581,14 @@ export default function DeveloperApiPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {keys.map((key) => (
+                          {keys.map((key, index) => (
                             <tr key={key.id}>
-                              <td className="text-[#898781] text-[13px]">{key.id}</td>
+                              {/* Row number, not key.id — the database id is
+                                  global across all users, so a user's first key
+                                  could read "#7". The list arrives oldest-first,
+                                  so this counts 1, 2, 3… in creation order.
+                                  Revocation still uses key.id below. */}
+                              <td className="text-[#898781] text-[13px]">{index + 1}</td>
                               <td className="font-semibold text-[#222]">{key.name}</td>
                               <td>
                                 <span
@@ -644,6 +667,7 @@ export default function DeveloperApiPage() {
                     Authenticate with <code className="bg-[#f5f5f3] border border-[#e8e8e6] rounded-md px-[7px] py-px text-[12.5px] text-[#c2185b]">X-API-Key</code>. Write
                     operations act as the key&apos;s owner: you can only modify your own listings.
                   </p>
+
                   {publicEndpoints.map(renderEndpoint)}
                 </div>
 

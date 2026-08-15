@@ -21,14 +21,14 @@ import {
 } from "@/lib/listingFiles";
 
 // Shared with the bulk importer so its "accepted values" help stays in sync.
-import { CATEGORIES, CONDITIONS, DEALING_METHODS } from "@/lib/productOptions";
-const WEIGHT_CATEGORIES = ["1U", "2U", "3U", "4U", "5U", "6U", "7U", "8U"];
-const FLEXIBILITY_CATEGORIES = [
-  "Stiff Shaft",
-  "Medium Flex",
-  "High Flexibility",
-];
-const BALANCE_CATEGORIES = ["Head Heavy", "Even Balance", "Head Light"];
+import {
+  CATEGORIES,
+  CONDITIONS,
+  DEALING_METHODS,
+  WEIGHT_CATEGORIES,
+  FLEXIBILITY_CATEGORIES,
+  BALANCE_CATEGORIES,
+} from "@/lib/productOptions";
 
 type Condition = (typeof CONDITIONS)[number]; // treat conditions like this is enum, but string union type
 
@@ -455,6 +455,13 @@ function SellPageInner() {
       showToast(t("sell.dealingMethodRequired"), "error");
       return;
     }
+    // The backend no longer defaults a blank location to "Malaysia" — an
+    // unstated location is rejected rather than invented, so ask for it here
+    // instead of letting the submit fail with a server error.
+    if (!location.trim()) {
+      showToast(t("sell.locationRequired"), "error");
+      return;
+    }
     // A listing with no photo shows a placeholder everywhere it appears, which
     // buyers skip past. Require one rather than letting it go live blank.
     if (existingImages.length + photos.length + (showLegacyImage ? 1 : 0) === 0) {
@@ -501,7 +508,9 @@ function SellPageInner() {
               price: parsedPrice,
               originalPrice: parsedOriginalPrice,
               stockQuantity: parsedStockQuantity,
-              location: location.trim() || "Malaysia",
+              // No "|| Malaysia" fallback: an unstated location is now rejected
+            // rather than invented, and the check above already blocked blanks.
+            location: location.trim(),
               weightCategory,
               flexibilityCategory,
               balanceCategory,
@@ -537,7 +546,9 @@ function SellPageInner() {
             price: parsedPrice,
             originalPrice: parsedOriginalPrice,
             stockQuantity: parsedStockQuantity,
-            location: location.trim() || "Malaysia",
+            // No "|| Malaysia" fallback: an unstated location is now rejected
+            // rather than invented, and the check above already blocked blanks.
+            location: location.trim(),
             weightCategory,
             flexibilityCategory,
             balanceCategory,
