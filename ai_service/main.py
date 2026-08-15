@@ -168,9 +168,10 @@ def health_check():
         "agent": "native_tool_calling_v3",
     }
 
-
+# this is the entry point for the chat endpoint, it will receive the request from the frontend, and send it to the agent to get the response, then stream the response back to the frontend
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
+    # limit last 10 chat history to avoid sending too much data to the agent
     history = [
         {"role": message.role, "content": message.content}
         for message in req.history[-10:]
