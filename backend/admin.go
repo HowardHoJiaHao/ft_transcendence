@@ -70,12 +70,13 @@ type adminSummary struct {
 	CompletedRevenue float64 `json:"completedRevenue"`
 }
 
+// admin routes are registered under /api/v1/admin, and require a valid admin JWT token for access. The login route is available at /api/v1/admin/auth/login for initial authentication.
 func registerAdminRoutes(v1 *echo.Group, db *sql.DB) {
-	v1.POST("/admin/auth/login", adminLogin)
+	v1.POST("/admin/auth/login", adminLogin) // this one is for the bootstrap login
 	admin := v1.Group("/admin")
 	admin.Use(myMiddleware.AdminAuth(db))
-	admin.GET("/summary", func(c echo.Context) error { return getAdminSummary(c, db) })
-	admin.GET("/users", func(c echo.Context) error { return listAdminUsers(c, db) })
+	admin.GET("/summary", func(c echo.Context) error { return getAdminSummary(c, db) }) // first load
+	admin.GET("/users", func(c echo.Context) error { return listAdminUsers(c, db) }) // first load
 	admin.GET("/users/:id", func(c echo.Context) error { return getAdminUser(c, db) })
 	admin.POST("/users", func(c echo.Context) error { return createAdminUser(c, db) })
 	admin.PATCH("/users/:id", func(c echo.Context) error { return updateAdminUser(c, db) })
