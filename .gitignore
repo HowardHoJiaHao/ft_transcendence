@@ -32,6 +32,7 @@ backups/
 study_folder/
 monitoring/alertmanager/logs/
 notes/
+.grok/skills/interactive-code-walk/
 monitoring/PROMETHEUS_CHEAT_SHEET.md
 monitoring/RUNBOOKS.md
 ai_service/ml_models/active.json

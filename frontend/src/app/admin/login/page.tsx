@@ -19,6 +19,7 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError("");
     try {
+      // when user key in the usernam and password, send a POST request to the backend to verify the credentials
       const response = await fetch("/api/v1/admin/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

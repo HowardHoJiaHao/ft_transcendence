@@ -205,6 +205,12 @@ export default function Header({
                         <span aria-hidden="true">🔑</span>
                         {t('header.developerApi')}
                       </Link>
+                      {(user.role === 'admin' || user.role === 'moderator') && (
+                        <Link href="/admin/users" role="menuitem" className={MENU_ITEM} onClick={closeMenu}>
+                          <span aria-hidden="true">🛡️</span>
+                          {t('header.adminPanel')}
+                        </Link>
+                      )}
 
                       <div className="h-px bg-[#eee] my-1.5" />
 
