@@ -81,11 +81,11 @@ func (h *Handler) Login(c echo.Context) error {
 
 	u, err := h.repo.GetUserByEmailWithPassword(req.Email)
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid credentials 1"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid credentials"})
 	}
 
 	if err = bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid credentials 2"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid credentials"})
 	}
 	if u.AccountStatus != "active" {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "Account suspended"})

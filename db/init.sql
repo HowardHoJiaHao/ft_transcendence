@@ -42,14 +42,6 @@ CREATE TABLE IF NOT EXISTS users (
         password_hash IS NOT NULL
         OR (oauth_id IS NOT NULL AND oauth_provider IS NOT NULL)
     )
-    -- CONSTRAINT users_avatar_source_check CHECK (
-    --     avatar_data IS NOT NULL
-    --     OR (avatar_url IS NOT NULL AND btrim(avatar_url) <> '')
-    -- ),
-    -- CONSTRAINT users_avatar_mime_check CHECK (
-    --     avatar_data IS NULL
-    --     OR (avatar_mime_type IS NOT NULL AND btrim(avatar_mime_type) <> '')
-    -- )
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth_identity
@@ -367,17 +359,6 @@ CREATE TABLE IF NOT EXISTS friendships (
     FOREIGN KEY (user_id2) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS messages (
-    id SERIAL PRIMARY KEY,
-    sender_id INT NOT NULL,
-	receiver_id INT NOT NULL,
-    content TEXT NOT NULL,
-    is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-	FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
-	FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
 CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver ON messages(sender_id, receiver_id);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_id, is_read);
 
@@ -445,9 +426,6 @@ CREATE TABLE IF NOT EXISTS analytics (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (listing_id) REFERENCES listings(id)
 );
-
--- Enable pgvector extension and create faq_embeddings table
-CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS faq_embeddings (
     id SERIAL PRIMARY KEY,
