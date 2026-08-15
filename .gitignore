@@ -37,3 +37,4 @@ monitoring/RUNBOOKS.md
 ai_service/ml_models/active.json
 ai_service/ml_models/.active.json.tmp
 ai_service/ml_models/versions/
+.grok/skills/interactive-code-walk/SKILL.md
