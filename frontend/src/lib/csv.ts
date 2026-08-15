@@ -40,15 +40,6 @@ const downloadBlob = (filename: string, contents: string, mime: string) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 3 — EXPORT
 // ══════════════════════════════════════════════════════════════════════════════
-// Byte-order mark, prepended to the text formats a spreadsheet opens.
-//
-// Excel ignores the Blob's `charset=utf-8` for a downloaded .csv/.tsv and falls
-// back to the machine's ANSI codepage, so the Sold column's "✓" (U+2713, three
-// UTF-8 bytes) is read as three separate Windows-1252 characters and renders as
-// "âœ“"; the "—" placeholder becomes "â€"" the same way. A leading U+FEFF is
-// the only in-band signal those apps honour — it marks the file as UTF-8 before
-// the first cell is read, and browsers/parseCsv strip it back off.
-//
 // CSV and TSV get it; JSON must not, because JSON.parse rejects a leading BOM.
 const UTF8_BOM = String.fromCharCode(0xfeff);
 
@@ -123,35 +114,8 @@ export const downloadData = (
 // ══════════════════════════════════════════════════════════════════════════════
 
 // Parse CSV text into rows of fields — the exact inverse of `downloadCsv`.
-//
-// WHY THIS IS HAND-WRITTEN RATHER THAN text.split(',')
-// A naive split breaks on the very files this app produces, because a quoted
-// field may legally contain the separator:
-//
-//     Yonex Astrox,"Lightly used, restrung",450
-//
-// Splitting on ',' yields four fields instead of three. Correct parsing needs
-// to know whether the cursor is currently inside quotes, which means walking
-// the text character by character while tracking that state.
-//
-// HOW IT WORKS
-// One pass over the input, accumulating into `field`. The `inQuotes` flag
-// decides how each character is read:
-//
-//   inQuotes = false  ','  ends the field
-//                     '\n' ends the row
-//                     '"'  opens a quoted field
-//   inQuotes = true   ','  and '\n' are ordinary data
-//                     '"'  either closes the field, or — if the next char is
-//                          also '"' — is an escaped literal quote
-//
-// WHAT IT HANDLES
-//   - quoted fields containing commas, newlines, or doubled quotes
-//   - both \n (Unix) and \r\n (Windows/Excel) line endings
-//   - trailing blank lines, which most spreadsheet exports append
-//
-// Returns a plain grid of strings. Every value is a string — the caller
-// decides which columns are numbers, because only it knows the schema.
+// Split the fields correctly with ","
+// Example - Yonex Astrox,"Lightly used, restrung",450
 export const parseCsv = (text: string): string[][] => {
   const rows: string[][] = []; // every completed row
   let field = '';              // characters seen since the last separator
@@ -164,20 +128,15 @@ export const parseCsv = (text: string): string[][] => {
     field = '';
   };
 
-  // Commit the current field, then the row. Rows that are entirely empty are
-  // dropped: a file ending in a newline (almost all of them do) would
-  // otherwise yield a phantom trailing row of one empty string, which the
-  // import page would then report as an invalid product.
   const endRow = () => {
     endField();
-    if (row.length > 1 || row[0].trim() !== '') rows.push(row);
+    if (row.length > 1 || row[0].trim() !== '') 
+      rows.push(row);
     row = [];
   };
-
-  // Drop a leading BOM before the walk. Our own downloads carry one, and so do
-  // files re-saved from Excel; left in place it would ride along inside the
-  // first header cell (U+FEFF then "title"), which normalizeHeader does not
-  // strip — so the import would report the required `title` column as missing.
+  
+  // text.charCodeAt(0) — the numeric code of the first character
+  // if it matches, start = 1; otherwise start = 0
   const start = text.charCodeAt(0) === 0xfeff ? 1 : 0;
 
   for (let i = start; i < text.length; i++) {
@@ -186,10 +145,7 @@ export const parseCsv = (text: string): string[][] => {
     if (inQuotes) {
       // Inside quotes, ',' and '\n' are ordinary data — only '"' is special.
       if (ch === '"') {
-        if (text[i + 1] === '"') {
-          // "" is an escaped literal quote (the inverse of csvEscape's
-          // doubling). Emit one quote and skip the second so it is not
-          // re-read as a closing quote.
+        if (text[i + 1] === '"') { // if double time "
           field += '"';
           i++;
         } else {
@@ -211,8 +167,6 @@ export const parseCsv = (text: string): string[][] => {
     }
   }
 
-  // The final row has no trailing newline to trigger endRow(), so flush
-  // whatever is still buffered.
   if (field !== '' || row.length > 0) endRow();
   return rows;
 };

@@ -1,42 +1,5 @@
 package main
 
-// Bulk product import — the server-side half of the CSV import flow.
-//
-// ─── ENDPOINT ─────────────────────────────────────────────────────────────────
-//
-//   POST /api/v1/products/import   JWT auth (the web UI)
-//
-// Accepts { "items": [CreateProductRequest, ...] }.
-//
-// This is a WEB-UI-ONLY feature: it backs Post an Ad's "Bulk upload" mode and
-// /profile/my-ads/import, and is reachable only with a logged-in session. It is
-// deliberately absent from the API-key surface in /api/public/v1 — a developer
-// creating many listings loops POST /products instead, so each one is rate
-// limited and audit logged individually rather than 500 arriving as one call.
-//
-// ─── WHERE THIS SITS IN THE FLOW ──────────────────────────────────────────────
-//
-//   BulkImport.tsx  parses the user's CSV, previews it, POSTs JSON here
-//        ↓
-//   importProducts  re-validates everything, then inserts in one transaction
-//        ↓
-//   201 { imported, ids }   or   400 { errors: [{row, field, message}] }
-//
-// The frontend runs the same checks before sending, but those are UX only —
-// anyone can call this endpoint directly. THIS is the authorization and
-// validation boundary; the client's checks are a convenience layered on top.
-//
-// ─── THE TWO GUARANTEES ───────────────────────────────────────────────────────
-//
-//  1. ALL-OR-NOTHING. Validation runs over every row before any insert, and
-//     the inserts share one transaction. A file that is 499 good rows and one
-//     bad row creates zero listings — never a partial import the seller then
-//     has to hunt down and clean up.
-//
-//  2. THE CALLER OWNS WHAT IT CREATES. The seller ID comes from the
-//     authenticated session, never from the request body, so a crafted payload
-//     cannot create listings under someone else's account.
-
 import (
 	"errors"
 	"log"
@@ -46,10 +9,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Upper bound on rows per request so a single call cannot flood the table.
-// The frontend enforces the same number (MAX_ROWS in BulkImport.tsx) to reject
-// oversized files early, but this is the limit that actually holds — the
-// public API can be called without going through the UI at all.
 const maxImportRows = 500
 
 // Request body shape. Items reuses CreateProductRequest so a bulk-imported
@@ -84,13 +43,6 @@ type ImportProductsResponse struct {
 // validateImportRow checks a single row against the same rules createProduct
 // enforces for a one-off listing, so importing 100 products cannot slip past
 // constraints that creating them individually would have caught.
-//
-// Returns every problem found rather than stopping at the first, so a user
-// fixing their spreadsheet sees all of a row's issues in one pass.
-//
-// The nil-checks on the pointer fields distinguish "column absent" from
-// "column present but invalid": an omitted optional field is fine and will be
-// defaulted later, whereas an explicitly supplied bad value is an error.
 func validateImportRow(row int, item CreateProductRequest) []ImportRowError {
 	var errs []ImportRowError
 
@@ -171,11 +123,6 @@ func applyImportDefaults(item *CreateProductRequest, sellerID int, sellerName st
 //  3. look up seller    — one query, reused for every row
 //  4. validate ALL rows — no database writes yet
 //  5. insert ALL rows   — one transaction, commit only if every row lands
-//
-// Steps 4 and 5 are strictly separated. Validating everything up front is what
-// makes the all-or-nothing promise cheap to keep: by the time the first INSERT
-// runs, the request is already known to be fully valid, so a rollback is only
-// ever needed for genuine database failures.
 func importProducts(c echo.Context, gormDB *gorm.DB) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -183,14 +130,12 @@ func importProducts(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	// STEP 1 — Authenticate.
-	// caller can only create listings under their own account.
 	sellerID, ok := c.Get("userId").(int)
 	if !ok || sellerID <= 0 {
 		return c.JSON(401, map[string]string{"error": "Unauthorized"})
 	}
 
 	// STEP 2 — Decode and bounds-check.
-	// Both checks are cheap and run before any per-row work or queries.
 	var req ImportProductsRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "Invalid request body"})
@@ -213,9 +158,6 @@ func importProducts(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	// STEP 4 — Validate every row before touching the database.
-	//
-	// The loop collects errors from ALL rows rather than returning at the
-	// first failure i + 1 to skip header
 	var rowErrors []ImportRowError
 	for i, item := range req.Items {
 		rowErrors = append(rowErrors, validateImportRow(i+1, item)...)

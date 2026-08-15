@@ -1,47 +1,5 @@
 'use client';
 
-// Bulk product import, without page chrome so it can be embedded.
-// Used by Post an Ad (Bulk upload mode) and by /profile/my-ads/import.
-//
-// ─── THE FULL IMPORT FLOW ─────────────────────────────────────────────────────
-//
-//   1. DOWNLOAD TEMPLATE  downloadTemplate() writes a one-example CSV via
-//                         downloadCsv(), so the user starts from a file whose
-//                         headers already match what the parser expects.
-//
-//   2. CHOOSE FILE        <input type="file"> hands over a File object.
-//
-//   3. PARSE              handleFile() reads it as text and calls parseCsv(),
-//                         producing a plain grid of strings.
-//
-//   4. MAP COLUMNS        The header row is matched to known column names,
-//                         tolerating case/space/underscore differences, so
-//                         "Stock Quantity" and "stockquantity" both work.
-//
-//   5. VALIDATE + PREVIEW Each row becomes a ParsedRow carrying its own error
-//                         list. The table below renders every row with an
-//                         OK/Error status, and the import button stays
-//                         disabled while any row is invalid.
-//
-//   6. UPLOAD             handleImport() POSTs the mapped items as JSON to
-//                         /api/v1/products/import.
-//
-//   7. SERVER RESULT      201 → success banner. 400 with per-row errors →
-//                         rendered under the upload controls so the user can
-//                         fix the file and retry.
-//
-// ─── WHY VALIDATION EXISTS ON BOTH SIDES ──────────────────────────────────────
-//
-// The client-side checks in validateRow() are UX only: they give instant,
-// per-row feedback without a network round trip. They are NOT a security
-// boundary — anyone can POST to the endpoint directly and skip this file
-// entirely. The backend re-validates every row in products_import.go and is
-// the actual guarantee; these rules deliberately mirror it so the preview
-// agrees with what the server will accept.
-//
-// The backend also inserts all-or-nothing inside a transaction, so a partially
-// valid file can never leave the seller with half their listings created.
-
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useToast } from '@/components/Toast/ToastContext';
@@ -62,11 +20,7 @@ const MAX_ROWS = 500;
 
 // Mirrors the backend CreateProductRequest fields the CSV can fill.
 //
-// Only title, price, location and dealingMethod are non-optional — exactly the
-// four a single-listing POST requires. The dropdown columns are optional
-// because applyListingDefaults fills them server-side (products.go), so a cell
-// left empty imports as the value Post an Ad pre-selects rather than failing.
-//
+// Only title, price, location and dealingMethod are non-optional
 // The optional ones are `?` so an empty cell can be omitted from the JSON
 // entirely: sending '' would store an empty string instead of letting the
 // server apply its default.
@@ -101,10 +55,6 @@ interface ServerRowError {
 
 // Every column a row must fill. The file is rejected outright if any of these
 // headers is absent, since every row would fail without them.
-//
-// The dropdown columns are deliberately absent from this list: a file that
-// omits them entirely still imports, with every listing taking the same
-// defaults it would get from a single-listing POST that omitted them.
 const REQUIRED_COLUMNS = ['title', 'price', 'location', 'dealingMethod'];
 
 // Columns the template offers; header matching is case/space/underscore-insensitive.
@@ -113,10 +63,7 @@ const TEMPLATE_COLUMNS = [
   'weightCategory', 'flexibilityCategory', 'balanceCategory',
   'stockQuantity', 'location', 'dealingMethod', 'phoneNumber', 'originalPrice',
 ];
-// Two sample rows rather than one. The first fills every column; the second is
-// a non-racket item with every optional cell deliberately left blank, so the
-// downloaded file itself demonstrates that empty cells are acceptable and shows
-// what a minimal row looks like.
+// Two sample rows rather than one.
 const TEMPLATE_EXAMPLES = [
   [
     'Yonex Astrox 88D Pro', 'Lightly used, restrung last month', '450', 'Rackets',
@@ -130,10 +77,7 @@ const TEMPLATE_EXAMPLES = [
   ],
 ];
 
-// What the server fills in for a blank cell (applyListingDefaults in
-// backend/products.go). Named once and used by both the column reference and
-// the preview, so the two can never claim different defaults — and so the
-// preview shows what a row actually becomes rather than an empty cell.
+// Default value
 const DEFAULTS = {
   category: 'Others',
   condition: 'Second-hand (Used)',
@@ -169,10 +113,7 @@ const OPTIONAL_COLUMNS: { name: string; note: string }[] = [
   { name: 'originalPrice', note: 'Pre-discount price, shown struck through above the real one. Must be above 0 if given. Example: 699' },
 ];
 
-// Collapse a header cell to a comparable key so the CSV's column names do not
-// have to match ours exactly. "Stock Quantity", "stock_quantity" and
-// "stockquantity" all normalise to the same string, which matters because
-// spreadsheet apps freely reformat headers when a user edits the template.
+// normalize header to compare real and submited file table column header
 const normalizeHeader = (h: string) => h.toLowerCase().replace(/[\s_]/g, '');
 
 const CHIP =
@@ -197,11 +138,6 @@ export default function BulkImport() {
   // Client-side mirror of the backend's per-row validation (validateImportRow
   // in products_import.go). Returns a list of human-readable messages for one
   // row — empty means the row looks importable.
-  //
-  // The raw strings are passed alongside the parsed item because parsing loses
-  // information that matters here. `Number('')` is 0, not NaN, so an empty
-  // price cell would otherwise slip through the `<= 0` check as a legitimate
-  // zero; testing the raw text catches "missing" separately from "invalid".
   const validateRow = (item: ImportItem, priceRaw: string, stockRaw: string, originalRaw: string) => {
     const errors: string[] = [];
 
@@ -214,12 +150,7 @@ export default function BulkImport() {
       errors.push(t('import.errPriceInvalid'));
 
     // The only two listing attributes the backend refuses to invent — the sell
-    // form does not pre-select them either, so a blank cell here is a genuine
-    // error rather than a default. Everything else on the row is defaulted
-    // server-side by applyListingDefaults, so an empty cell is acceptable.
-    //
-    // Named individually so the preview points at the exact column to fix,
-    // matching the per-field errors the server returns for the same row.
+    // form does not pre-select them either, so a blank cell is error rather .
     ([
       ['location', item.location],
       ['dealingMethod', item.dealingMethod],
@@ -227,39 +158,28 @@ export default function BulkImport() {
       if (!value.trim()) errors.push(t('import.errFieldRequired', { field: name }));
     });
 
-    // stockQuantity: optional, but if present must be a whole number >= 1.
-    // The regex rejects decimals and signs, which Number() would happily
-    // accept ("1.5" and "-2" both parse as numbers).
+    // stockQuantity: optional
     if (stockRaw.trim() !== '' && (!/^\d+$/.test(stockRaw.trim()) || Number(stockRaw) < 1))
       errors.push(t('import.errStockInvalid'));
 
     // originalPrice: optional, but if present must be a positive number.
-    // This is the struck-through "was" price, so 0 would be meaningless.
     if (originalRaw.trim() !== '' && (Number.isNaN(Number(originalRaw)) || Number(originalRaw) <= 0))
       errors.push(t('import.errOriginalPriceInvalid'));
 
     return errors;
   };
 
-  // Steps 3-5 of the flow: read the chosen file, map its columns, validate
+  // Read the chosen file, map its columns, validate
   // every row, and populate the preview table.
-  //
-  // Two classes of problem are handled differently. A FILE-level problem
-  // (unreadable, missing required columns, too many rows) sets `fileError` and
-  // aborts — there is nothing worth previewing. A ROW-level problem is kept on
-  // the row itself so the user still sees the full table with the bad rows
-  // marked, which is far more useful than a single message.
   const handleFile = async (file: File) => {
-    // Reset every result from a previous attempt, otherwise a stale success
-    // banner or old server errors would sit above the new preview.
+    // Reset every result from a previous attempt
     setFileName(file.name);
     setRows([]);
     setFileError('');
     setServerErrors([]);
     setImportedCount(null);
 
-    // file.text() reads the whole file into memory. Fine here: MAX_ROWS caps
-    // this at a few hundred KB of text.
+    // file.text() reads the whole file into memory.
     const grid = parseCsv(await file.text());
 
     // Need at least a header row plus one data row. parseCsv already dropped
@@ -269,56 +189,37 @@ export default function BulkImport() {
       return;
     }
 
-    // Build a column-name → index lookup from the header row. Normalising both
-    // sides means the user's capitalisation and spacing do not matter.
     const headers = grid[0].map(normalizeHeader);
     const col = (name: string) => headers.indexOf(normalizeHeader(name));
 
-    // None of these has a default any more, so a file missing one of their
-    // headers would fail on every single row. Naming the absent columns is far
-    // more useful than a generic message when there are nine of them.
+    // Checking all required column must be there
     const absent = REQUIRED_COLUMNS.filter((name) => col(name) === -1);
     if (absent.length > 0) {
       setFileError(t('import.missingColumns', { columns: absent.join(', ') }));
       return;
     }
 
-    // Checked before mapping so a huge file is rejected immediately rather
-    // than after building thousands of objects. -1 excludes the header row.
-    // Mirrors maxImportRows on the backend, which enforces the real limit.
+    // limit 500 rows
     if (grid.length - 1 > MAX_ROWS) {
       setFileError(t('import.tooManyRows', { max: MAX_ROWS }));
       return;
     }
 
-    // Read one named cell from a row. Returns '' for both "column not in this
-    // file" and "cell is empty", which is what the callers want: either way
-    // the field is absent and should fall back to its default.
     const cell = (row: string[], name: string) => {
-      const i = col(name);
+      const i = col(name); // column will get index comparing from headers
       return i === -1 ? '' : (row[i] ?? '').trim();
     };
 
     setRows(
-      // slice(1) skips the header; everything after it is data.
+      // slice(1) header
       grid.slice(1).map((raw, idx) => {
-        // Keep the raw strings: validateRow needs them to tell "missing"
-        // apart from "invalid" (see its comment).
         const priceRaw = cell(raw, 'price');
-        // Accept the shorter "stock" as an alias for "stockQuantity" — a
-        // common thing to type when filling the template by hand.
         const stockRaw = cell(raw, 'stockQuantity') || cell(raw, 'stock');
         const originalRaw = cell(raw, 'originalPrice');
 
-        // Map the row onto the payload shape the backend expects. OPTIONAL
-        // fields become `undefined` rather than '' so they are omitted from
-        // the JSON entirely, letting the server apply its own defaults instead
-        // of overwriting them with empty strings. That is what makes a blank
-        // dropdown cell import as "Others" / "4U" rather than as a blank.
-        //
         // title, price, location and dealingMethod are sent as-is, empty string
         // included, so the server rejects the row rather than silently filling
-        // it in — they are the four it will not invent.
+        // optional make it undefined so backend trigger
         const item: ImportItem = {
           title: cell(raw, 'title'),
           description: cell(raw, 'description') || undefined,
@@ -335,28 +236,19 @@ export default function BulkImport() {
           phoneNumber: cell(raw, 'phoneNumber') || undefined,
         };
 
-        // `line` is 1-based over data rows, matching both the preview table
-        // and the backend's row numbering, so server errors line up with what
-        // the user already saw.
         return { line: idx + 1, item, errors: validateRow(item, priceRaw, stockRaw, originalRaw) };
       }),
     );
   };
 
-  // How many rows carry at least one error (rows, not individual messages —
-  // one bad row with three problems still counts once).
+  // How many rows carry at least one error 
   const errorCount = rows.reduce((n, r) => n + (r.errors.length > 0 ? 1 : 0), 0);
 
-  // All-or-nothing on the client too: the import button stays disabled until
-  // every row is valid, matching the server's transactional behaviour. There
-  // is deliberately no "import only the good rows" path — a half-imported
-  // file is harder to reason about than one the user fixes and re-uploads.
+  // All import are valid only can import
   const canImport = rows.length > 0 && errorCount === 0 && !importing;
 
-  // Steps 6-7 of the flow: send the mapped rows and interpret the response.
   const handleImport = async () => {
-    // Guard even though the button is disabled — canImport also covers the
-    // in-flight case, preventing a double submit from a fast second click.
+    
     if (!canImport) return;
     setImporting(true);
     setServerErrors([]);
@@ -364,8 +256,6 @@ export default function BulkImport() {
     const token = localStorage.getItem('token') || '';
     try {
       // Only `item` is sent; `line` and `errors` are preview-side bookkeeping.
-      // The server derives the seller from the JWT, so no seller ID is sent —
-      // a client-supplied one could be forged to list under another account.
       const res = await fetch(`${API_BASE}/api/v1/products/import`, {
         method: 'POST',
         headers: {
@@ -390,10 +280,8 @@ export default function BulkImport() {
         setFileName('');
         showToast(t('import.successBody', { count: completedCount }), 'success');
       } else if (Array.isArray(data.errors) && data.errors.length > 0) {
-        // Per-row rejections from the server's own validation. Kept in state
-        // and rendered as a list rather than a toast, because the user needs
-        // to read them while editing the file. The preview is intentionally
-        // left intact so the row numbers still line up.
+        // Per-row rejections from the server's own validation. so the user
+        // can read them while editing the file.
         setServerErrors(data.errors);
       } else {
         // Any other failure (auth, rate limit, 500) has no per-row detail.
@@ -465,10 +353,6 @@ export default function BulkImport() {
           </table>
         </div>
 
-        {/* The spelling rule for the columns that list accepted values. The
-            values themselves now sit on each column's own row in the table
-            above, so repeating them here would be a second copy to keep in
-            sync — only the rule a bare list cannot convey stays. */}
         <div className="bg-[#eff6ff] border border-[#bfdbfe] rounded-[10px] px-4 py-3.5 mt-4">
           <p className="text-[13.5px] font-bold text-[#1c5cab] mt-0 mx-0 mb-2">
             {t('import.valuesTitle')}
