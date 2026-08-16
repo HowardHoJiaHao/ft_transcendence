@@ -67,14 +67,16 @@ func stripeServiceTestDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
 	return db, mock
 }
 
+// Listings sell as a whole lot, so the reserved quantity is always the entire
+// stock and the listing always lands on 0 / 'pending'.
 func expectNewStripeReservation(
 	mock sqlmock.Sqlmock,
 	now time.Time,
 	quantity int,
-	stock int,
 	sellerID int,
 	sellerEmail string,
 ) {
+	stock := quantity
 	mock.ExpectQuery("FROM payments").
 		WithArgs("8f41ea04-716f-4ca2-9cf2-33fd2da0d72f").
 		WillReturnError(sql.ErrNoRows)
@@ -101,13 +103,8 @@ func expectNewStripeReservation(
 			1001, 42, sellerID, 10, quantity, float64(50*quantity),
 			"pending", "stripe", now, now,
 		))
-	remaining := stock - quantity
-	status := "active"
-	if remaining == 0 {
-		status = "sold"
-	}
 	mock.ExpectExec("UPDATE listings").
-		WithArgs(remaining, status, 10).
+		WithArgs(0, "pending", 10).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 }
@@ -118,7 +115,6 @@ func TestStripeCheckoutUsesDatabaseMinorUnitsAndDestinationFee(t *testing.T) {
 	expectNewStripeReservation(
 		mock,
 		now,
-		2,
 		2,
 		stripeTestSellerID,
 		stripeTestSellerEmail,
@@ -180,12 +176,12 @@ func TestStripeCheckoutRejectsMultipleSellers(t *testing.T) {
 		WithArgs(10).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"seller_id", "seller_email", "unit_amount_minor", "status", "stock_quantity",
-		}).AddRow(stripeTestSellerID, stripeTestSellerEmail, 5000, "active", 2))
+		}).AddRow(stripeTestSellerID, stripeTestSellerEmail, 5000, "active", 1))
 	mock.ExpectQuery("SELECT l.seller_id, u.email, ROUND").
 		WithArgs(11).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"seller_id", "seller_email", "unit_amount_minor", "status", "stock_quantity",
-		}).AddRow(9221, "another.seller@example.com", 3000, "active", 2))
+		}).AddRow(9221, "another.seller@example.com", 3000, "active", 1))
 	mock.ExpectRollback()
 
 	_, checkoutErr := service.CreateCheckout(
@@ -216,7 +212,7 @@ func TestStripeCheckoutRejectsSellerEmailMismatch(t *testing.T) {
 		WithArgs(10).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"seller_id", "seller_email", "unit_amount_minor", "status", "stock_quantity",
-		}).AddRow(stripeTestSellerID, "different.seller@example.com", 5000, "active", 2))
+		}).AddRow(stripeTestSellerID, "different.seller@example.com", 5000, "active", 1))
 	mock.ExpectRollback()
 
 	_, checkoutErr := service.CreateCheckout(
@@ -238,7 +234,6 @@ func TestStripeCheckoutSellerEmailMatchIsCaseInsensitive(t *testing.T) {
 		mock,
 		now,
 		1,
-		2,
 		8842,
 		"  DEMO.SELLER@EXAMPLE.COM  ",
 	)
@@ -275,7 +270,6 @@ func TestStripeAmbiguousFailureKeepsStockReserved(t *testing.T) {
 		mock,
 		now,
 		1,
-		2,
 		stripeTestSellerID,
 		stripeTestSellerEmail,
 	)
@@ -302,7 +296,6 @@ func TestStripeDefinitiveFailureRestoresStockOnce(t *testing.T) {
 		mock,
 		now,
 		1,
-		2,
 		stripeTestSellerID,
 		stripeTestSellerEmail,
 	)

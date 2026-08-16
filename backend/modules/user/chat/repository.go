@@ -124,6 +124,9 @@ func (r *Repository) GetConversations(userId int) ([]Conversation, error) {
 		conv.LastMessageAt = lastMsgTime
 		conversations = append(conversations, conv)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed reading conversations: %w", err)
+	}
 	return conversations, nil
 }
 
@@ -139,15 +142,16 @@ func (r *Repository) GetMessagesBetween(user1Id, user2Id int) ([]Message, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch messages: %w", err)
 	}
-
 	return messages, nil
 }
 
 func (r *Repository) MarkAsRead(receiverId, senderId int) error {
-	_, err := r.DB.Exec(
-		"UPDATE messages SET is_read = true WHERE sender_id = $1 AND receiver_id = $2 AND is_read=false",
-		senderId, receiverId,
-	)
+	if r.GormDB == nil {
+		return fmt.Errorf("gorm db is not initialized")
+	}
+	err := r.GormDB.Model(&Message{}).
+		Where("sender_id = ? AND receiver_id = ? AND is_read = ?", senderId, receiverId, false).
+		Update("is_read", true).Error
 	if err != nil {
 		return fmt.Errorf("failed to mark messages as read: %w", err)
 	}
@@ -155,15 +159,17 @@ func (r *Repository) MarkAsRead(receiverId, senderId int) error {
 }
 
 func (r *Repository) GetUnreadCount(userId int) (int, error) {
-	var count int
-	err := r.DB.QueryRow(
-		"SELECT COUNT(*) FROM messages WHERE receiver_id = $1 AND is_read = false",
-		userId,
-	).Scan(&count)
+	if r.GormDB == nil {
+		return 0, fmt.Errorf("gorm db is not initialized")
+	}
+	var count int64
+	err := r.GormDB.Model(&Message{}).
+		Where("receiver_id = ? AND is_read = ?", userId, false).
+		Count(&count).Error
 	if err != nil {
 		return 0, fmt.Errorf("failed to count unread messages: %w", err)
 	}
-	return count, nil
+	return int(count), nil
 }
 
 func (r *Repository) DeleteConversation(userId, partnerId int) error {

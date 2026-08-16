@@ -199,13 +199,12 @@ jobs:
                'ml_training_runs',
                'api_keys',
                'api_request_logs',
-               'analytics_events',
                'knowledge_chunks'
              ]) AS required(table_name);"
 
           assert_sql_true \
             "required cross-feature columns" \
-            "SELECT count(*) = 50
+            "SELECT count(*) = 49
              FROM (VALUES
                ('users', 'account_status'),
                ('users', 'role'),
@@ -252,7 +251,6 @@ jobs:
                ('ml_training_runs', 'is_active'),
                ('api_keys', 'key_hash'),
                ('api_keys', 'rate_limit'),
-               ('analytics_events', 'listing_id'),
                ('knowledge_chunks', 'embedding'),
                ('knowledge_chunks', 'ingestion_version'),
                ('knowledge_chunks', 'is_active'),

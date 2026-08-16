@@ -143,10 +143,11 @@ services:
     expose:
       - "8080"
     volumes:
-      - ./uploads:/app/uploads
-      - ./avatar:/app/avatar
-      - ./static/avatars:/app/static/avatars
-      - ./static/listings:/app/static/listings
+      # One mount for every user upload. storage/ is not served as a directory:
+      # listing files go out through /api/v1/files/:fileId/content and avatars
+      # through /api/v1/users/:id/avatar, so nothing here is reachable without
+      # a handler deciding to serve it. The former ./uploads, ./avatar and
+      # ./static mounts were removed with the endpoints that used them.
       - ./storage:/app/storage
     depends_on:
       db:
@@ -232,10 +233,12 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 15s
+      interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 15s
+      retries: 8
+      # Cold start imports pandas/sklearn before uvicorn listens. 15s was
+      # too short on first `make setup`; cached reruns then looked "flaky".
+      start_period: 120s
     networks:
       - transcendence-network
 
@@ -391,6 +394,8 @@ services:
     networks:
       - transcendence-network
   waf:
+    #crs is actually means core rule set, a big maintained list of ModSec rules
+    #mod security is the engine that inspect request
     image: owasp/modsecurity-crs:4.25.0-nginx-lts
     container_name: transcendence-waf
     ports:
@@ -401,14 +406,21 @@ services:
     environment:
       BACKEND: http://nginx:8081
       SERVER_NAME: localhost
+      #hardened rules are here
+      #redirection rules
       NGINX_ALWAYS_TLS_REDIRECT: "on"
+      #straight away block SQLI / xss
       MODSEC_RULE_ENGINE: "On"
+      #all illigal action will got audit log (make logs-waf)
       MODSEC_AUDIT_ENGINE: "RelevantOnly"
       BLOCKING_PARANOIA: "1"
       DETECTION_PARANOIA: "1"
       REPORTING_LEVEL: "2"
+      #limit the request method
       ALLOWED_METHODS: "GET HEAD POST PUT PATCH DELETE OPTIONS"
+      #liimit the body size limit, 72 mb
       MODSEC_REQ_BODY_LIMIT: "75497472"
+      # max file size, 10 mb
       MAX_FILE_SIZE: "10485760"
       COMBINED_FILE_SIZES: "73400320"
     volumes:

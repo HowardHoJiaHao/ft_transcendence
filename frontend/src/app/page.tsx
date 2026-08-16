@@ -20,8 +20,6 @@ interface Product
   location: string;
   sellerId: string;
   sellerName: string;
-  rating: number;
-  reviews: number;
   isNew: boolean;
   isFeatured: boolean;
   stockQuantity: number;
@@ -164,8 +162,6 @@ export default function Home()
           location: p.location,
           sellerId: p.sellerId,
 		  sellerName: p.sellerName,
-          rating: parseFloat(p.rating),
-          reviews: p.reviews,
           isNew: p.isNew,
           isFeatured: p.isFeatured,
           stockQuantity: p.stockQuantity,
@@ -330,7 +326,6 @@ export default function Home()
                 <option value="newest">Newest</option>
                 <option value="price-low">Price: Low to High</option>
                 <option value="price-high">Price: High to Low</option>
-                <option value="rating">Highest Rating</option>
               </select>
             </div>
 
@@ -391,13 +386,18 @@ export default function Home()
                         )}
                       </div>
 
+                      {/* Show the quantity left rather than a bare
+                          "available", so a buyer can see scarcity at a glance.
+                          A sold-out listing keeps the word "Sold" —
+                          "Quantity: 0" reads as an error, not a sale. */}
                       <div className="flex items-center gap-1.5 mb-2 text-xs">
-                        <span className="inline-block tracking-[2px] text-[11px]">
-                          {'⭐'.repeat(Math.floor(product.rating))}
-                        </span>
-                        <span className="text-[var(--secondary)]">
-                          {product.rating} ({product.reviews} reviews)
-                        </span>
+                        {product.stockQuantity <= 0 || product.status === 'sold' ? (
+                          <span className="font-semibold text-red-600">{t('product.sold')}</span>
+                        ) : (
+                          <span className="font-semibold text-[#1a7f37]">
+                            {t('product.quantity', { count: product.stockQuantity })}
+                          </span>
+                        )}
                       </div>
 
                       <div className="py-2 border-t border-[var(--border)] text-xs text-[var(--secondary)]">

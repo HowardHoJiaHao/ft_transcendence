@@ -2,6 +2,8 @@ package profile
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -235,14 +237,13 @@ func (h *Handler) UploadAvatar(c echo.Context) error {
 // 	})
 // }
 
-// Currently not being used
 func (h *Handler) GetAvatar(c echo.Context) error {
 	userID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid user id"})
 	}
 
-	data, mimeType, err := h.repo.GetUserAvatarBinary(userID)
+	storageName, mimeType, err := h.repo.GetUserAvatarFile(userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "avatar not found"})
@@ -250,7 +251,40 @@ func (h *Handler) GetAvatar(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to fetch avatar"})
 	}
 
-	return c.Blob(http.StatusOK, mimeType, data)
+	// Defence in depth against a stored value that is not a bare filename. The
+	// column is only ever written with a generated UUID, so this can only fire
+	// if the row was tampered with directly — but a traversal here would read
+	// arbitrary files off the container, so it is worth the one comparison.
+	if filepath.Base(storageName) != storageName {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "avatar not found"})
+	}
+
+	// The directory comes from the URL's user id, never from the database
+	// value, so a row can only ever point at a file inside its own user folder.
+	fullPath := filepath.Join(avatarsRoot, strconv.Itoa(userID), storageName)
+	file, err := os.Open(fullPath)
+	if os.IsNotExist(err) {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "avatar not found"})
+	}
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to read avatar"})
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to read avatar"})
+	}
+
+	c.Response().Header().Set("Content-Type", mimeType)
+	c.Response().Header().Set("X-Content-Type-Options", "nosniff")
+	// Safe to cache hard: the URL is stable per user, but the file behind it is
+	// replaced under a new name each upload, and ServeContent revalidates with
+	// Last-Modified. This is what keeps a chat or friends list of avatars from
+	// costing one database round trip per face, every render.
+	c.Response().Header().Set("Cache-Control", "public, max-age=300")
+	http.ServeContent(c.Response().Writer, c.Request(), storageName, info.ModTime(), file)
+	return nil
 }
 
 // func (h *Handler) GetCurrentUser(c echo.Context) error {

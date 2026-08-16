@@ -70,12 +70,13 @@ type adminSummary struct {
 	CompletedRevenue float64 `json:"completedRevenue"`
 }
 
+// admin routes are registered under /api/v1/admin, and require a valid admin JWT token for access. The login route is available at /api/v1/admin/auth/login for initial authentication.
 func registerAdminRoutes(v1 *echo.Group, db *sql.DB) {
-	v1.POST("/admin/auth/login", adminLogin)
+	v1.POST("/admin/auth/login", adminLogin) // this one is for the bootstrap login
 	admin := v1.Group("/admin")
 	admin.Use(myMiddleware.AdminAuth(db))
-	admin.GET("/summary", func(c echo.Context) error { return getAdminSummary(c, db) })
-	admin.GET("/users", func(c echo.Context) error { return listAdminUsers(c, db) })
+	admin.GET("/summary", func(c echo.Context) error { return getAdminSummary(c, db) }) // first load
+	admin.GET("/users", func(c echo.Context) error { return listAdminUsers(c, db) }) // first load
 	admin.GET("/users/:id", func(c echo.Context) error { return getAdminUser(c, db) })
 	admin.POST("/users", func(c echo.Context) error { return createAdminUser(c, db) })
 	admin.PATCH("/users/:id", func(c echo.Context) error { return updateAdminUser(c, db) })
@@ -90,15 +91,18 @@ func registerAdminRoutes(v1 *echo.Group, db *sql.DB) {
 }
 
 func adminLogin(c echo.Context) error {
+	// read json from the login page, username and password, and bind to the struct
 	var req adminLoginRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
 	}
+	// if match the username and password with the environment variable, then generate a JWT token and return to the frontend
 	expectedUsername := strings.TrimSpace(os.Getenv("ADMIN_USERNAME"))
 	passwordHash := strings.TrimSpace(os.Getenv("ADMIN_PASSWORD_HASH"))
 	if expectedUsername == "" || passwordHash == "" {
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "Administrator login is not configured"})
 	}
+	// check if they are matched, with bcrypt for password, and constant time compare for username to prevent timing attacks
 	usernameMatches := subtle.ConstantTimeCompare([]byte(req.Username), []byte(expectedUsername)) == 1
 	passwordMatches := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) == nil
 	// The plaintext comparison is retained for the repository's disposable MVP
@@ -106,6 +110,7 @@ func adminLogin(c echo.Context) error {
 	if !passwordMatches {
 		passwordMatches = subtle.ConstantTimeCompare([]byte(req.Password), []byte(passwordHash)) == 1
 	}
+	// wrong then no token
 	if !usernameMatches || !passwordMatches {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid administrator credentials"})
 	}
@@ -472,10 +477,12 @@ func deleteAdminUser(c echo.Context, db *sql.DB) error {
 			first_name = '',
 			last_name = '',
 			phone_no = NULL,
+			address = NULL,
 			date_of_birth = NULL,
 			gender = NULL,
 			avatar_url = NULL,
 			avatar_data = NULL,
+			avatar_storage_name = NULL,
 			avatar_mime_type = NULL,
 			bio = '',
 			requires_2fa = false,
@@ -494,14 +501,8 @@ func deleteAdminUser(c echo.Context, db *sql.DB) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to complete deletion"})
 	}
 
-	// Database references are already removed. Best-effort cleanup prevents a
-	// previously known local avatar URL from continuing to expose personal data.
-	if avatarURL.Valid && strings.HasPrefix(avatarURL.String, "/static/avatars/") {
-		name := filepath.Base(avatarURL.String)
-		if name != "." && name != string(filepath.Separator) {
-			_ = os.Remove(filepath.Join("static", "avatars", name))
-		}
-	}
+	// Delete the stored profile
+	_ = os.RemoveAll(filepath.Join("storage", "avatars", strconv.Itoa(userID)))
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message":        "User deleted and anonymized",

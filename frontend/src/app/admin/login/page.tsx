@@ -2,9 +2,11 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useI18n } from "@/context/LanguageContext";
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -19,17 +21,18 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError("");
     try {
+      // when user key in the usernam and password, send a POST request to the backend to verify the credentials
       const response = await fetch("/api/v1/admin/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Login failed");
+      if (!response.ok) throw new Error(data.error ?? t("adminLogin.failed"));
       localStorage.setItem("adminToken", data.token);
       router.push("/admin/users");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error");
+      setError(err instanceof Error ? err.message : t("adminLogin.networkError"));
     } finally {
       setLoading(false);
     }
@@ -41,12 +44,12 @@ export default function AdminLoginPage() {
         className="w-full max-w-[420px] bg-white rounded-[10px] p-8 shadow-[var(--shadow)] flex flex-col gap-4"
         onSubmit={submit}
       >
-        <h1>Administrator login</h1>
+        <h1>{t("adminLogin.title")}</h1>
         {error && <p className="text-[#b42318] max-w-[1100px] mx-auto mb-4">{error}</p>}
-        <input placeholder="Admin username" value={username} onChange={(e) => setUsername(e.target.value)} required className="p-3 border border-[#ccc] rounded-md text-base" />
-        <input type="password" placeholder="Admin password" value={password} onChange={(e) => setPassword(e.target.value)} required className="p-3 border border-[#ccc] rounded-md text-base" />
+        <input placeholder={t("adminLogin.username")} value={username} onChange={(e) => setUsername(e.target.value)} required className="p-3 border border-[#ccc] rounded-md text-base" />
+        <input type="password" placeholder={t("adminLogin.password")} value={password} onChange={(e) => setPassword(e.target.value)} required className="p-3 border border-[#ccc] rounded-md text-base" />
         <button disabled={loading} className="px-4 py-[10px] border-0 rounded-md bg-[#d32f2f] text-white cursor-pointer">
-          {loading ? "Signing in..." : "Sign in"}
+          {loading ? t("adminLogin.signingIn") : t("adminLogin.signIn")}
         </button>
       </form>
     </main>

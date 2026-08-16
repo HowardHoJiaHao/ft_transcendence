@@ -27,6 +27,7 @@ func prepareUserForResponse(user *User) {
 	user.FirstName = ""
 	user.LastName = ""
 	user.PhoneNo = nil
+	user.Address = nil
 	user.DateOfBirth = nil
 	user.Gender = nil
 	user.AvatarURL = nil
@@ -84,7 +85,6 @@ func (r *Repository) GetUserByEmailWithPassword(email string) (*User, error) {
 		user.OAuthProvider = oauthProvider.String
 	}
 	prepareUserForResponse(&user)
-	// user.IsOnline = true // For demo
 	return &user, nil
 }
 
@@ -95,9 +95,9 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, first_name, last_name, phone_no, address, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE id = $1",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.Address, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
 
 	if err != nil {
 		fmt.Printf("Scan error\n")
@@ -122,7 +122,6 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 		user.OAuthProvider = oauthProvider.String
 	}
 	prepareUserForResponse(&user)
-	user.IsOnline = true // For demo
 	return &user, nil
 }
 
@@ -159,24 +158,25 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 		user.OAuthProvider = oauthProvider.String
 	}
 	prepareUserForResponse(&user)
-	user.IsOnline = true // For demo
-	//user.Requires2FA = true // For demo
 	return &user, nil
 }
 
 func (r *Repository) UpdatePassword(userID int, passwordHash string) error {
-	_, err := r.DB.Exec("UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", passwordHash, userID)
-	return err
+	if r.GormDB == nil {
+		return fmt.Errorf("gorm db is not initialized")
+	}
+	return r.GormDB.Session(&gorm.Session{SkipDefaultTransaction: true}).
+		Model(&User{}).
+		Where("id = ?", userID).
+		Updates(map[string]interface{}{
+			"password_hash": passwordHash,
+			"updated_at":    gorm.Expr("CURRENT_TIMESTAMP"),
+		}).Error
 }
 
 // use r.DB.exec when you dont care the information once you execute.use queryrow if you want to know some variables after you exec
 // in this case we ignore the sql result
 func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
-	// _, err := r.DB.Exec(
-	// 	"UPDATE users SET first_name = $1, last_name = $2, bio = $3, date_of_birth = $4, gender = $5, avatar_url = $6 WHERE id = $7",
-	// 	req.FirstName, req.LastName, req.Bio, req.DateOfBirth, req.Gender, req.AvatarURL, id,
-	// )
-	// err := r.DB.Model(user).Updates(req).Error
 	user, err := r.GetUserByID(id)
 	if err != nil {
 		return fmt.Errorf("Failed to fetch id in UpdateUserProfile")
@@ -184,32 +184,45 @@ func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
 	return r.GormDB.Model(user).Updates(req).Error
 }
 
-func (r *Repository) UpdateUserAvatarUrl(userID int, publicUrl string, mime string) error {
-	_, err := r.DB.Exec(
-		"UPDATE users SET avatar_url = $1, avatar_mime_type = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
-		publicUrl, mime, userID,
-	)
-	return err
+// storageName is written alongside the URL because GetUserAvatarFile below
+// selects only rows whose avatar_storage_name is non-null and non-blank, so a
+// row that never receives one can never have its avatar file served.
+//
+// Updates takes a map rather than a struct so the column can be written without
+// a matching field on the User model, which carries only AvatarURL and
+// AvatarMime.
+func (r *Repository) UpdateUserAvatarUrl(userID int, publicUrl, storageName, mime string) error {
+	if r.GormDB == nil {
+		return fmt.Errorf("gorm db is not initialized")
+	}
+	return r.GormDB.Session(&gorm.Session{SkipDefaultTransaction: true}).
+		Model(&User{}).
+		Where("id = ?", userID).
+		Updates(map[string]interface{}{
+			"avatar_url":          publicUrl,
+			"avatar_storage_name": storageName,
+			"avatar_mime_type":    mime,
+			"updated_at":          gorm.Expr("CURRENT_TIMESTAMP"),
+		}).Error
 }
 
-// Currently not being used
-func (r *Repository) GetUserAvatarBinary(userID int) ([]byte, string, error) {
-	var data []byte
-	var mime sql.NullString
-	err := r.DB.QueryRow(
-		"SELECT avatar_data, avatar_mime_type FROM users WHERE id = $1 AND avatar_data IS NOT NULL",
+func (r *Repository) GetUserAvatarFile(userID int) (storageName, mimeType string, err error) {
+	var name, mime sql.NullString
+	err = r.DB.QueryRow(
+		`SELECT avatar_storage_name, avatar_mime_type
+		 FROM users
+		 WHERE id = $1 AND avatar_storage_name IS NOT NULL AND btrim(avatar_storage_name) <> ''`,
 		userID,
-	).Scan(&data, &mime)
+	).Scan(&name, &mime)
 	if err != nil {
-		return nil, "", err
+		return "", "", err
 	}
 
 	contentType := "application/octet-stream"
 	if mime.Valid && strings.TrimSpace(mime.String) != "" {
 		contentType = mime.String
 	}
-
-	return data, contentType, nil
+	return name.String, contentType, nil
 }
 
 func (r *Repository) SaveOTP(tempToken, email, otpCode string) error {
@@ -263,7 +276,6 @@ func (r *Repository) CreateOAuthUser(req OAuthUserPayload) (int64, error) {
 	}
 
 	var id int64
-	// how to take from oauth user? is it in request?
 	query := `
 		INSERT INTO users (
 			username, email, first_name, last_name, avatar_url,
@@ -292,56 +304,3 @@ func (r *Repository) CreateOAuthUser(req OAuthUserPayload) (int64, error) {
 
 	return id, nil
 }
-
-// func (r *Repository) GetFriends(userID int) ([]Friend, error) {
-// 	rows, err := r.DB.Query(`
-// 		SELECT u.id, u.username, u.avatar_url, f.created_at
-// 		FROM friendships f
-// 		JOIN users u ON f.friend_id = u.id
-// 		WHERE f.user_id = $1
-// 		ORDER BY f.created_at DESC
-// 	`, userID)//--JOIN combine two table. ON only combine two rows w/ specific value match
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer rows.Close()
-
-// 	var friends []Friend
-// 	for rows.Next() {
-// 		var f Friend
-// 		var avatarURL sql.NullString
-// 		if err := rows.Scan(&f.ID, &f.Username, &avatarURL, &f.AddedAt); err != nil {
-// 			return nil, err
-// 		}
-// 		if avatarURL.Valid {
-// 			urlStr := avatarURL.String
-// 			f.AvatarURL = &urlStr
-// 		}
-// 		f.IsOnline = true
-// 		friends = append(friends, f)
-// 	}
-// 	if friends == nil {
-// 		friends = []Friend{}
-// 	}
-// 	return friends, nil
-// }
-
-// func (r *Repository) AddFriend(userID, friendID int) error {
-// 	//check if friend exists
-// 	var exists int
-// 	err := r.DB.QueryRow("SELECT id FROM users WHERE id = $1", friendID).Scan(&exists)
-// 	if err != nil {
-// 		return fmt.Errorf("friend user does not exist")
-// 	}
-
-// 	_, err = r.DB.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", userID, friendID)
-// 	//bidirectional for simplicirt
-// 	_, err = r.DB.Exec("INSERT IGNORE INTO friendships (user_id, friend_id) VALUES ($1, $2)", friendID, userID)
-// 	return err
-// }
-
-// func (r *Repository) RemoveFriend(userID, friendID int) error {
-// 	_, err := r.DB.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", userID, friendID)
-// 	_, err = r.DB.Exec("DELETE FROM friendships WHERE user_id = $1 AND friend_id = $2", friendID, userID)
-// 	return err
-// }

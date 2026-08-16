@@ -14,6 +14,7 @@ type User struct {
 	FirstName     string     `json:"firstName"`
 	LastName      string     `json:"lastName"`
 	PhoneNo       *string    `json:"phoneNo"`
+	Address       *string    `json:"address"`
 	DateOfBirth   *time.Time `json:"dateOfBirth"`
 	Gender        *string    `json:"gender"`
 	AvatarURL     *string    `json:"avatarUrl,omitempty"`
@@ -30,6 +31,8 @@ type User struct {
 
 	AvatarData []byte `json:"-"`
 }
+
+func (User) TableName() string { return "users" }
 
 type RegisterRequest struct {
 	Username    string     `json:"username"`
@@ -63,6 +66,7 @@ type UpdateProfileRequest struct {
 	AvatarURL   *string    `json:"avatar"`
 	Email       *string    `json:"email"`
 	PhoneNo     *string    `json:"phoneNo"`
+	Address     *string    `json:"address"`
 }
 
 type OTP struct {

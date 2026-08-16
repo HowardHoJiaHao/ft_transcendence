@@ -19,9 +19,11 @@ func TestGetProfileReturnsMemberProfileFieldsWithoutEmail(t *testing.T) {
 	}
 	defer db.Close()
 
+	// Column order mirrors the SELECT in Repository.GetUserByID — a mismatch
+	// here surfaces as a scan error and a 404, not as a helpful message.
 	rows := sqlmock.NewRows([]string{
-		"id", "username", "email", "first_name", "last_name", "phone_no", "date_of_birth", "gender", "avatar_url", "avatar_data", "avatar_mime_type", "bio", "requires_2fa", "role", "account_status", "oauth_id", "oauth_provider", "created_at",
-	}).AddRow(5, "alice", "alice@example.com", "Alice", "Tan", "+60123456789", time.Date(1995, time.May, 20, 0, 0, 0, 0, time.UTC), "Female", "/avatar/alice.png", nil, nil, "Badminton fan", false, "user", "active", nil, nil, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC))
+		"id", "username", "email", "first_name", "last_name", "phone_no", "address", "date_of_birth", "gender", "avatar_url", "avatar_data", "avatar_mime_type", "bio", "requires_2fa", "role", "account_status", "oauth_id", "oauth_provider", "created_at",
+	}).AddRow(5, "alice", "alice@example.com", "Alice", "Tan", "+60123456789", "12 Jalan Ampang, Kuala Lumpur", time.Date(1995, time.May, 20, 0, 0, 0, 0, time.UTC), "Female", "/avatar/alice.png", nil, nil, "Badminton fan", false, "user", "active", nil, nil, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC))
 	mock.ExpectQuery("SELECT id, username, email").WithArgs(5).WillReturnRows(rows)
 
 	e := echo.New()
@@ -46,7 +48,10 @@ func TestGetProfileReturnsMemberProfileFieldsWithoutEmail(t *testing.T) {
 	if response["username"] != "alice" || response["firstName"] != "Alice" || response["lastName"] != "Tan" || response["bio"] != "Badminton fan" || response["createdAt"] != "2026-01-01T00:00:00Z" {
 		t.Fatalf("unexpected public profile: %#v", response)
 	}
-	for _, privateField := range []string{"email", "accountStatus", "phoneNo", "gender", "dateOfBirth"} {
+	// "address" is in this list because a home address must never reach an
+	// anonymous visitor. It leaves the backend in exactly two places: the
+	// owner's own /me response, and the seller of an order that buyer placed.
+	for _, privateField := range []string{"email", "accountStatus", "phoneNo", "gender", "dateOfBirth", "address"} {
 		if _, found := response[privateField]; found {
 			t.Fatalf("response unexpectedly contains private field %q", privateField)
 		}

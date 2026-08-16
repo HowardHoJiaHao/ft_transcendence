@@ -79,6 +79,8 @@ func AdminAuth(db *sql.DB) echo.MiddlewareFunc {
 			if status != "active" {
 				return c.JSON(http.StatusForbidden, map[string]string{"error": "Account is not active"})
 			}
+			// check if the user is an admin or moderator, if not then return forbidden
+			// then it will allow the admin to access the admin page, and moderator to access the moderator page
 			if role != "admin" && role != "moderator" {
 				return c.JSON(http.StatusForbidden, map[string]string{"error": "Administrator or moderator access required"})
 			}
