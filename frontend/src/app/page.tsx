@@ -52,6 +52,13 @@ const BALANCE_CATEGORIES = [
   'Head Light',
 ];
 
+const LOCATIONS = [
+  'All',
+  'Kuala Lumpur',
+  'Petaling Jaya',
+  'Shah Alam',
+];
+
 export default function Home()
 {
   const { user, logout } = useAuth();
@@ -60,6 +67,11 @@ export default function Home()
   const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
   const [selectedFlexibilities, setSelectedFlexibilities] = useState<string[]>([]);
   const [selectedBalances, setSelectedBalances] = useState<string[]>([]);
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  const [minPriceInput, setMinPriceInput] = useState('');
+  const [maxPriceInput, setMaxPriceInput] = useState('');
+  const [appliedMinPrice, setAppliedMinPrice] = useState('');
+  const [appliedMaxPrice, setAppliedMaxPrice] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('featured');
@@ -96,7 +108,7 @@ export default function Home()
 
   useEffect(() => {
 	setCurrentPage(1)
-  }, [selectedWeights, selectedFlexibilities, selectedBalances, searchQuery, sortBy]);
+  }, [selectedWeights, selectedFlexibilities, selectedBalances, selectedLocations, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy]);
 
 
   //			FETCH PRODUCTS FROM API
@@ -134,6 +146,16 @@ export default function Home()
 			query.append('balanceCategory', b);
 			});
 		}
+		if (selectedLocations.length > 0)
+		{
+		  selectedLocations.forEach((loc) => {
+			query.append('location', loc);
+		  });
+		}
+		if (appliedMinPrice.trim())
+			query.append('minPrice', appliedMinPrice.trim());
+		if (appliedMaxPrice.trim())
+			query.append('maxPrice', appliedMaxPrice.trim());
         if (searchQuery.trim())
           query.append('search', searchQuery.trim());
         query.append('sort', sortBy);
@@ -198,11 +220,22 @@ export default function Home()
               <h3 className="text-sm font-semibold mb-3">Price Range</h3>
 			  	<div className="flex justify-between text-xs mt-2 text-[var(--secondary)] gap-4">
 				  <div className="flex items-center gap-2">
-					<input className="placeholder:text-[11px]" type="number" id="minPrice" placeholder="Min" min="0"/>
+					<input className="placeholder:text-[11px]" type="number" id="minPrice" placeholder="Min" min="0"
+					  value={minPriceInput}
+					  onChange={(e) => setMinPriceInput(e.target.value)}
+					/>
 					<span className="text-base flex items-center justify-center">-</span>
-					<input className="placeholder:text-[11px]" type="number" id="maxPrice" placeholder="Max" min="0"/>
+					<input className="placeholder:text-[11px]" type="number" id="maxPrice" placeholder="Max" min="0"
+					  value={maxPriceInput}
+					  onChange={(e) => setMaxPriceInput(e.target.value)}
+					/>
 				  </div>
-                  <button className="px-2.5 py-1">Apply</button>
+                  <button className="px-2.5 py-1"
+					onClick={() => {
+					  setAppliedMinPrice(minPriceInput);
+					  setAppliedMaxPrice(maxPriceInput);
+					}}
+				  >Apply</button>
 				</div>
             </div>
 
@@ -269,18 +302,20 @@ export default function Home()
             <div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
               <h3 className="text-sm font-semibold mb-3">Location</h3>
               <div className="flex flex-col gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
-                <label>
-                  <input type="checkbox" /> Kuala Lumpur
-                </label>
-                <label>
-                  <input type="checkbox" /> Petaling Jaya
-                </label>
-                <label>
-                  <input type="checkbox" /> Shah Alam
-                </label>
-                <label>
-                  <input type="checkbox" /> All Locations
-                </label>
+                {LOCATIONS.filter(c => c !== 'All').map((loc) => (
+                  <label key={loc}>
+                    <input type="checkbox" value={loc} checked={selectedLocations.includes(loc)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        setSelectedLocations((prev) =>
+                          prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+                        );
+                      }}
+                    />
+                    {loc}
+                  </label>
+                ))}
               </div>
             </div>
 

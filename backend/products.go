@@ -205,6 +205,7 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	weightCategory := c.QueryParams()["weightCategory"]
 	flexibilityCategory := c.QueryParams()["flexibilityCategory"]
 	balanceCategory := c.QueryParams()["balanceCategory"]
+	location := c.QueryParams()["location"]
 	search := c.QueryParam("search")
 	sortBy := c.QueryParam("sort")
 	limit := c.QueryParam("limit")
@@ -272,6 +273,18 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 			args = append(args, balanceCategory[i])
 		}
 		whereClause += " AND l.balance_category IN (" + placeholders + ")"
+	}
+	if len(location) > 0 {
+		startPos := len(args) + 1
+		placeholders := ""
+		for i := range location {
+			if i > 0 {
+				placeholders += ", "
+			}
+			placeholders += fmt.Sprintf("$%d", startPos+i)
+			args = append(args, location[i])
+		}
+		whereClause += " AND l.location IN (" + placeholders + ")"
 	}
 	if search != "" {
 		whereClause += fmt.Sprintf(" AND l.title ILIKE $%d", len(args)+1)
