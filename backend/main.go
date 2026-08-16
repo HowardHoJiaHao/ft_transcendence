@@ -201,13 +201,3 @@ func healthCheckHandler(c echo.Context, rawDB *sql.DB) error {
 		"db":     "connected",
 	})
 }
-<<<<<<< Updated upstream
-
-func statusHandler(c echo.Context) error {
-	return c.JSON(200, map[string]interface{}{
-		"status":  "running", //the map element
-		"version": "1.0.0",
-	})
-}
-=======
->>>>>>> Stashed changes
