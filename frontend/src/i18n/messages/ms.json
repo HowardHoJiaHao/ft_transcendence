@@ -58,6 +58,20 @@
     "accountRestored": "{name} telah dipulihkan",
     "accountUpdateFailed": "Tidak dapat mengemas kini status akaun"
   },
+  "validation": {
+    "emailRequired": "Sila masukkan e-mel baharu",
+    "emailInvalid": "Itu tidak kelihatan seperti alamat e-mel yang sah",
+    "emailTooLong": "Alamat e-mel terlalu panjang",
+    "phoneRequired": "Sila masukkan nombor telefon baharu",
+    "phoneInvalid": "Nombor telefon mestilah 8 hingga 15 digit, boleh bermula dengan +",
+    "phoneTooLong": "Nombor telefon terlalu panjang",
+    "firstNameTooLong": "Nama pertama terlalu panjang (maksimum 50 aksara)",
+    "lastNameTooLong": "Nama akhir terlalu panjang (maksimum 50 aksara)",
+    "addressTooLong": "Alamat terlalu panjang (maksimum 255 aksara)",
+    "bioTooLong": "Bio terlalu panjang (maksimum 500 aksara)",
+    "dateOfBirthFuture": "Tarikh lahir tidak boleh pada masa hadapan",
+    "dateOfBirthInvalid": "Sila masukkan tarikh lahir yang sah"
+  },
   "product": {
     "sold": "Terjual",
     "quantity": "Kuantiti: {count}"

@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toast/ToastContext";
 import Header from "@/components/Header/Header";
 import { resolveAvatarUrl, PLACEHOLDER_AVATAR, avatarClass } from "@/lib/avatar";
 import { useI18n } from "@/context/LanguageContext";
+import { PROFILE_LIMITS, validateProfileFields } from "@/lib/profileValidation";
 
 interface UserProfile {
   id: number;
@@ -281,6 +282,17 @@ export default function ProfilePage() {
   };
 
   const handleSave = async () => {
+    const problems = validateProfileFields({
+      firstName: inputData.firstName,
+      lastName: inputData.lastName,
+      address: inputData.address,
+      dateOfBirth: inputData.dateOfBirth,
+    });
+    if (problems.length > 0) {
+      showToast(t(problems[0].key), "error");
+      return;
+    }
+
     try {
       const updatedInputData = {
         ...inputData,
@@ -302,7 +314,8 @@ export default function ProfilePage() {
         const updated = await res.json();
         setUser(updated);
       } else {
-        showToast(t("profile.profileUpdateFailed"), "error");
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error ?? t("profile.profileUpdateFailed"), "error");
       }
     } catch (err) {
       showToast(t("profile.connectionError"), "error");
@@ -506,6 +519,7 @@ export default function ProfilePage() {
             <input
               id="firstName"
               name="firstName"
+              maxLength={PROFILE_LIMITS.name}
               value={inputData.firstName}
               onChange={handleChange}
               placeholder={t("profile.firstNamePlaceholder")}
@@ -520,6 +534,7 @@ export default function ProfilePage() {
             <input
               id="lastName"
               name="lastName"
+              maxLength={PROFILE_LIMITS.name}
               value={inputData.lastName}
               onChange={handleChange}
               placeholder={t("profile.lastNamePlaceholder")}
@@ -541,7 +556,7 @@ export default function ProfilePage() {
                 value={inputData.address}
                 onChange={handleChange}
                 placeholder={t("profile.addressPlaceholder")}
-                maxLength={255}
+                maxLength={PROFILE_LIMITS.address}
                 className={`${INPUT} w-full`}
               />
               <span className="block text-xs text-[#898781] mt-1.5">

@@ -58,6 +58,20 @@
     "accountRestored": "{name} 已恢复",
     "accountUpdateFailed": "无法更新账户状态"
   },
+  "validation": {
+    "emailRequired": "请输入新的电子邮件地址",
+    "emailInvalid": "这看起来不是有效的电子邮件地址",
+    "emailTooLong": "电子邮件地址过长",
+    "phoneRequired": "请输入新的电话号码",
+    "phoneInvalid": "电话号码必须为 8 至 15 位数字，可以以 + 开头",
+    "phoneTooLong": "电话号码过长",
+    "firstNameTooLong": "名字过长（最多 50 个字符）",
+    "lastNameTooLong": "姓氏过长（最多 50 个字符）",
+    "addressTooLong": "地址过长（最多 255 个字符）",
+    "bioTooLong": "个人简介过长（最多 500 个字符）",
+    "dateOfBirthFuture": "出生日期不能是未来的日期",
+    "dateOfBirthInvalid": "请输入有效的出生日期"
+  },
   "product": {
     "sold": "已售出",
     "quantity": "数量：{count}"

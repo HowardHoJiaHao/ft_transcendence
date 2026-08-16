@@ -174,14 +174,39 @@ func (r *Repository) UpdatePassword(userID int, passwordHash string) error {
 		}).Error
 }
 
-// use r.DB.exec when you dont care the information once you execute.use queryrow if you want to know some variables after you exec
-// in this case we ignore the sql result
+// Explicit map, not Updates(struct): the struct form skips zero values, which
+// would drop a pointer-to-"" meaning "clear this field".
 func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
-	user, err := r.GetUserByID(id)
-	if err != nil {
-		return fmt.Errorf("Failed to fetch id in UpdateUserProfile")
+	updates := map[string]interface{}{}
+	for column, value := range map[string]*string{
+		"first_name": req.FirstName,
+		"last_name":  req.LastName,
+		"bio":        req.Bio,
+		"avatar_url": req.AvatarURL,
+		"email":      req.Email,
+		"phone_no":   req.PhoneNo,
+		"address":    req.Address,
+	} {
+		if value != nil {
+			updates[column] = *value
+		}
 	}
-	return r.GormDB.Model(user).Updates(req).Error
+	// CHECK (gender IN ('Male','Female')) accepts NULL but not "", and the
+	// profile page's Clear button sends "".
+	if req.Gender != nil {
+		if *req.Gender == "" {
+			updates["gender"] = nil
+		} else {
+			updates["gender"] = *req.Gender
+		}
+	}
+	if req.DateOfBirth != nil {
+		updates["date_of_birth"] = *req.DateOfBirth
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return r.GormDB.Model(&User{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // storageName is written alongside the URL because GetUserAvatarFile below

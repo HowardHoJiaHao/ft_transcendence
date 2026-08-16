@@ -57,10 +57,11 @@ type LoginResponse struct {
 	TempToken string `json:"tempToken,omitempty"`
 }
 
+// All pointers so nil ("not sent") is distinguishable from "" ("clear it").
 type UpdateProfileRequest struct {
-	FirstName   string     `json:"firstName"`
-	LastName    string     `json:"lastName"`
-	Bio         string     `json:"bio"`
+	FirstName   *string    `json:"firstName"`
+	LastName    *string    `json:"lastName"`
+	Bio         *string    `json:"bio"`
 	DateOfBirth *time.Time `json:"dateOfBirth"`
 	Gender      *string    `json:"gender"`
 	AvatarURL   *string    `json:"avatar"`

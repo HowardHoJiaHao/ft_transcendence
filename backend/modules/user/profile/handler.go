@@ -150,6 +150,14 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
 	}
+
+	if fieldErrors := validateProfileUpdate(&req, time.Now()); len(fieldErrors) > 0 {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"error":  fieldErrors[0].Message,
+			"errors": fieldErrors,
+		})
+	}
+
 	if req.Email != nil {
 		currentUser, err := h.repo.GetUserByID(userId)
 		if err != nil {
@@ -161,6 +169,12 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 	}
 
 	if err := h.repo.UpdateUserProfile(userId, req); err != nil {
+		if isUniqueViolation(err) {
+			return c.JSON(http.StatusConflict, map[string]interface{}{
+				"error":  "that email is already registered",
+				"errors": []FieldError{{Field: "email", Message: "that email is already registered"}},
+			})
+		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update profile"})
 	}
 

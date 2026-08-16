@@ -88,6 +88,29 @@ Meant to hold multiple photos per listing. **Effectively unused** —
 
 ---
 
+## listing_files
+
+The attachment table that `listing_images` never became. **Actively used** by
+`backend/listing_files.go` — images and documents attached to a listing, with
+the bytes on disk and only metadata here.
+
+| Column | Type | Use |
+|---|---|---|
+| `id` | bigserial PK | Row ID |
+| `listing_id` | int FK → listings, CASCADE | Which listing owns the file |
+| `original_name` | varchar(255) | The filename the uploader chose, shown in the UI |
+| `storage_name` | varchar(255) unique | Generated name on disk — never the user's, so an upload can't pick its own path |
+| `file_kind` | varchar(20), CHECK | `image` or `document` |
+| `mime_type` | varchar(100) | Sent as `Content-Type` when serving, rather than trusting the extension |
+| `size_bytes` | bigint, CHECK `> 0` | Size, enforced non-empty |
+| `display_order` | int, default 0 | Ordering within a listing |
+| `created_at` | timestamp | Audit timestamp |
+
+Indexed by `idx_listing_files_listing_order` on
+`(listing_id, file_kind, display_order, id)`.
+
+---
+
 ## orders
 
 Purchase records — **one row per listing bought**, not one row per checkout.
@@ -223,21 +246,70 @@ override fresh on every request.
 
 ---
 
-## reviews
+## payments
 
-Buyer feedback on sellers/listings. **Currently unused** — no Go handler
-reads or writes this table. The `rating`/`reviews` count shown on listings
-comes from the cached columns on `listings`, not from aggregating this table.
+Stripe checkout records, separate from order fulfilment. **Actively used** by
+`backend/stripe_payments.go`. One payment funds one-or-more same-seller order
+rows; meetup orders have no payment row at all (`orders.payment_id` is NULL).
 
 | Column | Type | Use |
 |---|---|---|
-| `id` | serial PK | Row ID |
-| `reviewer_id` | int FK → users | Who wrote the review |
-| `reviewee_id` | int FK → users | Who's being reviewed (the seller) |
-| `listing_id` | int FK → listings, nullable | Optionally ties the review to a listing; set NULL if the listing is deleted |
-| `rating` | int, CHECK 1–5 | Star rating |
-| `comment` | text | Review body |
-| `created_at` | timestamp | Audit timestamp |
+| `id` | bigserial PK | Payment ID, referenced by `orders.payment_id` |
+| `checkout_request_id` | uuid unique | Client-supplied idempotency handle — a retried checkout reuses the same payment instead of charging twice |
+| `stripe_idempotency_key` | varchar(255) unique | Passed to Stripe so a retried API call is not a second charge |
+| `buyer_id`, `seller_id` | int FK → users, **RESTRICT** | The two parties; deleting either is blocked while a payment exists |
+| `provider` | varchar(20), CHECK `= 'stripe'` | Only provider supported |
+| `currency` | char(3), CHECK `= 'myr'` | Only currency supported |
+| `amount_minor` | bigint, CHECK `> 0` | Total in sen (minor units), avoiding float rounding |
+| `platform_fee_minor` | bigint, CHECK `0 ≤ fee ≤ amount` | Marketplace's cut |
+| `status` | varchar(20), CHECK | `initializing` / `pending` / `paid` / `failed` / `cancelled` / `expired` / `refunded` |
+| `stripe_checkout_session_id` | text | Stripe session; partial-unique when non-NULL |
+| `stripe_checkout_url` | text | Where the buyer is sent to pay |
+| `stripe_payment_intent_id` | text | Stripe intent; partial-unique when non-NULL |
+| `session_expires_at` | timestamp | When the Stripe session lapses |
+| `stock_released` | boolean, default false | Guards the reserved stock from being returned twice when a session expires |
+| `created_at`, `updated_at` | timestamp | Audit timestamps |
+
+---
+
+## stripe_webhook_events
+
+Replay guard for Stripe webhooks. **Actively used** by
+`backend/stripe_webhooks.go` — Stripe redelivers events, so the ID is recorded
+and a repeat delivery is skipped rather than processed twice.
+
+| Column | Type | Use |
+|---|---|---|
+| `stripe_event_id` | text PK | Stripe's event ID — being the primary key is what makes the insert the dedupe check |
+| `event_type` | text | e.g. `checkout.session.completed` |
+| `stripe_object_id` | text | The session/intent the event refers to |
+| `processed_at` | timestamp | When it was handled |
+
+---
+
+## listing_reviews
+
+Buyer feedback on a listing. **Actively used** — written by
+`createListingReview` and read by `getListingReviews` in
+`backend/listing_reviews.go` (`POST`/`GET /api/v1/products/:id/reviews`).
+
+An older `reviews` table (seller-level feedback) was dropped by a migration in
+`backend/db.go`; this replaces it. The `rating`/`reviews` columns cached on
+`listings` are separate seed values and are **not** aggregated from here.
+
+| Column | Type | Use |
+|---|---|---|
+| `id` | bigserial PK | Row ID |
+| `listing_id` | int FK → listings, CASCADE | Which listing is being reviewed |
+| `reviewer_id` | int FK → users, CASCADE | Who wrote the review |
+| `order_id` | int FK → orders, **RESTRICT** | The purchase that entitles the review — only a completed buyer may review, and the order can't be deleted out from under it |
+| `rating` | smallint, CHECK 1–5 | Star rating |
+| `comment` | text, CHECK trimmed length 1–1000 | Review body; blank/whitespace-only is rejected by the constraint as well as the handler |
+| `created_at`, `updated_at` | timestamp | Audit timestamps |
+
+`UNIQUE (listing_id, reviewer_id)` — one review per buyer per listing.
+Indexed by `idx_listing_reviews_listing_newest` on
+`(listing_id, created_at DESC, id DESC)` for the newest-first listing page.
 
 ---
 
@@ -269,6 +341,28 @@ The friend graph. Actively used by `backend/modules/user/friends/`.
 | `user_id1`, `user_id2` | int FK → users | The pair; `UNIQUE(user_id1, user_id2)` prevents duplicate pairs |
 | `status` | varchar(20), default `'pending'` | `pending` / `accepted` / `blocked` |
 | `created_at` | timestamp | Audit timestamp |
+
+---
+
+## notifications
+
+In-app notification feed behind the header bell. **Actively used** by
+`backend/modules/user/notifications/`, with events raised from
+`listing_reviews.go`, `orders.go`, the chat hub and the friends module.
+
+| Column | Type | Use |
+|---|---|---|
+| `id` | bigserial PK | Row ID |
+| `user_id` | int FK → users, CASCADE | Who receives the notification |
+| `actor_id` | int FK → users, **SET NULL** | Who caused it; the notification survives that account being deleted |
+| `notification_type` | varchar(40), CHECK | `message` / `friend_added` / `order_new` / `order_completed` / `review_added` |
+| `resource_id` | int | The listing/order/message the notification points at — no FK, since the target table varies by type |
+| `data` | jsonb, default `{}` | Per-type payload for rendering (names, titles) without extra joins |
+| `read_at` | timestamp, nullable | NULL = unread; drives the unread badge |
+| `created_at`, `updated_at` | timestamp | Audit timestamps |
+
+Two indexes on `(user_id, updated_at DESC, id DESC)` — one plain for the feed,
+one partial `WHERE read_at IS NULL` so the unread count stays cheap.
 
 ---
 
@@ -328,8 +422,9 @@ once the team agrees.
 
 ## faq_embeddings
 
-Vector store for the AI FAQ chatbot's RAG retrieval. Used exclusively by
-`ai_service/` (Python/FastAPI) — never touched by the Go backend.
+The original vector store for the AI FAQ chatbot. **Fully unused** —
+superseded by `knowledge_chunks`, which `ai_service/rag.py` creates and queries
+instead. `faq_embeddings` now appears nowhere outside `db/init.sql`.
 
 | Column | Type | Use |
 |---|---|---|
@@ -338,6 +433,88 @@ Vector store for the AI FAQ chatbot's RAG retrieval. Used exclusively by
 | `chunk_text` | text | The actual text chunk that was embedded |
 | `embedding` | vector(1536) | The embedding vector, indexed with `ivfflat` for cosine-similarity search |
 | `created_at` | timestamp | Audit timestamp |
+
+---
+
+## knowledge_chunks
+
+The live RAG store, superseding `faq_embeddings` — richer metadata and hybrid
+search (vector + full-text). Used exclusively by `ai_service/rag.py`, which
+also creates it at runtime; never touched by the Go backend.
+
+| Column | Type | Use |
+|---|---|---|
+| `id` | bigserial PK | Row ID |
+| `chunk_id`, `source_id` | varchar(255) | Stable identifiers for the chunk and its source document |
+| `source_file` | varchar(255) | Which file under `ai_service/faq_docs/` it came from |
+| `document_title`, `section_title` | text | Headings, surfaced as citations in answers |
+| `category` | varchar(100) | Topic grouping, filterable at retrieval |
+| `audience` | varchar(50), default `'all'` | Who the chunk is for |
+| `last_reviewed` | varchar(32) | Freshness marker for content review |
+| `chunk_text` | text | The text that was embedded |
+| `content_hash` | char(64) | Detects unchanged content so re-ingestion can skip it |
+| `embedding_model`, `embedding_dimension` | varchar/int | Which model produced the vector, so a model change is detectable |
+| `ingestion_version` | varchar(100) | Ingestion batch; `UNIQUE (ingestion_version, chunk_id)` |
+| `is_active` | boolean, default false | Only one ingestion version serves traffic — a new batch is loaded, then flipped active |
+| `search_vector` | tsvector, **generated** | Auto-maintained from title + section + text for full-text search |
+| `embedding` | vector | The embedding vector |
+| `created_at`, `updated_at` | timestamptz | Audit timestamps |
+
+Indexed by `idx_knowledge_chunks_active` on `(is_active, category)` and a GIN
+index on `search_vector`.
+
+---
+
+## recommendation_training_feedback
+
+Post-purchase survey answers that become training data for the racket
+recommender. Written by `createRecommendationSurvey` in `backend/orders.go`,
+read by `ai_service/training.py`.
+
+| Column | Type | Use |
+|---|---|---|
+| `id` | bigserial PK | Row ID |
+| `order_id` | int FK → orders, unique, CASCADE | One survey per order |
+| `buyer_id` | int FK → users, CASCADE | Who answered |
+| `age_group` | varchar(32), CHECK | `under_13` / `13-17` / `18-25` / `26-35` / `36-45` / `46_plus` |
+| `gender` | varchar(32), CHECK | `male` / `female` / `prefer_not_to_say` |
+| `experience_level` | varchar(32), CHECK | `less_than_6_months` … `more_than_5_years` |
+| `play_style` | varchar(32), CHECK | `attacking` / `defensive` / `balanced` / `not_sure` |
+| `budget_range` | varchar(32), CHECK | `under_200` / `200-400` / `400-700` / `700_plus` |
+| `weight_category` | varchar(32), CHECK | `1U`–`8U` — the label being predicted |
+| `flexibility_category` | varchar(32), CHECK | `Stiff Shaft` / `Medium Flex` / `High Flexibility` |
+| `balance_category` | varchar(32), CHECK | `Head Heavy` / `Even Balance` / `Head Light` |
+| `created_at` | timestamptz | Audit timestamp |
+
+Every answer column is CHECK-constrained, so the database rejects a value the
+model was never trained on.
+
+---
+
+## ml_training_runs
+
+Queue and audit history for recommender retraining. Written by
+`backend/ml_admin.go` (admin-triggered), progressed by `ai_service/training.py`.
+
+| Column | Type | Use |
+|---|---|---|
+| `id` | bigserial PK | Run ID |
+| `requested_by` | int FK → users, SET NULL | Who started it; history survives the account |
+| `requested_by_role` | varchar(20), CHECK | `moderator` or `admin` |
+| `status` | varchar(20), CHECK | `queued` / `running` / `succeeded` / `failed` |
+| `progress` | smallint, CHECK 0–100 | Percentage for the admin progress bar |
+| `stage` | varchar(100), default `'Queued'` | Human-readable current step |
+| `synthetic_rows`, `survey_rows`, `total_rows` | int, CHECK `>= 0` | Dataset composition — how much was real survey data vs generated |
+| `model_version` | varchar(100) | Version tag of the produced model |
+| `metrics` | jsonb, default `{}` | Accuracy and friends, shown after the run |
+| `dataset_sha256`, `artifact_sha256` | char(64) | Digests making a run reproducible/verifiable |
+| `error_message` | varchar(500) | Failure detail |
+| `is_active` | boolean, default false | Marks the run whose model is serving |
+| `created_at` | timestamptz | Queued time |
+| `started_at`, `finished_at` | timestamptz | Run window |
+
+Two partial unique indexes on the constant `(1)` enforce singletons: at most
+one run `queued`/`running`, and at most one `is_active`.
 
 ---
 
@@ -359,17 +536,30 @@ One-time passcodes for email verification / login 2FA. Not declared in
 
 ## Quick reference — used vs. unused
 
-**Fully wired and live:** `users`, `listings`, `orders` (real checkout via
-`POST /orders` + `PUT /orders/:id/complete`), `messages`, `friendships`,
-`otps`, `faq_embeddings`
+**Marketplace core:** `users`, `listings`, `listing_files`, `orders`,
+`payments`, `stripe_webhook_events`, `listing_reviews`
 
-**Schema exists, nothing uses it yet:** `listing_images` (images tracked by
-filename convention instead), `reviews`, `analytics` (dead event log)
+**Social:** `messages`, `friendships`, `notifications`
 
-**Public API (added this session):** `api_keys` + `api_request_logs` — see
+**Auth & developer API:** `otps`, `api_keys`, `api_request_logs` — see
 `API_DOCUMENTATION.md`
+
+**AI / ML:** `knowledge_chunks` (RAG store, Python only),
+`recommendation_training_feedback` and `ml_training_runs` (written by Go,
+consumed by `ai_service/training.py`)
+
+**Schema exists, nothing uses it:** `listing_images` — superseded by
+`listing_files`; `faq_embeddings` — superseded by `knowledge_chunks`;
+`analytics` — dead event log
+
+**Dropped:** `reviews` (seller-level feedback) — removed by a migration in
+`backend/db.go`, replaced by `listing_reviews`
 
 **Columns that exist but nothing reads/writes them:** `listings.currency`
 (hardcoded `'RM'` everywhere). `users.oauth_id` / `users.oauth_provider` are
 no longer in this list — Google OAuth now writes them (`backend/modules/user/repository.go`,
 read back in `backend/admin.go`), with a partial unique index on the pair.
+
+**Not in `db/init.sql`:** `otps` (GORM `AutoMigrate`), plus columns added by
+runtime migrations in `backend/db.go` — `listings.stock_quantity`,
+`orders.payment_id`.

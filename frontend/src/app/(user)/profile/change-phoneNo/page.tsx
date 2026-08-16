@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
+import { PROFILE_LIMITS, normalizePhone, validatePhone } from '@/lib/profileValidation';
 
 export default function ChangePhoneNoPage()
 {
@@ -20,7 +21,14 @@ export default function ChangePhoneNoPage()
 
 		if (!newPhoneNo.trim())
 		{
-			setMsg('Please enter a new Phone Number')
+			setMsg(t('validation.phoneRequired'));
+			return ;
+		}
+		const invalid = validatePhone(newPhoneNo);
+		if (invalid)
+		{
+			setMsg(t(invalid));
+			showToast(t(invalid), 'error');
 			return ;
 		}
 		try
@@ -34,7 +42,7 @@ export default function ChangePhoneNoPage()
 					'Content-Type': 'application/json',
 					Authorization: token ? 'Bearer ' + token : '',
 				},
-				body: JSON.stringify({ phoneNo: newPhoneNo.trim() })
+				body: JSON.stringify({ phoneNo: normalizePhone(newPhoneNo) })
 			});
 
 			const data = await res.json().catch(() => ({}));
@@ -66,7 +74,17 @@ export default function ChangePhoneNoPage()
 			<main className="bg-white p-10 rounded-lg shadow-[0_4px_6px_rgba(0,0,0,0.1)] w-full max-w-[560px] flex flex-col gap-4">
 				<h1 className="text-center mb-2 text-[#333]">Change Phone Number</h1>
 				<form onSubmit={handleSubmit} className="grid gap-3">
-					<input type="PhoneNo" placeholder="Enter new Phone Number" value={newPhoneNo} onChange={(e) => setNewPhoneNo(e.target.value)} required className="p-3 border border-[#ccc] rounded text-base" />
+					<input
+						type="tel"
+						inputMode="tel"
+						autoComplete="tel"
+						maxLength={PROFILE_LIMITS.phoneRaw}
+						placeholder="Enter new Phone Number"
+						value={newPhoneNo}
+						onChange={(e) => setNewPhoneNo(e.target.value)}
+						required
+						className="p-3 border border-[#ccc] rounded text-base"
+					/>
 					<button type="submit" disabled={loading} className="p-3 bg-[#080808] text-white border-none rounded text-base font-bold cursor-pointer w-full mt-0 hover:bg-[#323131] disabled:opacity-70 disabled:cursor-not-allowed">
 						{loading ? 'Saving...' : 'Save New Phone Number'}
 					</button>

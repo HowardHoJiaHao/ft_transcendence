@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
+import { PROFILE_LIMITS, validateEmail } from '@/lib/profileValidation';
 
 export default function ChangeEmailPage()
 {
@@ -18,9 +19,11 @@ export default function ChangeEmailPage()
 		e.preventDefault();
 		setMsg('');
 
-		if (!newEmail.trim())
+		const invalid = validateEmail(newEmail);
+		if (invalid)
 		{
-			setMsg('Please enter a new email')
+			setMsg(t(invalid));
+			showToast(t(invalid), 'error');
 			return ;
 		}
 		try
@@ -34,7 +37,7 @@ export default function ChangeEmailPage()
 					'Content-Type': 'application/json',
 					Authorization: token ? 'Bearer ' + token : '',
 				},
-				body: JSON.stringify({ email: newEmail.trim() })
+				body: JSON.stringify({ email: newEmail.trim().toLowerCase() })
 			});
 
 			const data = await res.json().catch(() => ({}));
@@ -68,6 +71,8 @@ export default function ChangeEmailPage()
 				<form onSubmit={handleSubmit} className="grid gap-3">
 					<input
 						type="email"
+						autoComplete="email"
+						maxLength={PROFILE_LIMITS.email}
 						placeholder="Enter new email"
 						value={newEmail}
 						onChange={(e) => setNewEmail(e.target.value)}
