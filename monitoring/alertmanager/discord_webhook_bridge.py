@@ -100,20 +100,32 @@ class AlertHandler(BaseHTTPRequestHandler):
             for i, alert in enumerate(alerts):
                 labels = alert.get("labels", {})
                 annotations = alert.get("annotations", {})
+                status = alert.get("status", payload.get("status", "firing"))
                 name = labels.get("alertname") or "Alert"
                 summary = annotations.get("summary") or name
                 description = annotations.get("description") or ""
-                # Header then summary and description
-                lines.append("**Alertmanager notification**")
+                instance = labels.get("instance", "")
+                job = labels.get("job", "")
+
+                if status == "resolved":
+                    lines.append("✅ Alert RESOLVED")
+                else:
+                    lines.append("🚨 Alert FIRING")
+
                 lines.append(summary)
+
+                if instance:
+                    lines.append(f"Target: {instance}")
+
+                if job:
+                    lines.append(f"Job: {job}")
+
                 if description:
                     lines.append(description)
+
                 # separate multiple alerts with a blank line
                 if i != len(alerts) - 1:
                     lines.append("")
-        else:
-            lines.append("**Alertmanager notification**")
-            lines.append("No alert details provided")
 
         # Ensure message ends with a single newline for readability in Discord
         message = "\n".join(lines) + "\n"
