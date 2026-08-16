@@ -613,20 +613,3 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		</main>
 	);
 }
-
-// function OnlineStatus({ userId, showDot = true }: { userId: number, showDot?: boolean }) {
-// 	const { onlineUsers } = useWebSocketContext();
-// 	const isOnline = onlineUsers.has(userId);
-
-// 	return (
-// 		<span className={isOnline ? 'text-[#22c55e]' : 'text-[var(--secondary)]'}>
-// 		  {showDot && (isOnline ? '●' : '○')}
-// 		  {isOnline ? 'Online' : 'Offline'}
-// 		</span>
-// 	)
-// }
-
-//<Link href={`/chat?partner=${product.sellerId}`} className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed">Chat Seller</Link>
-
-// import { useWebSocketContext } from '@/context/WebSocketContext';
-// const { onlineUsers } = useWebSocketContext();

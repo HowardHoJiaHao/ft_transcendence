@@ -30,7 +30,7 @@ export default function RootLayout({
                 <CartProvider>
                   <ToastProvider>
                       {children}
-                  </ToastProvider> {/*suggested moving toast as parents of floating chat and footer */}
+                  </ToastProvider> 
                   <FloatingChat />
                   <AIFloatingChat />
                 <Footer />
