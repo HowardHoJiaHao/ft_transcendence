@@ -82,11 +82,6 @@ export default function Home()
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 10;
 
-//   const handleSearchWithFilters = (nextSearchQuery: string) => {
-//     setSearchQuery(nextSearchQuery);
-//   };
-
-
   //			SEARH INITIALIZATION (FROM OTHER PAGE SEARCH)
   useEffect(() => {
 	const urlSearch = new URLSearchParams(window.location.search).get('search');
@@ -112,18 +107,8 @@ export default function Home()
 
 
   //			FETCH PRODUCTS FROM API
-  //new URLSearchParams(window.location.search) gives search query and get('search') gives value of search key.
   useEffect(() =>
 	{
-    // const urlSearch = typeof window === 'undefined'
-    //             ? null : new URLSearchParams(window.location.search).get('search'); //if the search comes from url (other page), get they word from the key search
-    // const currentSearch = urlSearch ?? searchQuery; //if empty, means it dont come from url, use the searchQuery
-    // if (urlSearch && urlSearch !== searchQuery) //if both exist but different, means it come from url, update searchQuery following url
-    // {
-	//   setSearchQuery(urlSearch);
-	//   return ;
-	// }
-
     const fetchProducts = async () => {
       try {
         setLoading(true);
@@ -201,7 +186,7 @@ export default function Home()
     };
 
     fetchProducts();
-  }, [selectedWeights, selectedFlexibilities, selectedBalances, searchQuery, sortBy, currentPage]);
+  }, [selectedWeights, selectedFlexibilities, selectedBalances, selectedLocations, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy, currentPage]);
 
   return (
     <main className="flex flex-col min-h-screen px-5">
