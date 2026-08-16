@@ -47,10 +47,10 @@ When a module is confirmed as complete, check its main checkbox and add its poin
 - [x] **Minor — ORM (1 point)**
   - [x] Use an ORM for database access.
 
-- [ ] **Minor — Complete notification system (1 point)**
-  - [ ] Notify users about creation actions.
-  - [ ] Notify users about update actions.
-  - [ ] Notify users about deletion actions.
+- [x] **Minor — Complete notification system (1 point)**
+  - [x] Notify users about creation actions.
+  - [x] Notify users about update actions.
+  - [x] Notify users about deletion actions.
 
 - [ ] **Minor — Real-time collaboration (1 point)**
   - [ ] Implement a collaborative feature such as shared workspaces, live editing, or collaborative drawing.

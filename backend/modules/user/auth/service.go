@@ -107,24 +107,6 @@ func ValidateToken(tokenStr string) (*Claims, error) {
 	return claims, nil
 }
 
-// func (s *Service) ValidateToken(tokenStr string) (*Claims, error) {
-// 	if !strings.HasPrefix(tokenStr, "token_") {
-// 		return nil, fmt.Errorf("invalid token format")
-// 	}
-
-// 	idStr := strings.TrimPrefix(tokenStr, "token_")
-// 	userId, err := strconv.Atoi(idStr)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("invalid user id in token")
-// 	}
-
-// 	_, err = s.repo.GetUserByID(userId)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("user not found")
-// 	}
-// 	return &Claims{UserId: userId}, nil
-// }
-
 func (s *Service) GenerateAndSendOTP(email string) (string, error) {
 	tempToken := uuid.NewString()
 	otpCode := GenerateOTP()

@@ -251,7 +251,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "container_memory_usage_bytes{id=~\"/docker/[0-9a-f]{64}\"}",
+          "expr": "container_memory_usage_bytes{id=~\".*[0-9a-f]{64}.*\"}",
           "legendFormat": "{{name}}",
           "range": true,
           "refId": "A"
@@ -345,7 +345,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_cpu_usage_seconds_total{id=~\"/docker/[0-9a-f]{64}\"}[1m])) by (id)",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{id=~\".*[0-9a-f]{64}.*\"}[1m])) by (id)",
+
           "legendFormat": "{{name}}",
           "range": true,
           "refId": "A"

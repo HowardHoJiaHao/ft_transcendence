@@ -182,31 +182,6 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
-// func (h *Handler) UpdateProfile(c echo.Context) error {
-// 	authHeader := c.Request().Header.Get("Authorization")
-// 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer token_") {
-// 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
-// 	}
-
-// 	idStr := strings.TrimPrefix(authHeader, "Bearer token_")
-// 	id, err := strconv.Atoi(idStr)
-// 	if err != nil {
-// 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
-// 	}
-
-// 	var req user.UpdateProfileRequest
-// 	if err := c.Bind(&req); err != nil {
-// 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
-// 	}
-
-// 	if err := h.repo.UpdateUserProfile(id, req); err != nil {
-// 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update profile"})
-// 	}
-
-// 	user, _ := h.repo.GetUserByID(id)
-// 	return c.JSON(http.StatusOK, user)
-// }
-
 func (h *Handler) UploadAvatar(c echo.Context) error {
 	userId, ok := c.Get("userId").(int)
 	if !ok {
@@ -228,28 +203,6 @@ func (h *Handler) UploadAvatar(c echo.Context) error {
 		"avatarUrl": publicUrl,
 	})
 }
-
-// func (h *Handler) UploadAvatar(c echo.Context) error {
-// 	userID, err := strconv.Atoi(c.Param("id"))
-// 	if err != nil {
-// 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid user id"})
-// 	}
-
-// 	fileHeader, err := c.FormFile("avatar")
-// 	if err != nil {
-// 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "avatar file is required"})
-// 	}
-
-// 	publicUrl, err := h.service.SaveAvatar(userID, fileHeader)
-// 	if err != nil {
-// 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-// 	}
-
-// 	return c.JSON(http.StatusOK, map[string]string{
-// 		"message":    "avatar uploaded",
-// 		"avatarUrl":  publicUrl,
-// 	})
-// }
 
 func (h *Handler) GetAvatar(c echo.Context) error {
 	userID, err := strconv.Atoi(c.Param("id"))
@@ -300,22 +253,3 @@ func (h *Handler) GetAvatar(c echo.Context) error {
 	http.ServeContent(c.Response().Writer, c.Request(), storageName, info.ModTime(), file)
 	return nil
 }
-
-// func (h *Handler) GetCurrentUser(c echo.Context) error {
-// 	authHeader := c.Request().Header.Get("Authorization")
-// 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer token_") {
-// 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
-// 	}
-
-// 	idStr := strings.TrimPrefix(authHeader, "Bearer token_")
-// 	id, err := strconv.Atoi(idStr)
-// 	if err != nil {
-// 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
-// 	}
-
-// 	user, err := h.repo.GetUserByID(id)
-// 	if err != nil {
-// 		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
-// 	}
-// 	return c.JSON(http.StatusOK, user)
-// }
