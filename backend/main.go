@@ -46,7 +46,6 @@ func main() {
 	e.GET("/health", func(c echo.Context) error { return healthCheckHandler(c, rawDB) })
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 	v1 := e.Group("/api/v1")
-	v1.GET("/status", statusHandler)
 	// ai chat route, this is a public route, no auth required, but if the user is logged in, then we will pass the userId and authToken to the AI chat service
 	v1.POST("/ai/chat", func(c echo.Context) error { return handleAIChat(c, rawDB) })
 
@@ -202,6 +201,7 @@ func healthCheckHandler(c echo.Context, rawDB *sql.DB) error {
 		"db":     "connected",
 	})
 }
+<<<<<<< Updated upstream
 
 func statusHandler(c echo.Context) error {
 	return c.JSON(200, map[string]interface{}{
@@ -209,3 +209,5 @@ func statusHandler(c echo.Context) error {
 		"version": "1.0.0",
 	})
 }
+=======
+>>>>>>> Stashed changes

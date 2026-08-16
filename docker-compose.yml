@@ -4,8 +4,8 @@ services:
     container_name: transcendence-postgres
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME:-transcendence}
-      POSTGRES_USER: ${DB_USER:-transcendence}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -17,7 +17,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${DB_USER:-transcendence} -d ${DB_NAME:-transcendence}",
+          "pg_isready -U ${DB_USER} -d ${DB_NAME}",
         ]
       timeout: 20s
       retries: 10
@@ -57,7 +57,7 @@ services:
     image: prometheuscommunity/postgres-exporter:v0.15.0
     container_name: transcendence-postgres-exporter
     environment:
-      DATA_SOURCE_NAME: postgresql://${DB_USER:-transcendence}:${DB_PASSWORD:-transcendence_pass}@db:5432/${DB_NAME:-transcendence}?sslmode=disable
+      DATA_SOURCE_NAME: postgresql://${DB_USER:-transcendence}:${DB_PASSWORD}@db:5432/${DB_NAME:-transcendence}?sslmode=disable
     ports:
       - "127.0.0.1:9187:9187"
     depends_on:
@@ -91,8 +91,8 @@ services:
       SERVER_PORT: "8080"
       DB_HOST: db
       DB_PORT: "5432"
-      DB_NAME: ${DB_NAME:-transcendence}
-      DB_USER: ${DB_USER:-transcendence}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-wongdakfat}
@@ -186,9 +186,9 @@ services:
       RAG_EMBEDDING_BATCH_SIZE: ${RAG_EMBEDDING_BATCH_SIZE:-2}
       DB_HOST: db
       DB_PORT: "5432"
-      DB_USER: ${DB_USER:-transcendence}
+      DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME:-transcendence}
+      DB_NAME: ${DB_NAME}
       BACKEND_URL: http://backend:8080
       RACKET_RECOMMENDER_MODEL_DIR: /app/ml_models
       RACKET_RECOMMENDER_BASELINE_DATASET: /app/training_data/dummy_racket_recommendation_data.csv
@@ -328,9 +328,9 @@ services:
     container_name: transcendence-db-backup
     environment:
       DB_HOST: db
-      DB_USER: ${DB_USER:-transcendence}
-      DB_PASSWORD: ${DB_PASSWORD:-transcendence_pass}
-      DB_NAME: ${DB_NAME:-transcendence}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
     volumes:
