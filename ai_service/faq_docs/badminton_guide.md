@@ -26,3 +26,17 @@ Balance affects the swing weight and style of play:
 * **Low Tension (18 - 23 lbs):** Larger sweet spot, bouncy feel, generates easy power but less control. Best for beginners.
 * **Medium Tension (24 - 27 lbs):** Balanced control and power. Standard for intermediate club players.
 * **High Tension (28+ lbs):** Solid, crisp feel, maximum control, but requires strong technique to generate power. Increases risk of frame breakage. Only for advanced players.
+
+## 5. How to use these specs on RacketDiction
+
+* The home-page filters and the Sell form use the same labels: `1U`–`8U`, `Stiff Shaft` / `Medium Flex` / `High Flexibility`, and `Head Heavy` / `Even Balance` / `Head Light`.
+* A larger U number is a **lighter** frame: 3U is heavier than 4U. Do not reverse that.
+* Manufacturer gram ranges can overlap. Trust a weighed unstrung figure in chat if the seller has one.
+* These labels do not apply to shoes, strings, or bags. See the separate guide for those categories.
+
+## 6. Putting a spec combo together
+
+* Attacking singles players often look at **3U or 4U**, **stiff**, **head heavy**.
+* Fast doubles / front-court players often look at **4U or 5U**, **medium or flexible**, **even or head light**.
+* Beginners are usually happier with **4U**, **medium or flexible**, **even balance**, and **lower tension**.
+* These are starting points, not rules. Hand size, injury history, and what you can physically swing matter more than a marketing chart.
