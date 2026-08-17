@@ -83,6 +83,7 @@ func registerAdminRoutes(v1 *echo.Group, db *sql.DB) {
 	admin.PATCH("/users/:id/role", func(c echo.Context) error { return updateAdminUserRole(c, db) })
 	admin.PATCH("/users/:id/status", func(c echo.Context) error { return updateAdminUserStatus(c, db) })
 	admin.DELETE("/users/:id", func(c echo.Context) error { return deleteAdminUser(c, db) })
+	admin.GET("/api-attempts", func(c echo.Context) error { return getAPIAttackAttempts(c, db) })
 	admin.GET("/ml/status", func(c echo.Context) error { return getMLStatus(c, db) })
 	admin.GET("/ml/feedback", func(c echo.Context) error { return listMLFeedback(c, db) })
 	admin.GET("/ml/runs", func(c echo.Context) error { return listMLRuns(c, db) })

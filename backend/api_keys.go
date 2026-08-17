@@ -67,18 +67,33 @@ type APIKeyInfo struct {
 	IsActive   bool    `json:"isActive"`
 	RateLimit  int     `json:"rateLimit"`
 	CreatedAt  string  `json:"createdAt"`
+	ExpiresAt  string  `json:"expiresAt"`
+	IsExpired  bool    `json:"isExpired"`
 	LastUsedAt *string `json:"lastUsedAt,omitempty"`
 }
 
 type APIRequestLog struct {
 	ID        int    `json:"id"`
-	APIKeyID  int    `json:"apiKeyId"`
+	APIKeyID  *int   `json:"apiKeyId,omitempty"`
 	KeyName   string `json:"keyName"`
 	Method    string `json:"method"`
 	Path      string `json:"path"`
 	Status    int    `json:"status"`
 	IPAddress string `json:"ipAddress"`
+	Outcome   string `json:"outcome"`
+	UserAgent string `json:"userAgent"`
 	CreatedAt string `json:"createdAt"`
+}
+
+// APIAttackAttempt is one address's rejected traffic, for the admin view.
+type APIAttackAttempt struct {
+	IPAddress    string `json:"ipAddress"`
+	Outcome      string `json:"outcome"`
+	Attempts     int    `json:"attempts"`
+	DistinctKeys int    `json:"distinctKeys"`
+	UserAgent    string `json:"userAgent"`
+	FirstSeen    string `json:"firstSeen"`
+	LastSeen     string `json:"lastSeen"`
 }
 
 // createAPIKey mints a new key for the authenticated user. This is the ONLY
@@ -120,10 +135,13 @@ func createAPIKey(c echo.Context, gormDB *gorm.DB) error {
 
 	// Store the hash only. RETURNING id gets the new row's id in the same
 	// round trip, so the response can identify the key for later revocation.
+	// Set from the Go constant rather than the column default, so the lifetime
+	// has one source of truth that the middleware also reads.
+	expiresAt := time.Now().Add(myMiddleware.APIKeyLifetime)
 	var id int
 	err = sqlDB.QueryRow(
-		"INSERT INTO api_keys (user_id, key_hash, name) VALUES ($1, $2, $3) RETURNING id",
-		userID, hash, req.Name,
+		"INSERT INTO api_keys (user_id, key_hash, name, expires_at) VALUES ($1, $2, $3, $4) RETURNING id",
+		userID, hash, req.Name, expiresAt,
 	).Scan(&id)
 	if err != nil {
 		// The detail goes to the server log; the client gets a generic message.
@@ -133,10 +151,11 @@ func createAPIKey(c echo.Context, gormDB *gorm.DB) error {
 
 	// 201 Created, and the one and only sighting of `apiKey`.
 	return c.JSON(201, map[string]interface{}{
-		"id":      id,
-		"name":    req.Name,
-		"apiKey":  plaintext,
-		"warning": "Copy this key now — it will not be shown again.",
+		"id":        id,
+		"name":      req.Name,
+		"apiKey":    plaintext,
+		"expiresAt": expiresAt.Format(time.RFC3339),
+		"warning":   "Copy this key now — it will not be shown again. This key stops working in 30 days.",
 	})
 }
 
@@ -155,7 +174,7 @@ func listAPIKeys(c echo.Context, gormDB *gorm.DB) error {
 	}
 
 	rows, err := sqlDB.Query(
-		`SELECT id, name, is_active, rate_limit, created_at, last_used_at
+		`SELECT id, name, is_active, rate_limit, created_at, expires_at, last_used_at
 		 FROM api_keys WHERE user_id = $1 ORDER BY id ASC`, userID,
 	)
 	if err != nil {
@@ -169,11 +188,11 @@ func listAPIKeys(c echo.Context, gormDB *gorm.DB) error {
 	keys := []APIKeyInfo{}
 	for rows.Next() {
 		var k APIKeyInfo
-		var createdAt time.Time
+		var createdAt, expiresAt time.Time
 		// last_used_at is NULL until the key's first request, so it cannot scan
 		// straight into time.Time.
 		var lastUsed sql.NullTime
-		if err := rows.Scan(&k.ID, &k.Name, &k.IsActive, &k.RateLimit, &createdAt, &lastUsed); err != nil {
+		if err := rows.Scan(&k.ID, &k.Name, &k.IsActive, &k.RateLimit, &createdAt, &expiresAt, &lastUsed); err != nil {
 			// Skip the unreadable row rather than failing the whole list — one
 			// odd row should not hide every other key from the user.
 			log.Printf("Error scanning API key: %v", err)
@@ -181,6 +200,8 @@ func listAPIKeys(c echo.Context, gormDB *gorm.DB) error {
 		}
 		// RFC3339 is a format so the browser can parse it with new Date() unambiguously.
 		k.CreatedAt = createdAt.Format(time.RFC3339)
+		k.ExpiresAt = expiresAt.Format(time.RFC3339)
+		k.IsExpired = !time.Now().Before(expiresAt)
 		if lastUsed.Valid {
 			s := lastUsed.Time.Format(time.RFC3339)
 			k.LastUsedAt = &s
@@ -245,8 +266,13 @@ func getAPIKeyLogs(c echo.Context, gormDB *gorm.DB) error {
 		}
 	}
 
+	// Rejected calls against the user's own keys are included, not just the ones
+	// that worked — a revoked key still being used, or a key being hammered, is
+	// exactly what the owner needs to see. Attempts with an unrecognised key
+	// belong to no account and are reachable only through the admin view.
 	rows, err := sqlDB.Query(
-		`SELECT l.id, l.api_key_id, COALESCE(k.name, ''), l.method, l.path, l.status, COALESCE(l.ip_address, ''), l.created_at
+		`SELECT l.id, l.api_key_id, COALESCE(k.name, ''), l.method, l.path, l.status,
+		        COALESCE(l.ip_address, ''), l.outcome, COALESCE(l.user_agent, ''), l.created_at
 		 FROM api_request_logs l
 		 JOIN api_keys k ON k.id = l.api_key_id
 		 WHERE k.user_id = $1
@@ -263,7 +289,8 @@ func getAPIKeyLogs(c echo.Context, gormDB *gorm.DB) error {
 	for rows.Next() {
 		var lg APIRequestLog
 		var createdAt time.Time
-		if err := rows.Scan(&lg.ID, &lg.APIKeyID, &lg.KeyName, &lg.Method, &lg.Path, &lg.Status, &lg.IPAddress, &createdAt); err != nil {
+		if err := rows.Scan(&lg.ID, &lg.APIKeyID, &lg.KeyName, &lg.Method, &lg.Path, &lg.Status,
+			&lg.IPAddress, &lg.Outcome, &lg.UserAgent, &createdAt); err != nil {
 			log.Printf("Error scanning API log row: %v", err)
 			continue
 		}
@@ -271,4 +298,58 @@ func getAPIKeyLogs(c echo.Context, gormDB *gorm.DB) error {
 		logs = append(logs, lg)
 	}
 	return c.JSON(200, map[string]interface{}{"logs": logs})
+}
+
+// getAPIAttackAttempts is the admin read of everything the middleware rejected,
+// grouped by address and reason.
+//
+// distinctKeys is what separates the two attacks that look alike in a raw log:
+// one key retried a thousand times is a misconfigured integration, a thousand
+// different keys tried once each is somebody guessing. The fingerprint column
+// makes that countable without ever storing a usable credential.
+func getAPIAttackAttempts(c echo.Context, db *sql.DB) error {
+	hours := 24
+	if h := c.QueryParam("hours"); h != "" {
+		if parsed, err := strconv.Atoi(h); err == nil && parsed > 0 && parsed <= 720 {
+			hours = parsed
+		}
+	}
+	limit := 100
+	if l := c.QueryParam("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 500 {
+			limit = parsed
+		}
+	}
+
+	rows, err := db.Query(
+		`SELECT COALESCE(ip_address, ''), outcome, COUNT(*) AS attempts,
+		        COUNT(DISTINCT key_fingerprint) AS distinct_keys,
+		        COALESCE(MAX(user_agent), ''), MIN(created_at), MAX(created_at)
+		 FROM api_request_logs
+		 WHERE outcome <> 'success'
+		   AND created_at >= NOW() - ($1 || ' hours')::interval
+		 GROUP BY ip_address, outcome
+		 ORDER BY attempts DESC
+		 LIMIT $2`, strconv.Itoa(hours), limit,
+	)
+	if err != nil {
+		log.Printf("Error querying API attack attempts: %v", err)
+		return c.JSON(500, map[string]string{"error": "Failed to fetch attempts"})
+	}
+	defer rows.Close()
+
+	attempts := []APIAttackAttempt{}
+	for rows.Next() {
+		var a APIAttackAttempt
+		var firstSeen, lastSeen time.Time
+		if err := rows.Scan(&a.IPAddress, &a.Outcome, &a.Attempts, &a.DistinctKeys,
+			&a.UserAgent, &firstSeen, &lastSeen); err != nil {
+			log.Printf("Error scanning attack attempt row: %v", err)
+			continue
+		}
+		a.FirstSeen = firstSeen.Format(time.RFC3339)
+		a.LastSeen = lastSeen.Format(time.RFC3339)
+		attempts = append(attempts, a)
+	}
+	return c.JSON(200, map[string]interface{}{"windowHours": hours, "attempts": attempts})
 }

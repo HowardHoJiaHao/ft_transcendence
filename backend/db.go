@@ -332,6 +332,32 @@ func runAPIRequestLogsMigration(db *sql.DB) error {
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_api_request_logs_key ON api_request_logs(api_key_id, created_at)`,
+		// Rejected attempts are logged too, so the log can show an attack.
+		`ALTER TABLE api_request_logs ADD COLUMN IF NOT EXISTS outcome VARCHAR(32)`,
+		`UPDATE api_request_logs SET outcome = 'success' WHERE outcome IS NULL`,
+		`ALTER TABLE api_request_logs ALTER COLUMN outcome SET DEFAULT 'success'`,
+		`ALTER TABLE api_request_logs ALTER COLUMN outcome SET NOT NULL`,
+		`ALTER TABLE api_request_logs ADD COLUMN IF NOT EXISTS user_agent VARCHAR(255)`,
+		`ALTER TABLE api_request_logs ADD COLUMN IF NOT EXISTS key_fingerprint VARCHAR(16)`,
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint WHERE conname = 'api_request_logs_outcome_check'
+			) THEN
+				ALTER TABLE api_request_logs ADD CONSTRAINT api_request_logs_outcome_check
+				CHECK (outcome IN ('success', 'missing_key', 'invalid_key',
+				                   'revoked_key', 'expired_key', 'rate_limited'));
+			END IF;
+		END $$`,
+		`CREATE INDEX IF NOT EXISTS idx_api_request_logs_failures
+		 ON api_request_logs(outcome, created_at DESC) WHERE outcome <> 'success'`,
+		`CREATE INDEX IF NOT EXISTS idx_api_request_logs_ip
+		 ON api_request_logs(ip_address, created_at DESC)`,
+		// Keys expire, so a leaked one stops working on its own.
+		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`,
+		`UPDATE api_keys SET expires_at = created_at + INTERVAL '30 days' WHERE expires_at IS NULL`,
+		`ALTER TABLE api_keys ALTER COLUMN expires_at SET DEFAULT (CURRENT_TIMESTAMP + INTERVAL '30 days')`,
+		`ALTER TABLE api_keys ALTER COLUMN expires_at SET NOT NULL`,
 	}
 	for _, m := range migrations {
 		if _, err := db.Exec(m); err != nil {

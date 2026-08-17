@@ -17,6 +17,23 @@ func HashAPIKey(key string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// APIKeyLifetime is how long a new key stays valid. A leaked key stops working
+// on its own rather than living until somebody notices.
+const APIKeyLifetime = 30 * 24 * time.Hour
+
+// Outcomes recorded against every request. The rejected ones are the point:
+// they are what turns the log into something an attack shows up in.
+const (
+	outcomeSuccess     = "success"
+	outcomeMissingKey  = "missing_key"
+	outcomeInvalidKey  = "invalid_key"
+	outcomeRevokedKey  = "revoked_key"
+	outcomeExpiredKey  = "expired_key"
+	outcomeRateLimited = "rate_limited"
+)
+
+const maxUserAgentLen = 255
+
 // Fixed-window rate limiter, per API key, kept in memory.
 type rateWindow struct {
 	windowStart time.Time
@@ -55,19 +72,68 @@ func allowRequest(keyID, limitPerMinute int) bool {
 	return true
 }
 
+// attempt is what one request looked like, whether or not it was allowed.
+type attempt struct {
+	keyID       *int
+	userID      *int
+	status      int
+	outcome     string
+	fingerprint *string
+}
+
+// recordAttempt writes one row to api_request_logs. Every path through the
+// middleware ends here, including the rejections, so a key that is guessed,
+// revoked, expired or hammered leaves the same trail a successful call does.
+//
+// Best-effort by design: a failed insert must never turn into a failed request.
+func recordAttempt(db *sql.DB, c echo.Context, a attempt) {
+	userAgent := c.Request().UserAgent()
+	if len(userAgent) > maxUserAgentLen {
+		userAgent = userAgent[:maxUserAgentLen]
+	}
+	_, _ = db.Exec(
+		`INSERT INTO api_request_logs
+		   (api_key_id, user_id, method, path, status, ip_address,
+		    outcome, user_agent, key_fingerprint)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		a.keyID, a.userID, c.Request().Method, c.Request().URL.Path,
+		a.status, c.RealIP(), a.outcome, userAgent, a.fingerprint,
+	)
+}
+
+// fingerprint is the first 12 hex characters of a key's SHA-256. It is enough
+// to correlate repeated attempts with the same key without storing anything
+// that could be replayed — the hash is one-way, and this is only part of it.
+func fingerprint(hash string) *string {
+	if len(hash) < 12 {
+		return nil
+	}
+	short := hash[:12]
+	return &short
+}
+
 // APIKeyAuth authenticates requests via the X-API-Key header, enforces the
-// key's per-minute rate limit, and records every call to api_request_logs.
+// key's expiry and per-minute rate limit, and records EVERY call to
+// api_request_logs — accepted or rejected.
 //
 // ─── WHAT THIS MIDDLEWARE DOES, IN ORDER ──────────────────────────────────────
 //
-//  1. read X-API-Key         missing        → 401
-//  2. hash it and look it up unknown        → 401
-//  3. check it is active     revoked        → 403
-//  4. check the rate limit   over limit     → 429
-//  5. publish the identity   c.Set("userId", ...)
-//  6. touch last_used_at     (for the key-management UI)
-//  7. run the handler
-//  8. log the call           method, path, status, IP
+//  1. read X-API-Key         missing        → 401  logged missing_key
+//  2. hash it and look it up unknown        → 401  logged invalid_key
+//  3. check it is active     revoked        → 403  logged revoked_key
+//  4. check it has not expired              → 401  logged expired_key
+//  5. check the rate limit   over limit     → 429  logged rate_limited
+//  6. publish the identity   c.Set("userId", ...)
+//  7. touch last_used_at     (for the key-management UI)
+//  8. run the handler
+//  9. log the call           logged success (or the handler's own status)
+//
+// ─── WHY THE REJECTIONS ARE LOGGED ────────────────────────────────────────────
+//
+// A log of only the calls that worked cannot show an attack. Someone guessing
+// keys never reaches step 6, so under the previous version they left no trace
+// at all. Recording the rejections is what makes "one address, four hundred
+// invalid_key in a minute" a thing you can see.
 //
 // ─── WHY LOGGING HAPPENS AFTER next(c) ────────────────────────────────────────
 //
@@ -81,46 +147,83 @@ func APIKeyAuth(db *sql.DB) echo.MiddlewareFunc {
 			// URLs end up in browser history, proxy logs and Referer headers.
 			key := c.Request().Header.Get("X-API-Key")
 			if key == "" {
+				recordAttempt(db, c, attempt{
+					status:  http.StatusUnauthorized,
+					outcome: outcomeMissingKey,
+				})
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Missing X-API-Key header"})
 			}
 
 			// 2. Look the key up BY ITS HASH. The plaintext is never compared
 			// against anything stored, because nothing stored is plaintext.
-			// The key's own rate_limit is fetched here too, so limits are
-			// per-key rather than one global setting.
+			// The key's own rate_limit and expiry are fetched here too.
+			hash := HashAPIKey(key)
 			var keyID, userID, rateLimit int
 			var isActive bool
+			var expiresAt sql.NullTime
 			err := db.QueryRow(
-				"SELECT id, user_id, rate_limit, is_active FROM api_keys WHERE key_hash = $1",
-				HashAPIKey(key),
-			).Scan(&keyID, &userID, &rateLimit, &isActive)
+				"SELECT id, user_id, rate_limit, is_active, expires_at FROM api_keys WHERE key_hash = $1",
+				hash,
+			).Scan(&keyID, &userID, &rateLimit, &isActive, &expiresAt)
 			if err != nil {
+				// Unknown key: nothing to attribute it to, so the row carries
+				// only the address, the agent and the fingerprint.
+				recordAttempt(db, c, attempt{
+					status:      http.StatusUnauthorized,
+					outcome:     outcomeInvalidKey,
+					fingerprint: fingerprint(hash),
+				})
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid API key"})
 			}
 
 			// 3. Revoked keys stay in the table but it is just no longer allowed.
 			if !isActive {
+				recordAttempt(db, c, attempt{
+					keyID: &keyID, userID: &userID,
+					status:      http.StatusForbidden,
+					outcome:     outcomeRevokedKey,
+					fingerprint: fingerprint(hash),
+				})
 				return c.JSON(http.StatusForbidden, map[string]string{"error": "API key has been revoked"})
 			}
 
-			// 4. Rate limit, checked
+			// 4. Expiry. Checked against the database value on every request, so
+			// shortening a key's life takes effect immediately.
+			if expiresAt.Valid && !time.Now().Before(expiresAt.Time) {
+				recordAttempt(db, c, attempt{
+					keyID: &keyID, userID: &userID,
+					status:      http.StatusUnauthorized,
+					outcome:     outcomeExpiredKey,
+					fingerprint: fingerprint(hash),
+				})
+				return c.JSON(http.StatusUnauthorized, map[string]string{
+					"error": "API key has expired. Create a new one from the Developer API page.",
+				})
+			}
+
+			// 5. Rate limit, checked
 			if !allowRequest(keyID, rateLimit) {
+				recordAttempt(db, c, attempt{
+					keyID: &keyID, userID: &userID,
+					status:      http.StatusTooManyRequests,
+					outcome:     outcomeRateLimited,
+					fingerprint: fingerprint(hash),
+				})
 				return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "Rate limit exceeded"})
 			}
 
-			// 5. Publish the identity for downstream handlers.
+			// 6. Publish the identity for downstream handlers.
 			c.Set("userId", userID)
 			c.Set("apiKeyId", keyID)
 
-			// 6. Best-effort "last used" stamp powering the key-management UI.
+			// 7. Best-effort "last used" stamp powering the key-management UI.
 			_, _ = db.Exec("UPDATE api_keys SET last_used_at = NOW() WHERE id = $1", keyID)
 
-			// 7. Run the actual handler. Its error is held, not returned yet,
+			// 8. Run the actual handler. Its error is held, not returned yet,
 			// so the request can still be logged below.
-			// execute the api only come back
 			handlerErr := next(c)
 
-			// 8. Log the call. The status normally comes off the response, but
+			// 9. Log the call. The status normally comes off the response, but
 			// when a handler returns an *echo.HTTPError the response may not
 			// have been written yet — so the error's own code is preferred,
 			// otherwise failures would all be recorded as 200.
@@ -128,15 +231,12 @@ func APIKeyAuth(db *sql.DB) echo.MiddlewareFunc {
 			if he, ok := handlerErr.(*echo.HTTPError); ok {
 				status = he.Code
 			}
-			// Every call is recorded — this is what the developer-api page
-			// renders as the request log. RealIP() reads the proxy headers, so
-			// the client's address survives the WAF → nginx → backend hops
-			// instead of logging the proxy's own IP every time.
-			_, _ = db.Exec(
-				`INSERT INTO api_request_logs (api_key_id, user_id, method, path, status, ip_address)
-				 VALUES ($1, $2, $3, $4, $5, $6)`,
-				keyID, userID, c.Request().Method, c.Request().URL.Path, status, c.RealIP(),
-			)
+			recordAttempt(db, c, attempt{
+				keyID: &keyID, userID: &userID,
+				status:      status,
+				outcome:     outcomeSuccess,
+				fingerprint: fingerprint(hash),
+			})
 
 			// Return the handler's result untouched — logging observes, never
 			// alters, the outcome.

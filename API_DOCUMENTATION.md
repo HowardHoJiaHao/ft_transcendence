@@ -135,6 +135,16 @@ CSV import, with matching `CHECK` constraints in the database:
 | `originalPrice` | greater than 0 when set, at most 100000 |
 | `stockQuantity` | 1–100 on create; 0–100 on update, where `0` means out of stock |
 
+**Keys expire after 30 days.** `expiresAt` is returned when a key is created and
+by `GET /api/v1/api-keys`. An expired key returns
+`401 API key has expired. Create a new one from the Developer API page.` — mint a
+replacement before the old one lapses.
+
+**Every call is logged, including rejected ones.** Each request writes a row to
+`api_request_logs` with an `outcome` of `success`, `missing_key`, `invalid_key`,
+`revoked_key`, `expired_key` or `rate_limited`, alongside the caller's IP and
+user agent. Rejections against your own keys appear in `GET /api/v1/api-keys/logs`.
+
 **Taken from your account, not from the request:** `location`, `state` and
 `phoneNumber` are read from the authenticated seller's profile. Sending them is
 ignored. If your profile is missing a phone number or a complete Malaysian

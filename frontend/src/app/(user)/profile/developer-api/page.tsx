@@ -13,18 +13,31 @@ type APIKeyInfo = {
   isActive: boolean;
   rateLimit: number;
   createdAt: string;
+  expiresAt: string;
+  isExpired: boolean;
   lastUsedAt?: string | null;
 };
 
 type APIRequestLog = {
   id: number;
-  apiKeyId: number;
+  apiKeyId?: number | null;
   keyName: string;
   method: string;
   path: string;
   status: number;
   ipAddress: string;
+  outcome: string;
+  userAgent: string;
   createdAt: string;
+};
+
+const OUTCOME_LABELS: Record<string, string> = {
+  success: 'Accepted',
+  missing_key: 'No key sent',
+  invalid_key: 'Unknown key',
+  revoked_key: 'Revoked key',
+  expired_key: 'Expired key',
+  rate_limited: 'Rate limited',
 };
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -408,6 +421,9 @@ export default function DeveloperApiPage() {
   const logStatusClass = (status: number) =>
     status < 300 ? 'bg-[#e6f4ea] text-[#1a7f37]' : status < 500 ? 'bg-[#fff3cd] text-[#8d6e00]' : 'bg-[#fee2e2] text-[#991b1b]';
 
+  const outcomeClass = (outcome: string) =>
+    outcome === 'success' ? 'bg-[#e6f4ea] text-[#1a7f37]' : 'bg-[#fee2e2] text-[#991b1b]';
+
   const totalLogPages = Math.max(1, Math.ceil(logs.length / LOGS_PER_PAGE));
   const clampedLogPage = Math.min(logPage, totalLogPages);
   const paginatedLogs = logs.slice(
@@ -571,6 +587,7 @@ export default function DeveloperApiPage() {
                             <th>Status</th>
                             <th>Rate limit</th>
                             <th>Created</th>
+                            <th>Expires</th>
                             <th>Last used</th>
                             <th></th>
                           </tr>
@@ -587,13 +604,22 @@ export default function DeveloperApiPage() {
                               <td className="font-semibold text-[#222]">{key.name}</td>
                               <td>
                                 <span
-                                  className={`inline-block px-3 py-[3px] rounded-xl text-xs font-bold ${key.isActive ? 'bg-[#e6f4ea] text-[#1a7f37]' : 'bg-[#fee2e2] text-[#991b1b]'}`}
+                                  className={`inline-block px-3 py-[3px] rounded-xl text-xs font-bold ${
+                                    !key.isActive
+                                      ? 'bg-[#fee2e2] text-[#991b1b]'
+                                      : key.isExpired
+                                        ? 'bg-[#fef3c7] text-[#92400e]'
+                                        : 'bg-[#e6f4ea] text-[#1a7f37]'
+                                  }`}
                                 >
-                                  {key.isActive ? 'Active' : 'Revoked'}
+                                  {!key.isActive ? 'Revoked' : key.isExpired ? 'Expired' : 'Active'}
                                 </span>
                               </td>
                               <td>{key.rateLimit}/min</td>
                               <td>{formatDateTime(key.createdAt)}</td>
+                              <td className={key.isExpired ? 'text-[#92400e] font-semibold' : ''}>
+                                {formatDateTime(key.expiresAt)}
+                              </td>
                               <td>{formatDateTime(key.lastUsedAt)}</td>
                               <td>
                                 <button
@@ -759,6 +785,7 @@ export default function DeveloperApiPage() {
                             <th>Method</th>
                             <th>Path</th>
                             <th>Status</th>
+                            <th>Outcome</th>
                             <th>Key</th>
                             <th>IP</th>
                             <th>Time</th>
@@ -778,8 +805,15 @@ export default function DeveloperApiPage() {
                                   {log.status}
                                 </span>
                               </td>
+                              <td>
+                                <span className={`inline-block px-2.5 py-0.5 rounded-[10px] text-[11.5px] font-bold ${outcomeClass(log.outcome)}`}>
+                                  {OUTCOME_LABELS[log.outcome] ?? log.outcome}
+                                </span>
+                              </td>
                               <td>{log.keyName}</td>
-                              <td className="text-[#898781] text-[13px]">{log.ipAddress || '—'}</td>
+                              <td className="text-[#898781] text-[13px]" title={log.userAgent || undefined}>
+                                {log.ipAddress || '—'}
+                              </td>
                               <td className="text-[#898781] text-[13px]">{formatDateTime(log.createdAt)}</td>
                             </tr>
                           ))}
