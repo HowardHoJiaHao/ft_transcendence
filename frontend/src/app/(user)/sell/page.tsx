@@ -82,6 +82,8 @@ function SellPageInner() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadedFileCount, setUploadedFileCount] = useState(0);
   const [editSaved, setEditSaved] = useState(false);
+  // Id of the listing just created, so the success screen can link to it.
+  const [postedListingId, setPostedListingId] = useState<number | null>(null);
   const [deletingFileId, setDeletingFileId] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -297,6 +299,7 @@ function SellPageInner() {
     setUploadProgress(null);
     setUploadedFileCount(0);
     setEditSaved(false);
+    setPostedListingId(null);
     if (!isEditMode) setStep(1);
   };
 
@@ -578,6 +581,7 @@ function SellPageInner() {
         const created = await res.json();
         await uploadPendingFiles(created.id, token);
         showToast(t('toast.listingCreated'), 'success');
+        setPostedListingId(Number(created.id) || null);
         setStep(3);
       }
     } catch (err) {
@@ -1200,12 +1204,6 @@ function SellPageInner() {
                     <h3 className="text-[15px] font-semibold mt-0 mx-0 mb-2.5 text-[#222]">
                       {t("sell.dealingMethodTitle")}
                     </h3>
-                    <button
-                      className="bg-none border-none text-[#22c55e] text-sm font-semibold cursor-pointer p-0"
-                      onClick={() => setDealingMethods([...DEALING_METHODS])}
-                    >
-                      {t("sell.selectAll")}
-                    </button>
                   </div>
                   <div className="flex gap-2.5 flex-wrap">
                     {DEALING_METHODS.map((m) => (
@@ -1310,18 +1308,15 @@ function SellPageInner() {
                   <button
                     type="button"
                     className="bg-[#166534] text-white border-none rounded-md px-4 py-2 text-sm font-semibold cursor-pointer"
-                    onClick={() => router.push("/profile/my-ads")}
+                    onClick={() => router.push(`/products/${editId}`)}
                   >
-                    {t("listingFiles.viewMyAds")}
+                    {t("sell.viewListing")}
                   </button>
                 </div>
               )}
 
               {/* Submit buttons */}
               <div className="flex justify-end gap-3">
-                <button className="px-7 py-3 border border-[#555] bg-white rounded-md text-sm font-bold cursor-pointer text-[#333] tracking-[0.5px] transition-colors duration-150 enabled:hover:bg-[#f5f5f5] disabled:opacity-50 disabled:cursor-not-allowed" disabled={submitting}>
-                  {t("sell.previewAd")}
-                </button>
                 <button
                   className="px-7 py-3 bg-[#2563eb] text-white border-none rounded-md text-sm font-bold cursor-pointer tracking-[0.5px] transition-colors duration-150 enabled:hover:bg-[#1d4ed8] disabled:bg-[#93c5fd] disabled:cursor-not-allowed"
                   disabled={submitting}
@@ -1362,9 +1357,11 @@ function SellPageInner() {
                 <div className="flex gap-4 flex-wrap justify-center">
                   <button
                     className="bg-[#2563eb] text-white border-none rounded-md px-8 py-3 text-sm font-bold cursor-pointer tracking-[0.5px] transition-colors duration-150 hover:bg-[#1d4ed8] disabled:bg-[#93c5fd] disabled:cursor-not-allowed"
-                    onClick={() => router.push("/profile/my-ads")}
+                    onClick={() =>
+                      router.push(postedListingId ? `/products/${postedListingId}` : "/profile/my-ads")
+                    }
                   >
-                    {t("sell.viewMyAds")}
+                    {t("sell.viewListing")}
                   </button>
                   <button
                     className="px-7 py-3 border border-[#555] bg-white rounded-md text-sm font-bold cursor-pointer text-[#333] tracking-[0.5px] transition-colors duration-150 enabled:hover:bg-[#f5f5f5] disabled:opacity-50 disabled:cursor-not-allowed"

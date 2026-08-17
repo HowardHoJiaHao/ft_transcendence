@@ -666,28 +666,6 @@ export default function ProfilePage() {
                 />
                 {t("profile.female")}
               </label>
-              <label className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-[20px] border border-[#ccc] bg-white text-[13px] font-medium text-[#444] cursor-pointer transition-all duration-150 hover:border-[#888]">
-                <input
-                  type="radio"
-                  name="gender"
-                  value="PreferNotToTell"
-                  checked={false}
-                  onChange={() => {
-                    showToast(t("profile.chooseGender"), "success");
-                  }}
-                  className="accent-[#c2185b]"
-                />
-                {t("profile.preferNotToTell")}
-              </label>
-              {inputData.gender && (
-                <button
-                  type="button"
-                  className="text-[13px] font-semibold text-[#2563eb] bg-transparent border-none cursor-pointer px-1.5 py-1 hover:underline"
-                  onClick={() => setInputData((prev) => ({ ...prev, gender: "" }))}
-                >
-                  {t("profile.clear")}
-                </button>
-              )}
             </div>
           </div>
 
