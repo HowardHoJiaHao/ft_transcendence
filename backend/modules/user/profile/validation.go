@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"transcendence/modules/geo"
+	"transcendence/modules/phone"
 	"transcendence/modules/user"
 )
 
@@ -19,15 +21,10 @@ const (
 	maxNameLen      = 50
 	maxAddressLen   = 255
 	maxBioLen       = 500
-	minPhoneDigits  = 8
-	maxPhoneDigits  = 15
 	earliestBirthYr = 1900
 )
 
-var (
-	phoneSeparators = regexp.MustCompile(`[\s\-().]`)
-	phoneDigits     = regexp.MustCompile(`^\+?[0-9]+$`)
-)
+var postcodeShape = regexp.MustCompile(`^[0-9]{5}$`)
 
 type FieldError struct {
 	Field   string `json:"field"`
@@ -62,38 +59,42 @@ func validateProfileUpdate(req *user.UpdateProfileRequest, now time.Time) []Fiel
 
 	if req.PhoneNo != nil {
 		raw := strings.TrimSpace(*req.PhoneNo)
-		if utf8.RuneCountInString(raw) > maxPhoneRawLen {
+		switch {
+		case raw == "":
+			errs = append(errs, FieldError{"phoneNo", "phone number is required"})
+		case utf8.RuneCountInString(raw) > maxPhoneRawLen:
 			errs = append(errs, FieldError{"phoneNo", "phone number is too long"})
-		} else {
-			normalised := phoneSeparators.ReplaceAllString(raw, "")
-			*req.PhoneNo = normalised
-			if normalised != "" {
-				digits := strings.TrimPrefix(normalised, "+")
-				if !phoneDigits.MatchString(normalised) ||
-					len(digits) < minPhoneDigits || len(digits) > maxPhoneDigits {
-					errs = append(errs, FieldError{
-						"phoneNo",
-						"phone number must be 8 to 15 digits, optionally starting with +",
-					})
-				}
+		default:
+			if normalised, ok := phone.Normalize(raw); ok {
+				*req.PhoneNo = normalised
+			} else {
+				errs = append(errs, FieldError{
+					"phoneNo",
+					"phone number must be a Malaysian number, for example 012-345 6789",
+				})
 			}
 		}
 	}
 
 	for _, field := range []struct {
-		name  string
-		value *string
-		max   int
+		name     string
+		value    *string
+		max      int
+		required bool
 	}{
-		{"firstName", req.FirstName, maxNameLen},
-		{"lastName", req.LastName, maxNameLen},
-		{"address", req.Address, maxAddressLen},
-		{"bio", req.Bio, maxBioLen},
+		{"firstName", req.FirstName, maxNameLen, false},
+		{"lastName", req.LastName, maxNameLen, false},
+		{"address", req.Address, maxAddressLen, true},
+		{"bio", req.Bio, maxBioLen, false},
 	} {
 		if field.value == nil {
 			continue
 		}
 		*field.value = strings.TrimSpace(*field.value)
+		if field.required && *field.value == "" {
+			errs = append(errs, FieldError{field.name, field.name + " is required"})
+			continue
+		}
 		if utf8.RuneCountInString(*field.value) > field.max {
 			errs = append(errs, FieldError{field.name, field.name + " is too long"})
 		}
@@ -108,6 +109,17 @@ func validateProfileUpdate(req *user.UpdateProfileRequest, now time.Time) []Fiel
 		}
 	}
 
+	if req.Postcode != nil {
+		*req.Postcode = strings.TrimSpace(*req.Postcode)
+		if *req.Postcode == "" {
+			errs = append(errs, FieldError{"postcode", "postcode is required"})
+		} else if !postcodeShape.MatchString(*req.Postcode) {
+			errs = append(errs, FieldError{"postcode", "postcode must be 5 digits"})
+		}
+	}
+
+	errs = append(errs, validateStateDistrict(req)...)
+
 	if req.DateOfBirth != nil {
 		if req.DateOfBirth.After(now) {
 			errs = append(errs, FieldError{"dateOfBirth", "date of birth cannot be in the future"})
@@ -117,4 +129,27 @@ func validateProfileUpdate(req *user.UpdateProfileRequest, now time.Time) []Fiel
 	}
 
 	return errs
+}
+
+// State and district are validated as a pair and rewritten to canonical spelling.
+func validateStateDistrict(req *user.UpdateProfileRequest) []FieldError {
+	if req.State == nil && req.District == nil {
+		return nil
+	}
+	if req.State == nil || req.District == nil {
+		return []FieldError{{"state", "state and district must be sent together"}}
+	}
+
+	state := strings.TrimSpace(*req.State)
+	district := strings.TrimSpace(*req.District)
+	if state == "" || district == "" {
+		return []FieldError{{"state", "state and district are required"}}
+	}
+
+	canonicalState, canonicalDistrict, ok := geo.Resolve(state, district)
+	if !ok {
+		return []FieldError{{"district", "district must be a Malaysian district within the chosen state"}}
+	}
+	*req.State, *req.District = canonicalState, canonicalDistrict
+	return nil
 }

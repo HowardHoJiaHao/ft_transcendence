@@ -191,6 +191,9 @@ func runUsersMigration(db *sql.DB) error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth_identity
 		 ON users(oauth_provider, oauth_id)
 		 WHERE oauth_provider IS NOT NULL AND oauth_id IS NOT NULL`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS postcode VARCHAR(5)`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(50)`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS district VARCHAR(100)`,
 	}
 	for _, migration := range migrations {
 		if _, err := db.Exec(migration); err != nil {

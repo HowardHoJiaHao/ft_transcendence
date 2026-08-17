@@ -67,13 +67,17 @@ func TestValidateProfileUpdatePhone(t *testing.T) {
 		wantErr bool
 		want    string
 	}{
-		{"malaysian mobile", "0123456789", false, "0123456789"},
-		{"separators are stripped", "012-345 6789", false, "0123456789"},
+		{"malaysian mobile", "0123456789", false, "+60123456789"},
+		{"separators are stripped", "012-345 6789", false, "+60123456789"},
 		{"country code kept", "+60123456789", false, "+60123456789"},
-		{"empty clears the field", "", false, ""},
+		{"eleven digit mobile", "011-1234 5678", false, "+601112345678"},
+		{"landline", "03-1234 5678", false, "+60312345678"},
+		{"empty is rejected, phone is required", "", true, ""},
 		{"too short", "12345", true, ""},
 		{"letters rejected", "0123abc789", true, ""},
 		{"too many digits", "1234567890123456", true, ""},
+		{"foreign number rejected", "+14155552671", true, ""},
+		{"unknown prefix rejected", "020123456", true, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := user.UpdateProfileRequest{PhoneNo: ptr(tc.input)}

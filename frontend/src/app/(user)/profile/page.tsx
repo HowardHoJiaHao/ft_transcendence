@@ -8,6 +8,7 @@ import Header from "@/components/Header/Header";
 import { resolveAvatarUrl, PLACEHOLDER_AVATAR, avatarClass } from "@/lib/avatar";
 import { useI18n } from "@/context/LanguageContext";
 import { PROFILE_LIMITS, validateProfileFields } from "@/lib/profileValidation";
+import { MALAYSIA_STATES, districtsOf } from "@/lib/malaysia";
 
 interface UserProfile {
   id: number;
@@ -20,6 +21,9 @@ interface UserProfile {
   // so they know where to send the item, which is why it is edited here rather
   // than being asked for at checkout.
   address?: string;
+  postcode?: string;
+  state?: string;
+  district?: string;
   gender?: string;
   dateOfBirth?: string;
   avatarUrl?: string;
@@ -66,6 +70,9 @@ export default function ProfilePage() {
     firstName: ctxUser?.firstName ?? "",
     lastName: ctxUser?.lastName ?? "",
     address: "",
+    postcode: "",
+    state: "",
+    district: "",
     gender: ctxUser?.gender ?? "",
     dateOfBirth: toDateInput(ctxUser?.dateOfBirth),
   });
@@ -218,6 +225,9 @@ export default function ProfilePage() {
         firstName: user.firstName ?? "",
         lastName: user.lastName ?? "",
         address: user.address ?? "",
+        postcode: user.postcode ?? "",
+        state: user.state ?? "",
+        district: user.district ?? "",
         gender: user.gender ?? "",
         dateOfBirth: toDateInput(user.dateOfBirth),
       });
@@ -286,6 +296,9 @@ export default function ProfilePage() {
       firstName: inputData.firstName,
       lastName: inputData.lastName,
       address: inputData.address,
+      postcode: inputData.postcode,
+      state: inputData.state,
+      district: inputData.district,
       dateOfBirth: inputData.dateOfBirth,
     });
     if (problems.length > 0) {
@@ -559,6 +572,53 @@ export default function ProfilePage() {
                 maxLength={PROFILE_LIMITS.address}
                 className={`${INPUT} w-full`}
               />
+              <div className="grid grid-cols-3 gap-2 mt-2 max-[640px]:grid-cols-1">
+                <input
+                  id="postcode"
+                  name="postcode"
+                  value={inputData.postcode}
+                  onChange={handleChange}
+                  placeholder={t("profile.postcodePlaceholder")}
+                  maxLength={PROFILE_LIMITS.postcode}
+                  inputMode="numeric"
+                  className={`${INPUT} w-full`}
+                />
+                <select
+                  id="state"
+                  name="state"
+                  value={inputData.state}
+                  onChange={(e) =>
+                    setInputData((prev) => ({
+                      ...prev,
+                      state: e.target.value,
+                      district: "",
+                    }))
+                  }
+                  className={`${INPUT} w-full`}
+                >
+                  <option value="">{t("profile.stateSelect")}</option>
+                  {MALAYSIA_STATES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  id="district"
+                  name="district"
+                  value={inputData.district}
+                  onChange={handleChange}
+                  disabled={!inputData.state}
+                  className={`${INPUT} w-full disabled:bg-[#f5f5f4] disabled:text-[#a3a3a3] disabled:cursor-not-allowed`}
+                >
+                  <option value="">{t("profile.districtSelect")}</option>
+                  {districtsOf(inputData.state).map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <span className="block text-xs text-[#898781] mt-1.5">
                 {t("profile.addressHint")}
               </span>

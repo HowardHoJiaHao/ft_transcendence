@@ -28,6 +28,9 @@ func prepareUserForResponse(user *User) {
 	user.LastName = ""
 	user.PhoneNo = nil
 	user.Address = nil
+	user.Postcode = nil
+	user.State = nil
+	user.District = nil
 	user.DateOfBirth = nil
 	user.Gender = nil
 	user.AvatarURL = nil
@@ -95,9 +98,9 @@ func (r *Repository) GetUserByID(id int) (*User, error) {
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, first_name, last_name, phone_no, address, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, first_name, last_name, phone_no, address, postcode, state, district, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE id = $1",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.Address, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.Address, &user.Postcode, &user.State, &user.District, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
 
 	if err != nil {
 		fmt.Printf("Scan error\n")
@@ -186,6 +189,9 @@ func (r *Repository) UpdateUserProfile(id int, req UpdateProfileRequest) error {
 		"email":      req.Email,
 		"phone_no":   req.PhoneNo,
 		"address":    req.Address,
+		"postcode":   req.Postcode,
+		"state":      req.State,
+		"district":   req.District,
 	} {
 		if value != nil {
 			updates[column] = *value

@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS users (
 	-- where to send the item, and to nobody else — it is never part of a public
 	-- profile or listing response.
 	address VARCHAR(255),
+	postcode VARCHAR(5),
+	state VARCHAR(50),
+	district VARCHAR(100),
 	date_of_birth DATE,
 	gender VARCHAR(10) CHECK (gender IN ('Male', 'Female')),
     -- The URL the frontend renders. For an uploaded avatar this is always
@@ -697,3 +700,8 @@ WHERE l.id BETWEEN 20 AND 59
       SELECT 1 FROM orders o
       WHERE o.listing_id = l.id AND o.status IN ('pending', 'completed')
   );
+
+-- Structured address columns, for databases created before they existed.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS postcode VARCHAR(5);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(50);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS district VARCHAR(100);

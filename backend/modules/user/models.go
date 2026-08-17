@@ -15,6 +15,9 @@ type User struct {
 	LastName      string     `json:"lastName"`
 	PhoneNo       *string    `json:"phoneNo"`
 	Address       *string    `json:"address"`
+	Postcode      *string    `json:"postcode"`
+	State         *string    `json:"state"`
+	District      *string    `json:"district"`
 	DateOfBirth   *time.Time `json:"dateOfBirth"`
 	Gender        *string    `json:"gender"`
 	AvatarURL     *string    `json:"avatarUrl,omitempty"`
@@ -68,6 +71,9 @@ type UpdateProfileRequest struct {
 	Email       *string    `json:"email"`
 	PhoneNo     *string    `json:"phoneNo"`
 	Address     *string    `json:"address"`
+	Postcode    *string    `json:"postcode"`
+	State       *string    `json:"state"`
+	District    *string    `json:"district"`
 }
 
 type OTP struct {
