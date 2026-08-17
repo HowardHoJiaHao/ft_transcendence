@@ -185,7 +185,7 @@ export default function NotificationBell({ onBeforeOpen }: NotificationBellProps
                     <li key={item.id} className="border-b border-[#f0f0ee] last:border-b-0">
                       <button
                         type="button"
-                        className={`w-full border-0 text-left px-3.5 py-3 flex gap-3 cursor-pointer transition-colors hover:bg-[#f7f7f5] ${
+                        className={`w-full border-0 text-left px-3.5 py-3 flex items-start gap-3 cursor-pointer transition-colors whitespace-normal hover:bg-[#f7f7f5] ${
                           isSessionNew || !item.readAt ? 'bg-[#fff5f7]' : 'bg-white'
                         }`}
                         onClick={() => {
@@ -214,9 +214,9 @@ export default function NotificationBell({ onBeforeOpen }: NotificationBellProps
                         </span>
 
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm text-[#262626] leading-5">{describe(item)}</span>
+                          <span className="block text-sm text-[#262626] leading-5 break-words [overflow-wrap:anywhere]">{describe(item)}</span>
                           {item.type === 'message' && item.data.preview && (
-                            <span className="block text-xs text-[#6b7280] truncate mt-0.5">{item.data.preview}</span>
+                            <span className="block text-xs text-[#6b7280] mt-0.5 break-words [overflow-wrap:anywhere] [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">{item.data.preview}</span>
                           )}
                           <span className="block text-[11px] text-[#8b8b86] mt-1">{relativeTime(item.updatedAt)}</span>
                         </span>
