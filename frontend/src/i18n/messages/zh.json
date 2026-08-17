@@ -295,7 +295,9 @@
     "revoked": "已撤销"
   },
   "auth": {
-    "adminLogin": "管理员登录"
+    "adminLogin": "管理员登录",
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码"
   },
   "admin": {
     "loginRequired": "需要管理员或版主登录",

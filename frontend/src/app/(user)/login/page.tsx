@@ -7,8 +7,10 @@ import { useI18n } from '@/context/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { MALAYSIA_STATES, districtsOf } from '@/lib/malaysia';
 import { PROFILE_LIMITS, validatePhone, validatePostcode } from '@/lib/profileValidation';
+import PasswordField from '@/components/PasswordField/PasswordField';
 
 const inputClass = "p-3 border border-[#ccc] rounded text-base";
+const passwordInputClass = "w-full p-3 pr-12 border border-[#ccc] rounded text-base";
 const buttonClass = "p-3 bg-[var(--primary)] text-white border-none rounded text-base font-bold cursor-pointer mt-4 hover:bg-[var(--primary-dark)]";
 
 export default function LoginPage ()
@@ -16,6 +18,7 @@ export default function LoginPage ()
 	const [username, setUsername] = useState('');
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
+	const [showPassword, setShowPassword] = useState(false);
 	// An account always carries a phone and address: its listings inherit both.
 	const [phoneNo, setPhoneNo] = useState('');
 	const [address, setAddress] = useState('');
@@ -224,13 +227,16 @@ export default function LoginPage ()
 					className={inputClass}
 				/>
 
-				<input
-				type="password"  //typed chars are masked
-				placeholder="Password"  //only "password" text shown when input empty. so that field is known as place to write password
-				value={password} //what inputted given to react. controlled inout method
-				onChange={(e) => setPassword(e.target.value)} //every time user types save to password state
-				required
-				className={inputClass}
+				<PasswordField
+					placeholder="Password"
+					value={password}
+					onChange={setPassword}
+					show={showPassword}
+					onToggle={() => setShowPassword((open) => !open)}
+					showLabel={t('auth.showPassword')}
+					hideLabel={t('auth.hidePassword')}
+					className={passwordInputClass}
+					autoComplete={isRegister ? 'new-password' : 'current-password'}
 				/>
 
 				{isRegister && (

@@ -295,7 +295,9 @@
     "revoked": "dibatalkan"
   },
   "auth": {
-    "adminLogin": "Log masuk pentadbir"
+    "adminLogin": "Log masuk pentadbir",
+    "showPassword": "Tunjuk kata laluan",
+    "hidePassword": "Sembunyi kata laluan"
   },
   "admin": {
     "loginRequired": "Log masuk pentadbir atau moderator diperlukan",

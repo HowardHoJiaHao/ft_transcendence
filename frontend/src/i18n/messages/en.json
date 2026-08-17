@@ -295,7 +295,9 @@
     "revoked": "revoked"
   },
   "auth": {
-    "adminLogin": "Admin login"
+    "adminLogin": "Admin login",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "admin": {
     "loginRequired": "Administrator or moderator login required",
