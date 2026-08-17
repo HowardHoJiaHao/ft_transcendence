@@ -33,11 +33,14 @@ type AIChatRequest struct {
 // share http client with a timeout to avoid hanging connections to the AI service
 var aiHTTPClient = &http.Client{Timeout: 70 * time.Second}
 
-// this is helper for handleAIChat
+// this is helper for the public routes that show more to a signed-in caller
 // who is talking?
-// still allow public access to the AI chat, but if the user is logged in, we will pass the userId and authToken to the AI chat service
-// wihtout login, some question is not allowed
-// for example, whats are my order, my profile, my account, etc. will not be allowed without login
+// a missing Authorization header means an anonymous visitor, so it returns
+// (0, "", nil) instead of an error and lets the caller decide what to withhold
+// right now only getProductByID uses it, to hide seller phone numbers from
+// anonymous visitors while still serving the rest of the listing
+// the AI chat no longer calls this: RacketBot is login-only and sits behind
+// JWTAuth in the protected group
 func getOptionalJWTAuth(c echo.Context, db *sql.DB) (int, string, error) {
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader == "" {
@@ -69,7 +72,9 @@ func getOptionalJWTAuth(c echo.Context, db *sql.DB) (int, string, error) {
 }
 
 // this is the function that handles the AI chat request, it will send the request to the python fastapi service, and stream the response back to the frontend
-func handleAIChat(c echo.Context, db *sql.DB) error {
+// registered on the protected group, so JWTAuth has already turned away
+// anonymous callers, expired tokens and non-active accounts before we get here
+func handleAIChat(c echo.Context) error {
 	// read the chat, browser sends in json body
 	// declare empty go struct
 	var userReq struct {
@@ -82,11 +87,16 @@ func handleAIChat(c echo.Context, db *sql.DB) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
 	}
 
-	// 1. Resolve JWT auth context if present. Guest AI chat remains allowed.
-	// the ai response style based on getOptionalJWTAuth, if the user is logged in, we will pass the userId and authToken to the AI chat service
-	userID, authToken, err := getOptionalJWTAuth(c, db)
-	if err != nil {
-		return err
+	// 1. Read the identity JWTAuth already resolved. Login is required, so
+	// every request that reaches here carries an active member.
+	// the userId and authToken are passed on to the AI chat service, which
+	// needs them to call the user-scoped tools (my orders, my profile, ...)
+	// the check below is belt and braces: it keeps RacketBot shut if this
+	// route is ever moved back onto a group without the auth middleware
+	userID, _ := c.Get("userId").(int)
+	authToken, _ := c.Get("token").(string)
+	if userID <= 0 || authToken == "" {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Please log in to chat with RacketBot"})
 	}
 
 	// 2. Prepare payload to Python AI Service, by build another struct

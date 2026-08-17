@@ -106,7 +106,7 @@ const assessmentSteps: AssessmentStep[] = [
 ];
 
 export default function AIFloatingChat() {
-  const { logout } = useAuth();
+  const { user, loading, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -127,6 +127,19 @@ export default function AIFloatingChat() {
       scrollToBottom();
     }
   }, [messages, isOpen]);
+
+  // RacketBot is login-only. When the session ends, close the panel and drop
+  // the transcript so the next account to log in on this browser never sees
+  // the previous one's conversation.
+  useEffect(() => {
+    if (!user) {
+      setIsOpen(false);
+      setMessages([]);
+      setInputValue('');
+      setAssessmentStepIndex(null);
+      setRecommendationProfile({});
+    }
+  }, [user]);
 
   const suggestedPrompts = [
     "Find me a stiff racket under RM500",
@@ -163,12 +176,13 @@ export default function AIFloatingChat() {
         }
       );
 
-      let response = await sendRequest(token);
-      if (response.status === 401 && token) {
-        // Guest AI chat is supported. Expire stale browser auth state and retry
-        // once without credentials; private tools will remain unavailable.
+      const response = await sendRequest(token);
+      if (response.status === 401) {
+        // RacketBot is login-only, so there is no guest request to retry with.
+        // Clear the stale browser auth state; the logout drops `user`, which
+        // unmounts this panel and leaves the visitor on the logged-out site.
         logout();
-        response = await sendRequest('');
+        return;
       }
 
       if (!response.ok) {
@@ -413,6 +427,13 @@ export default function AIFloatingChat() {
       </div>
     );
   };
+
+  // Login-only feature: render nothing at all for signed-out visitors, and
+  // stay hidden while AuthContext is still restoring the session so the button
+  // never flashes in and out on a page load.
+  if (loading || !user) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-[90px] right-6 z-[1000] font-[inherit]">

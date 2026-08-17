@@ -46,8 +46,6 @@ func main() {
 	e.GET("/health", func(c echo.Context) error { return healthCheckHandler(c, rawDB) })
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 	v1 := e.Group("/api/v1")
-	// ai chat route, this is a public route, no auth required, but if the user is logged in, then we will pass the userId and authToken to the AI chat service
-	v1.POST("/ai/chat", func(c echo.Context) error { return handleAIChat(c, rawDB) })
 
 	// Product routes
 	v1.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
@@ -60,6 +58,12 @@ func main() {
 	// concatenate for example "/api/v1" + "/product" = "/api/v1/products"
 	protected := e.Group("/api/v1")
 	protected.Use(myMiddleware.JWTAuth(rawDB))
+
+	// ai chat route, this is a logged-in only route. RacketBot answers order,
+	// profile and account questions through user-scoped tools, so there is no
+	// useful guest mode: JWTAuth resolves the member first, and handleAIChat
+	// forwards that userId and token on to the AI chat service.
+	protected.POST("/ai/chat", func(c echo.Context) error { return handleAIChat(c) })
 
 	// Shared user, real-time, and notification services. Notifications reuse
 	// the authenticated chat WebSocket rather than opening a second connection.
