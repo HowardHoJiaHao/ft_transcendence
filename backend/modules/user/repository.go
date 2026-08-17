@@ -45,8 +45,8 @@ func (r *Repository) CreateUser(req RegisterRequest) (int64, error) {
 	avatar := "https://ui-avatars.com/api/?name=" + req.FirstName + "+" + req.LastName
 	var id int64
 	err := r.DB.QueryRow(
-		"INSERT INTO users (username, email, password_hash, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, is_verified, requires_2fa) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
-		req.Username, req.Email, req.Password, req.FirstName, req.LastName, req.PhoneNo, req.DateOfBirth, req.Gender, avatar, true, true,
+		"INSERT INTO users (username, email, password_hash, first_name, last_name, phone_no, address, postcode, state, district, date_of_birth, gender, avatar_url, is_verified, requires_2fa) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id",
+		req.Username, req.Email, req.Password, req.FirstName, req.LastName, req.PhoneNo, req.Address, req.Postcode, req.State, req.District, req.DateOfBirth, req.Gender, avatar, true, true,
 	).Scan(&id)
 	if err != nil {
 		fmt.Printf("\nCreate user error\n")

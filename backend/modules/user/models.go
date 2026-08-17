@@ -44,6 +44,10 @@ type RegisterRequest struct {
 	FirstName   string     `json:"firstName"`
 	LastName    string     `json:"lastName"`
 	PhoneNo     *string    `json:"phoneNo"`
+	Address     *string    `json:"address"`
+	Postcode    *string    `json:"postcode"`
+	State       *string    `json:"state"`
+	District    *string    `json:"district"`
 	DateOfBirth *time.Time `json:"dateOfBirth"`
 	Gender      *string    `json:"gender"`
 }

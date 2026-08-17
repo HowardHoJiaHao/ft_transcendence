@@ -57,6 +57,10 @@ func (h *Handler) Register(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
+	if err := validateSignupContact(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+
 	id, err := h.repo.CreateUser(req)
 	if err != nil {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "User with this email or username already exists"})

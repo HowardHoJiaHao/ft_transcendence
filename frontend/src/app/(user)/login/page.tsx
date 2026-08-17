@@ -5,6 +5,8 @@ import { useAuth } from '@/context/AuthContext';;
 import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
 import { useRouter } from 'next/navigation';
+import { MALAYSIA_STATES, districtsOf } from '@/lib/malaysia';
+import { PROFILE_LIMITS, validatePhone, validatePostcode } from '@/lib/profileValidation';
 
 const inputClass = "p-3 border border-[#ccc] rounded text-base";
 const buttonClass = "p-3 bg-[var(--primary)] text-white border-none rounded text-base font-bold cursor-pointer mt-4 hover:bg-[var(--primary-dark)]";
@@ -14,6 +16,12 @@ export default function LoginPage ()
 	const [username, setUsername] = useState('');
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
+	// An account always carries a phone and address: its listings inherit both.
+	const [phoneNo, setPhoneNo] = useState('');
+	const [address, setAddress] = useState('');
+	const [postcode, setPostcode] = useState('');
+	const [signupState, setSignupState] = useState('');
+	const [district, setDistrict] = useState('');
 	const [isRegister, setIsRegister] = useState(false);
 	const [showOtp, setShowOtp] = useState(false);
 	const [otpCode, setOtpCode] = useState('');
@@ -80,6 +88,19 @@ export default function LoginPage ()
 	{
 		e.preventDefault(); //prevent default behaviour of submit. like sigint which automatically exit program, we want to modify our default submit behaviour. we dont want it to refresh
 
+		if (isRegister && !showOtp)
+		{
+			const phoneProblem = validatePhone(phoneNo);
+			if (phoneProblem) { showToast(t(phoneProblem), 'error'); return; }
+			if (!address.trim()) { showToast(t('validation.addressRequired'), 'error'); return; }
+			const postcodeProblem = validatePostcode(postcode);
+			if (postcodeProblem || !postcode.trim()) {
+				showToast(t(postcodeProblem ?? 'validation.postcodeInvalid'), 'error');
+				return;
+			}
+			if (!signupState || !district) { showToast(t('validation.stateRequired'), 'error'); return; }
+		}
+
 		try
 		{
 			let res;
@@ -104,7 +125,16 @@ export default function LoginPage ()
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(
-						isRegister ? {username, email, password, firstName: username, lastName: ''} : { email, password },
+						isRegister
+						? {
+							username, email, password, firstName: username, lastName: '',
+							phoneNo: phoneNo.trim(),
+							address: address.trim(),
+							postcode: postcode.trim(),
+							state: signupState,
+							district,
+						}
+						: { email, password },
 					)
 				}); //use fetch to get response from fetch sending http request. wait for server reply
 			}
@@ -198,6 +228,62 @@ export default function LoginPage ()
 				required
 				className={inputClass}
 				/>
+
+				{isRegister && (
+					<>
+						<input
+							type="tel"
+							placeholder="Phone number (e.g. 012-345 6789)"
+							value={phoneNo}
+							onChange={(e) => setPhoneNo(e.target.value)}
+							maxLength={PROFILE_LIMITS.phoneRaw}
+							required
+							className={inputClass}
+						/>
+						<input
+							type="text"
+							placeholder="Unit and street"
+							value={address}
+							onChange={(e) => setAddress(e.target.value)}
+							maxLength={PROFILE_LIMITS.address}
+							required
+							className={inputClass}
+						/>
+						<input
+							type="text"
+							inputMode="numeric"
+							placeholder="Postcode"
+							value={postcode}
+							onChange={(e) => setPostcode(e.target.value.replace(/[^\d]/g, ''))}
+							maxLength={PROFILE_LIMITS.postcode}
+							required
+							className={inputClass}
+						/>
+						<select
+							value={signupState}
+							onChange={(e) => { setSignupState(e.target.value); setDistrict(''); }}
+							required
+							className={inputClass}
+						>
+							<option value="">Select state</option>
+							{MALAYSIA_STATES.map((s) => (
+								<option key={s} value={s}>{s}</option>
+							))}
+						</select>
+						<select
+							value={district}
+							onChange={(e) => setDistrict(e.target.value)}
+							disabled={!signupState}
+							required
+							className={inputClass}
+						>
+							<option value="">Select district</option>
+							{districtsOf(signupState).map((d) => (
+								<option key={d} value={d}>{d}</option>
+							))}
+						</select>
+					</>
+				)}
 
 				<button type="submit" className={buttonClass}>
 					{isRegister ? 'Sign Up' : 'Sign In'}
