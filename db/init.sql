@@ -818,3 +818,58 @@ FROM (VALUES
     ('Johor Bahru',   'Johor',           'Johor Bahru')
 ) AS m(town, state, district)
 WHERE l.location = m.town;
+
+-- Scatter the demo accounts across all 16 states so the state/district filter
+-- has a real spread to test against. Every pair below is a genuine Malaysian
+-- district in that state, matching backend/modules/geo/malaysia.go, and the
+-- assignment is by id rather than random() so re-running produces the same map.
+--
+-- Only accounts still carrying a placeholder address are touched, so running
+-- this against a live database can never overwrite an address a real user typed.
+UPDATE users u
+SET phone_no = '+6012' || LPAD(u.id::text, 7, '0'),
+    address  = 'No. ' || u.id || ', Jalan Contoh',
+    postcode = p.postcode,
+    state    = p.state,
+    district = p.district
+FROM (VALUES
+    ( 0, 'Johor',                            'Johor Bahru',              '80000'),
+    ( 1, 'Selangor',                         'Petaling',                 '47300'),
+    ( 2, 'Pulau Pinang',                     'Timur Laut',               '10000'),
+    ( 3, 'Sarawak',                          'Kuching',                  '93000'),
+    ( 4, 'Wilayah Persekutuan Kuala Lumpur', 'Kuala Lumpur',             '50000'),
+    ( 5, 'Perak',                            'Kinta',                    '30000'),
+    ( 6, 'Sabah',                            'Kota Kinabalu',            '88000'),
+    ( 7, 'Selangor',                         'Klang',                    '41000'),
+    ( 8, 'Negeri Sembilan',                  'Seremban',                 '70000'),
+    ( 9, 'Kedah',                            'Kota Setar',               '05000'),
+    (10, 'Pahang',                           'Kuantan',                  '25000'),
+    (11, 'Selangor',                         'Hulu Langat',              '43000'),
+    (12, 'Melaka',                           'Melaka Tengah',            '75000'),
+    (13, 'Kelantan',                         'Kota Bharu',               '15000'),
+    (14, 'Terengganu',                       'Kuala Terengganu',         '20000'),
+    (15, 'Sarawak',                          'Miri',                     '98000'),
+    (16, 'Selangor',                         'Gombak',                   '68100'),
+    (17, 'Johor',                            'Batu Pahat',               '83000'),
+    (18, 'Pulau Pinang',                     'Seberang Perai Tengah',    '13600'),
+    (19, 'Wilayah Persekutuan Putrajaya',    'Putrajaya',                '62000'),
+    (20, 'Sabah',                            'Sandakan',                 '90000'),
+    (21, 'Perlis',                           'Perlis',                   '01000'),
+    (22, 'Selangor',                         'Sepang',                   '43900'),
+    (23, 'Perak',                            'Manjung',                  '32040')
+) AS p(idx, state, district, postcode)
+WHERE p.idx = (u.id % 24)
+  AND u.account_status = 'active'
+  AND (u.address IS NULL OR u.address = '' OR u.address LIKE 'No. %, Jalan Contoh');
+
+-- Seeded listings take their seller's location, exactly as a new listing does,
+-- so the demo data obeys the same rule the app enforces. Scoped to the seeded
+-- id range so listings created through the app keep the location they were
+-- stamped with at the time.
+UPDATE listings l
+SET state = u.state, location = u.district
+FROM users u
+WHERE u.id = l.seller_id
+  AND u.state IS NOT NULL AND u.state <> ''
+  AND u.district IS NOT NULL AND u.district <> ''
+  AND l.id <= 109;
