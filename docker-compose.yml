@@ -269,6 +269,8 @@ services:
       - transcendence-network
 
   discord-webhook-relay:
+    # Script is COPY'd into the image (not bind-mounted). Code should not
+    # change just because the host file changes; rebuild to update the relay.
     build:
       context: ./monitoring/alertmanager
       dockerfile: Dockerfile
@@ -277,6 +279,7 @@ services:
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
       RELAY_LOG_DIR: /var/log/alertmanager-relay
     volumes:
+      # Logs stay on the host so they can be read without entering the container.
       - ./monitoring/alertmanager/logs:/var/log/alertmanager-relay
     ports:
       - "127.0.0.1:5001:5001"
