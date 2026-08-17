@@ -869,7 +869,7 @@
     "hidePassword": "Sembunyi kata laluan",
     "sending": "Menghantar…",
     "sendOtp": "Hantar OTP",
-    "otpPrompt": "Masukkan OTP yang dihantar ke e-mel berdaftar anda.",
+    "otpPrompt": "Masukkan kod 6 digit daripada e-mel terbaru sahaja. E-mel lama tidak akan berjaya.",
     "otpPlaceholder": "OTP 6 digit",
     "changing": "Menukar…",
     "submit": "Tukar kata laluan",

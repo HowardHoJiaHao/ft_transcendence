@@ -106,7 +106,7 @@ export default function ChangePasswordPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? t("changePassword.otpFailed"));
-      setTempToken(data.tempToken);
+      setTempToken(String(data.tempToken ?? "").trim());
       showToast(t("changePassword.otpSent"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("changePassword.networkError"), "error");
@@ -122,7 +122,12 @@ export default function ChangePasswordPage() {
       const response = await fetch("/api/v1/auth/change-password/confirm", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ tempToken, otpCode, newPassword, confirmPassword }),
+        body: JSON.stringify({
+          tempToken: tempToken.trim(),
+          otpCode: otpCode.trim(),
+          newPassword,
+          confirmPassword,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? t("changePassword.changeFailed"));

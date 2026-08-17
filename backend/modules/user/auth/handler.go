@@ -154,6 +154,11 @@ func (h *Handler) ConfirmPasswordChange(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
 	}
+	req.TempToken = strings.TrimSpace(req.TempToken)
+	req.OtpCode = strings.TrimSpace(req.OtpCode)
+	if req.TempToken == "" || req.OtpCode == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tempToken and otpCode are required"})
+	}
 	if req.NewPassword != req.ConfirmPassword {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "New passwords do not match"})
 	}
@@ -176,7 +181,7 @@ func (h *Handler) ConfirmPasswordChange(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	email, err := h.repo.VerifyOTPAndConsume(req.TempToken, req.OtpCode)
-	if err != nil || email != u.Email {
+	if err != nil || !strings.EqualFold(email, u.Email) {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid or expired OTP"})
 	}
 	if err := h.repo.UpdatePassword(userID, passwordRequest.Password); err != nil {

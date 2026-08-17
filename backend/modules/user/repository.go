@@ -269,9 +269,11 @@ func (r *Repository) VerifyOTPAndConsume(tempToken, otpCode string) (string, err
 	if r.GormDB == nil {
 		return "", fmt.Errorf("gorm db is not initialized")
 	}
+	tempToken = strings.TrimSpace(tempToken)
+	otpCode = strings.TrimSpace(otpCode)
 	var otp OTP
 	err := r.GormDB.Where(
-		"temp_token = ? AND code = ? AND used = ? AND expiry_date > ?",
+		"temp_token = ? AND btrim(code) = ? AND used = ? AND expiry_date > ?",
 		tempToken, otpCode, false, time.Now(),
 	).First(&otp).Error
 	if err != nil {

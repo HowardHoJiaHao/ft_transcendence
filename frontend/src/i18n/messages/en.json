@@ -869,7 +869,7 @@
     "hidePassword": "Hide password",
     "sending": "Sending…",
     "sendOtp": "Send OTP",
-    "otpPrompt": "Enter the OTP sent to your registered email.",
+    "otpPrompt": "Enter the 6-digit code from the newest email only. Older emails will not work.",
     "otpPlaceholder": "6-digit OTP",
     "changing": "Changing…",
     "submit": "Change password",

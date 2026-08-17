@@ -869,7 +869,7 @@
     "hidePassword": "隐藏密码",
     "sending": "发送中…",
     "sendOtp": "发送验证码",
-    "otpPrompt": "请输入发送至您注册邮箱的验证码。",
+    "otpPrompt": "请只输入最新一封邮件里的 6 位验证码。旧邮件中的验证码无效。",
     "otpPlaceholder": "6 位验证码",
     "changing": "更改中…",
     "submit": "更改密码",
