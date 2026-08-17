@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Header from '@/components/Header/Header';
 import ShopHeader from '@/components/ShopTabs/ShopHeader';
-import { useAuth } from '@/context/AuthContext';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
 
@@ -275,8 +274,10 @@ const formatDateTime = (str?: string | null) => {
 };
 
 export default function DeveloperApiPage() {
-  const router = useRouter();
-  const { user } = useAuth();
+  // Guards on loading as well as user: AuthContext starts null and only reads
+  // the cached session on mount, so redirecting on `!user` alone bounces the
+  // page to /login before the session has been restored.
+  const { user } = useRequireAuth('/login');
   const { showToast } = useToast();
   // Only the controls are localised here — the endpoint reference below stays in
   // English, since it documents literal API paths, fields and JSON payloads.
@@ -297,12 +298,6 @@ export default function DeveloperApiPage() {
   useEffect(() => {
     setToken(localStorage.getItem('token') || '');
   }, []);
-
-  useEffect(() => {
-    if (!user) {
-      router.push('/login');
-    }
-  }, [router, user]);
 
   useEffect(() => {
     setLogPage(1);
