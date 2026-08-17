@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext';
@@ -74,7 +75,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const { addToCart, items } = useCart();
 	const { showToast } = useToast();
 	const { t, lang } = useI18n();
+	const router = useRouter();
 	const [chatOpen, setChatOpen] = useState(false);
+	const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 	const [chatMessages, setChatMessages] = useState<any[]>([]);
 	const [chatLoading, setChatLoading] = useState(false);
 	const [quantity, setQuantity] = useState(1);
@@ -288,6 +291,12 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const alreadyInCart = cartQuantity > 0;
 	const canAddToCart = isAvailable && !isOwnListing && !alreadyInCart;
 	const handleAddToCart = () => {
+		// Checked before availability: a signed-out visitor is told to sign in,
+		// not that the listing is unavailable to them.
+		if (!currentUser) {
+			setShowLoginPrompt(true);
+			return;
+		}
 		if (!canAddToCart) {
 			showToast(isOwnListing ? 'You cannot buy your own listing' : alreadyInCart ? 'This listing is already in your cart' : 'This listing is not available', 'error');
 			return;
@@ -622,6 +631,49 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 				messages={chatMessages}
 				onClose={() => setChatOpen(false)}
 			/>
+		)}
+
+		{/* Buying needs an account, so the ask is a dialog rather than a toast. */}
+		{showLoginPrompt && (
+			<div
+				className="fixed inset-0 z-[1200] bg-black/40 flex items-center justify-center px-4"
+				onClick={() => setShowLoginPrompt(false)}
+			>
+				<div
+					role="dialog"
+					aria-modal="true"
+					aria-labelledby="login-prompt-title"
+					className="bg-white border border-[#e8e8e6] rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.2)] w-full max-w-[400px] px-5 py-[18px]"
+					onClick={(e) => e.stopPropagation()}
+				>
+					<h2 id="login-prompt-title" className="text-lg font-bold text-[#222] mt-0 mx-0 mb-2">
+						{t('cart.loginPromptTitle')}
+					</h2>
+					<p className="text-[#898781] text-sm mt-0 mx-0 mb-5">
+						{t('cart.loginPromptBody')}
+					</p>
+					<div className="flex gap-2.5 justify-end flex-wrap">
+						<button
+							type="button"
+							className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]"
+							onClick={() => setShowLoginPrompt(false)}
+						>
+							{t('cart.loginPromptCancel')}
+						</button>
+						<button
+							type="button"
+							className="inline-flex items-center px-[18px] py-[7px] rounded-lg bg-[var(--primary)] text-white border-none text-[13px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[var(--primary-dark)]"
+							onClick={() => {
+								setShowLoginPrompt(false);
+								// Come back to this listing instead of dumping them on the home page.
+								router.push(`/login?redirect=${encodeURIComponent(`/products/${product.id}`)}`);
+							}}
+						>
+							{t('cart.loginPromptConfirm')}
+						</button>
+					</div>
+				</div>
+			</div>
 		)}
 		</main>
 	);

@@ -157,7 +157,11 @@ export default function LoginPage ()
 					if (data?.token) //? means check data exists or not first then check token
 						localStorage.setItem('token', data.token);
 					login(data?.user ?? data); // give me data?.user if it exist, give data if data.user, dont exists
-					router.push('/'); //navigate user to route homepage
+					// Return to whatever sent them here (?redirect=), so signing in
+					// from a listing lands back on that listing. Same-origin paths
+					// only: an absolute URL here would be an open redirect.
+					const target = new URLSearchParams(window.location.search).get('redirect');
+					router.push(target && target.startsWith('/') && !target.startsWith('//') ? target : '/');
 				}
 			}
 			else
