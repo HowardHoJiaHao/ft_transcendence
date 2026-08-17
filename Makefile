@@ -1,4 +1,4 @@
-.PHONY: help check-docker check-curl check-tools check-infisical-project check-secrets check-stripe-secrets test-stripe-setup build up down restart logs logs-waf logs-stripe logs-backend logs-frontend logs-db ps clean reset shell-backend shell-frontend shell-db db-connect db-migrate health-check test-waf infisical-auth-init infisical-auth-check infisical-auth-clear setup setup-backend setup-frontend build-up
+.PHONY: help check-docker check-curl check-tools check-infisical-project check-secrets check-stripe-secrets test-stripe-setup build up down restart logs logs-waf logs-stripe logs-backend logs-frontend logs-db ps clean prune reset shell-backend shell-frontend shell-db db-connect db-migrate health-check test-waf infisical-auth-init infisical-auth-check infisical-auth-clear setup setup-backend setup-frontend build-up
 
 INFISICAL_ENV ?= dev
 INFISICAL_PATH ?= /
@@ -39,7 +39,8 @@ help:
 	@echo "make infisical-auth-clear - Delete only the local Infisical token file"
 	@echo "make db-connect       - Open psql inside the PostgreSQL container"
 	@echo "make db-migrate       - Apply db/init.sql to the running database"
-	@echo "make clean            - DESTRUCTIVE: remove containers and database volume"
+	@echo "make clean            - DESTRUCTIVE: remove this project's containers and database volume"
+	@echo "make prune            - DESTRUCTIVE: stop every container on this machine, then prune images/volumes"
 	@echo "make reset            - DESTRUCTIVE: remove data and recreate the full stack"
 
 check-docker:
@@ -168,6 +169,13 @@ infisical-auth-clear:
 clean: check-docker
 	@echo "⚠️  Removing containers and the PostgreSQL data volume. This deletes local database data."
 	$(COMPOSE) down -v --rmi local
+
+prune: check-docker
+	@echo "⚠️  Stopping and removing EVERY Docker container on this machine,"
+	@echo "    then deleting unused images, networks, and volumes (all projects)."
+	@ids=$$(docker ps -aq); \
+	if [ -n "$$ids" ]; then docker rm -f $$ids; else echo "No containers to remove."; fi
+	docker system prune -a --volumes -f
 
 reset: check-tools check-infisical-project
 	@echo "⚠️  Removing containers and the PostgreSQL data volume. This deletes local database data."
