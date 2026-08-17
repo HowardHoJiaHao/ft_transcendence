@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import { PROFILE_LIMITS, validateEmail } from '@/lib/profileValidation';
 
 export default function ChangeEmailPage()
@@ -11,6 +12,7 @@ export default function ChangeEmailPage()
 	const router = useRouter();
 	const { showToast } = useToast();
 	const { t } = useI18n();
+	const { updateUser } = useAuth();
 	const [newEmail, setNewEmail] = useState('');
 	const [loading, setLoading] = useState(false);
 	const [msg, setMsg] = useState('');
@@ -49,6 +51,8 @@ export default function ChangeEmailPage()
 				showToast(message, 'error');
 				return ;
 			}
+			// Keep the cached auth user in step with the row that just changed.
+			updateUser({ email: data.email ?? newEmail.trim().toLowerCase() });
 			setMsg(t('toast.emailUpdated'));
 			showToast(t('toast.emailUpdated'), 'success');
 			setTimeout(() => router.push('/profile'), 800);

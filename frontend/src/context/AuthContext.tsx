@@ -66,6 +66,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) //by p
 		setLoading(false);
 	}, []); //run the code exactly
 
+	// The cached copy above is whatever was true at login, so it goes stale the
+	// moment the profile changes in another tab or session. Re-read the row once
+	// on mount and keep the cache on failure, so a blip never logs anyone out.
+	useEffect(() => {
+		const token = localStorage.getItem('token');
+		if (!token) return;
+		let cancelled = false;
+		void (async () => {
+			try {
+				const res = await fetch('/api/v1/me', {
+					headers: { Authorization: `Bearer ${token}` },
+				});
+				if (!res.ok || cancelled) return;
+				// /me answers with { token, user }, not a bare user.
+				const fresh = (await res.json())?.user;
+				if (typeof fresh?.id !== 'number') return;
+				setUser(prev => {
+					const merged = { ...(prev ?? {}), ...fresh } as User;
+					localStorage.setItem('user', JSON.stringify(merged));
+					return merged;
+				});
+			} catch {
+				// Offline or backend down: the cached user stays usable.
+			}
+		})();
+		return () => { cancelled = true; };
+	}, []);
+
 	const login = useCallback((userData: User) =>
 	{
 		setUser(userData); //put user data in state variable

@@ -326,6 +326,18 @@ export default function ProfilePage() {
         showToast(t("profile.profileUpdated"), "success");
         const updated = await res.json();
         setUser(updated);
+        // Without this the rest of the app keeps reading the copy cached at login.
+        updateUser({
+          email: updated.email ?? "",
+          firstName: updated.firstName ?? "",
+          lastName: updated.lastName ?? "",
+          phoneNo: updated.phoneNo ?? "",
+          address: updated.address ?? "",
+          postcode: updated.postcode ?? "",
+          state: updated.state ?? "",
+          district: updated.district ?? "",
+          gender: updated.gender ?? "",
+        });
       } else {
         const data = await res.json().catch(() => ({}));
         showToast(data.error ?? t("profile.profileUpdateFailed"), "error");

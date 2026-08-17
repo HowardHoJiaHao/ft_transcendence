@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import { PROFILE_LIMITS, normalizePhone, validatePhone } from '@/lib/profileValidation';
 
 export default function ChangePhoneNoPage()
@@ -11,6 +12,7 @@ export default function ChangePhoneNoPage()
 	const router = useRouter();
 	const { showToast } = useToast();
 	const { t } = useI18n();
+	const { updateUser } = useAuth();
 	const [newPhoneNo, setNewPhoneNo] = useState('');
 	const [loading, setLoading] = useState(false);
 	const [msg, setMsg] = useState('');
@@ -54,6 +56,8 @@ export default function ChangePhoneNoPage()
 				showToast(message, 'error');
 				return ;
 			}
+			// Keep the cached auth user in step, or Post an Ad shows the old number.
+			updateUser({ phoneNo: data.phoneNo ?? normalizePhone(newPhoneNo) });
 			setMsg(t('toast.phoneUpdated'));
 			showToast(t('toast.phoneUpdated'), 'success');
 			setTimeout(() => router.push('/profile'), 800);
