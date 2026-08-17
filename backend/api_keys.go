@@ -270,14 +270,28 @@ func getAPIKeyLogs(c echo.Context, gormDB *gorm.DB) error {
 	// that worked — a revoked key still being used, or a key being hammered, is
 	// exactly what the owner needs to see. Attempts with an unrecognised key
 	// belong to no account and are reachable only through the admin view.
+	// Optional ?apiKeyId= narrows the trail to one key. Ownership still comes
+	// from the join on k.user_id, so another user's key id simply matches
+	// nothing rather than leaking their traffic.
+	keyFilter := ""
+	args := []interface{}{userID, limit}
+	if raw := c.QueryParam("apiKeyId"); raw != "" {
+		parsed, convErr := strconv.Atoi(raw)
+		if convErr != nil || parsed <= 0 {
+			return c.JSON(400, map[string]string{"error": "apiKeyId must be a positive integer"})
+		}
+		args = append(args, parsed)
+		keyFilter = " AND l.api_key_id = $3"
+	}
+
 	rows, err := sqlDB.Query(
 		`SELECT l.id, l.api_key_id, COALESCE(k.name, ''), l.method, l.path, l.status,
 		        COALESCE(l.ip_address, ''), l.outcome, COALESCE(l.user_agent, ''), l.created_at
 		 FROM api_request_logs l
 		 JOIN api_keys k ON k.id = l.api_key_id
-		 WHERE k.user_id = $1
+		 WHERE k.user_id = $1`+keyFilter+`
 		 ORDER BY l.id DESC
-		 LIMIT $2`, userID, limit,
+		 LIMIT $2`, args...,
 	)
 	if err != nil {
 		log.Printf("Error querying API request logs: %v", err)

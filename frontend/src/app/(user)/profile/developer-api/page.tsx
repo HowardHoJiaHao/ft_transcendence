@@ -301,6 +301,8 @@ export default function DeveloperApiPage() {
   const [loadingKeys, setLoadingKeys] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [activeTab, setActiveTab] = useState<'keys' | 'docs' | 'logs'>('keys');
+  // '' = every key's traffic; a key id narrows the log to that one key.
+  const [logKeyFilter, setLogKeyFilter] = useState('');
   const [logPage, setLogPage] = useState(1);
   const [creating, setCreating] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
@@ -333,11 +335,14 @@ export default function DeveloperApiPage() {
     }
   };
 
-  const refreshLogs = async () => {
+  const refreshLogs = async (keyId?: number | null) => {
     if (!token) return;
     setLoadingLogs(true);
     try {
-      const res = await fetch(buildApiUrl('/api/v1/api-keys/logs?limit=500'), {
+      // Filtering server-side rather than in the browser: a busy key's history
+      // would otherwise be crowded out of the shared 500-row window.
+      const query = keyId ? `?limit=500&apiKeyId=${keyId}` : '?limit=500';
+      const res = await fetch(buildApiUrl(`/api/v1/api-keys/logs${query}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
@@ -353,8 +358,8 @@ export default function DeveloperApiPage() {
   useEffect(() => {
     if (!user || !token) return;
     void refreshKeys();
-    void refreshLogs();
-  }, [token, user]); // eslint-disable-line react-hooks/exhaustive-deps
+    void refreshLogs(logKeyFilter ? Number(logKeyFilter) : null);
+  }, [token, user, logKeyFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreateKey = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -395,7 +400,7 @@ export default function DeveloperApiPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to revoke API key');
       showToast('API key revoked', 'success');
       await refreshKeys();
-      await refreshLogs();
+      await refreshLogs(logKeyFilter ? Number(logKeyFilter) : null);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to revoke API key', 'error');
     } finally {
@@ -761,15 +766,38 @@ export default function DeveloperApiPage() {
               <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
                 <div className="flex justify-between items-center gap-3 mt-0 mx-0 mb-3 max-[640px]:flex-wrap">
                   <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-0">📋 Request log</h2>
-                  <button className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]" type="button" onClick={refreshLogs}>
-                    {t('devApi.refresh')}
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label htmlFor="log-key-filter" className="sr-only">
+                      {t('devApi.filterByKey')}
+                    </label>
+                    <select
+                      id="log-key-filter"
+                      className="border border-[#ccc] bg-white rounded-lg px-3 py-[7px] text-[13px] text-[#333] cursor-pointer outline-none focus:border-[#c2185b]"
+                      value={logKeyFilter}
+                      onChange={(event) => {
+                        setLogKeyFilter(event.target.value);
+                        setLogPage(1);
+                      }}
+                    >
+                      <option value="">{t('devApi.allKeys')}</option>
+                      {keys.map((key) => (
+                        <option key={key.id} value={String(key.id)}>
+                          {key.name}
+                          {key.isActive ? '' : ` (${t('devApi.revoked')})`}
+                        </option>
+                      ))}
+                    </select>
+                    <button className="border border-[#ccc] bg-white rounded-lg px-3.5 py-[7px] text-[13px] font-semibold text-[#333] cursor-pointer transition-[border-color] duration-150 hover:border-[#888]" type="button" onClick={() => refreshLogs(logKeyFilter ? Number(logKeyFilter) : null)}>
+                      {t('devApi.refresh')}
+                    </button>
+                  </div>
                 </div>
                 <p className="text-[#898781] text-[13.5px] leading-[1.55] mt-0 mx-0 mb-3.5">
                   Every call made with your API keys, newest first — review this for
                   unfamiliar IPs or unexpected activity, and revoke a key if it looks
                   compromised.
                 </p>
+
                 {loadingLogs ? (
                   <p className="text-[#888] text-[15px] m-0 py-5">Loading logs…</p>
                 ) : logs.length === 0 ? (
