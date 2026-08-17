@@ -329,6 +329,8 @@ CREATE TABLE IF NOT EXISTS api_keys (
     is_active BOOLEAN DEFAULT TRUE,
     rate_limit INT DEFAULT 100,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Keys are short-lived on purpose: a leaked key stops working on its own.
+    expires_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '30 days'),
     last_used_at TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -342,6 +344,17 @@ CREATE TABLE IF NOT EXISTS api_request_logs (
     path VARCHAR(255),
     status INT,
     ip_address VARCHAR(64),
+    -- Why the call ended the way it did. Rejected attempts are recorded too, so
+    -- a run of invalid_key from one address is visible as the attack it is.
+    outcome VARCHAR(32) NOT NULL DEFAULT 'success' CHECK (
+        outcome IN ('success', 'missing_key', 'invalid_key',
+                    'revoked_key', 'expired_key', 'rate_limited')
+    ),
+    user_agent VARCHAR(255),
+    -- First 12 hex of the SHA-256 of the presented key. Enough to tell one key
+    -- retried 500 times from 500 different keys tried once; not enough to be a
+    -- credential, and one-way regardless.
+    key_fingerprint VARCHAR(16),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- SET NULL rather than CASCADE: revoking a key or deleting a user must not
     -- erase the audit trail of what that key already did.
@@ -353,6 +366,13 @@ CREATE INDEX IF NOT EXISTS idx_api_request_logs_key
 ON api_request_logs(api_key_id, created_at);
 
 -- Drives the attack view: "which addresses are failing, and how often".
+CREATE INDEX IF NOT EXISTS idx_api_request_logs_failures
+ON api_request_logs(outcome, created_at DESC)
+WHERE outcome <> 'success';
+
+CREATE INDEX IF NOT EXISTS idx_api_request_logs_ip
+ON api_request_logs(ip_address, created_at DESC);
+
 -- Create friendships table
 CREATE TABLE IF NOT EXISTS friendships (
     id SERIAL PRIMARY KEY,
@@ -729,6 +749,31 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_stock_quantity_range') THEN
         ALTER TABLE listings ADD CONSTRAINT listings_stock_quantity_range
         CHECK (stock_quantity >= 0 AND stock_quantity <= 100);
+    END IF;
+END $$;
+
+-- API key expiry and richer request logging, for databases created before them.
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+UPDATE api_keys SET expires_at = created_at + INTERVAL '30 days' WHERE expires_at IS NULL;
+ALTER TABLE api_keys ALTER COLUMN expires_at SET NOT NULL;
+ALTER TABLE api_keys ALTER COLUMN expires_at
+    SET DEFAULT (CURRENT_TIMESTAMP + INTERVAL '30 days');
+
+ALTER TABLE api_request_logs ADD COLUMN IF NOT EXISTS outcome VARCHAR(32);
+UPDATE api_request_logs SET outcome = 'success' WHERE outcome IS NULL;
+ALTER TABLE api_request_logs ALTER COLUMN outcome SET DEFAULT 'success';
+ALTER TABLE api_request_logs ALTER COLUMN outcome SET NOT NULL;
+ALTER TABLE api_request_logs ADD COLUMN IF NOT EXISTS user_agent VARCHAR(255);
+ALTER TABLE api_request_logs ADD COLUMN IF NOT EXISTS key_fingerprint VARCHAR(16);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'api_request_logs_outcome_check'
+    ) THEN
+        ALTER TABLE api_request_logs ADD CONSTRAINT api_request_logs_outcome_check
+        CHECK (outcome IN ('success', 'missing_key', 'invalid_key',
+                           'revoked_key', 'expired_key', 'rate_limited'));
     END IF;
 END $$;
 
