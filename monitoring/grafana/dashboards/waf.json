@@ -156,7 +156,7 @@
         {
           "datasource": { "type": "loki", "uid": "loki" },
           "editorMode": "code",
-          "expr": "sum(count_over_time({service=\"waf\"} |~ `(?i)(modsecurity|access denied)`[5m]))",
+          "expr": "sum(count_over_time({service=\"waf\"} |~ `(?i)(access denied|\"is_interrupted\":true|\"http_code\":403)`[5m]))",
           "queryType": "instant",
           "refId": "A"
         }
@@ -236,7 +236,7 @@
         {
           "datasource": { "type": "loki", "uid": "loki" },
           "editorMode": "code",
-          "expr": "sum(count_over_time({service=\"waf\"} |~ `(?i)(modsecurity|access denied)`[1m]))",
+          "expr": "sum(count_over_time({service=\"waf\"} |~ `(?i)(access denied|\"is_interrupted\":true|\"http_code\":403)`[1m]))",
           "legendFormat": "ModSecurity / min",
           "queryType": "range",
           "refId": "D"
@@ -303,7 +303,7 @@
         {
           "datasource": { "type": "loki", "uid": "loki" },
           "editorMode": "code",
-          "expr": "sum(count_over_time({service=\"waf\"} |~ `(?i)(modsecurity|access denied)`[1h]))",
+          "expr": "sum(count_over_time({service=\"waf\"} |~ `(?i)(access denied|\"is_interrupted\":true|\"http_code\":403)`[1h]))",
           "legendFormat": "ModSecurity",
           "queryType": "instant",
           "refId": "C"
@@ -331,7 +331,7 @@
         {
           "datasource": { "type": "loki", "uid": "loki" },
           "editorMode": "code",
-          "expr": "{service=\"waf\"} |~ `(?i)( 403 |modsecurity|access denied)`",
+          "expr": "{service=\"waf\"} |~ `(?i)(access denied|\"is_interrupted\":true|\"http_code\":403)`",
           "queryType": "range",
           "refId": "A"
         }
