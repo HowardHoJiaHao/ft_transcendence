@@ -13,6 +13,7 @@ import { useI18n } from '@/context/LanguageContext';
 import { PLACEHOLDER_LISTING_IMAGE } from '@/lib/listingImage';
 import ListingImage from '@/components/ListingImage/ListingImage';
 import { avatarClass } from '@/lib/avatar';
+import { formatLocation } from '@/lib/malaysia';
 
 interface Product
 {
@@ -25,6 +26,7 @@ interface Product
   flexibilityCategory: string;
   balanceCategory: string;
   location: string;
+  state: string;
   sellerId: string;
   sellerName: string;
   // Both feed the one thing a buyer needs to know about availability: a
@@ -193,6 +195,7 @@ export default function UserPage()
 			  flexibilityCategory: p.flexibilityCategory,
 			  balanceCategory: p.balanceCategory,
 			  location: p.location,
+			  state: p.state,
 			  sellerId: p.sellerId,
 			  sellerName: p.sellerName,
 			  stockQuantity: p.stockQuantity,
@@ -287,7 +290,7 @@ export default function UserPage()
                    <div className="p-3">
                      <h4 className="text-sm font-semibold mb-2 text-[var(--dark)] leading-[1.4] h-[2.8em] overflow-hidden text-ellipsis line-clamp-2">{product.title}</h4>
                      <div className="text-xs text-[var(--secondary)] mb-2">
-                       <span className="block whitespace-nowrap overflow-hidden text-ellipsis">📍 {product.location}</span>
+                       <span className="block whitespace-nowrap overflow-hidden text-ellipsis">📍 {formatLocation(product.location, product.state)}</span>
                      </div>
                      <div className="mb-2">
                        <span className="price">RM {product.price}</span>

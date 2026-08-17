@@ -211,7 +211,33 @@ func runListingsMigration(db *sql.DB) error {
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS condition VARCHAR(50) DEFAULT 'Second-hand (Used)'`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS dealing_method VARCHAR(100) DEFAULT 'Meet Up'`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20) DEFAULT ''`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS state VARCHAR(50)`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS stock_quantity INT NOT NULL DEFAULT 1`,
+		// Ceilings matching the Go constants in products.go.
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_title_length') THEN
+				ALTER TABLE listings ADD CONSTRAINT listings_title_length
+				CHECK (char_length(title) <= 70);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_description_length') THEN
+				ALTER TABLE listings ADD CONSTRAINT listings_description_length
+				CHECK (description IS NULL OR char_length(description) <= 4000);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_price_ceiling') THEN
+				ALTER TABLE listings ADD CONSTRAINT listings_price_ceiling
+				CHECK (price <= 100000);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_original_price_ceiling') THEN
+				ALTER TABLE listings ADD CONSTRAINT listings_original_price_ceiling
+				CHECK (original_price IS NULL OR original_price <= 100000);
+			END IF;
+			ALTER TABLE listings DROP CONSTRAINT IF EXISTS listings_stock_quantity_nonnegative;
+			IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_stock_quantity_range') THEN
+				ALTER TABLE listings ADD CONSTRAINT listings_stock_quantity_range
+				CHECK (stock_quantity >= 0 AND stock_quantity <= 100);
+			END IF;
+		END $$`,
 		`DO $$
 		BEGIN
 			IF NOT EXISTS (

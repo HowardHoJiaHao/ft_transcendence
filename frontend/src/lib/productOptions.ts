@@ -31,3 +31,11 @@ export const FLEXIBILITY_CATEGORIES = [
 ] as const;
 
 export const BALANCE_CATEGORIES = ['Head Heavy', 'Even Balance', 'Head Light'] as const;
+
+// Mirrors the constants in backend/products.go; the server re-validates.
+export const LISTING_LIMITS = {
+  title: 70,
+  description: 4000,
+  price: 100000,
+  stock: 100,
+} as const;

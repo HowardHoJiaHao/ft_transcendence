@@ -14,6 +14,7 @@ import ListingImage from '@/components/ListingImage/ListingImage';
 import { resolveListingImageUrl } from '@/lib/listingImage';
 import { formatFileSize, type ListingFile } from '@/lib/listingFiles';
 import { avatarClass } from '@/lib/avatar';
+import { formatLocation } from '@/lib/malaysia';
 
 interface Product {
 	id: number;
@@ -32,6 +33,7 @@ interface Product {
 	dealingMethod: string;
 	phoneNumber: string;
 	location: string;
+	state: string;
 	rating: number;
 	reviews: number;
 	isNew: boolean;
@@ -278,7 +280,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		{ label: 'Flexibility', value: product.flexibilityCategory },
 		{ label: 'Balance', value: product.balanceCategory },
 		{ label: 'Dealing method', value: product.dealingMethod },
-		{ label: 'Location', value: product.location },
+		{ label: 'Location', value: formatLocation(product.location, product.state) },
 		{ label: 'Contact', value: product.phoneNumber },
 	].filter((spec) => spec.value && spec.value.trim() !== '');
 	// A listing is one indivisible lot, so it is either already in the cart or
@@ -371,7 +373,18 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		  	  </div>
 
 		  	  <div className="flex-[0_0_50%]">
-			    <div className="text-[40px] font-bold text-[var(--dark)] mb-2.5">{product.title}</div>
+			    {/* Wraps rather than truncating: on the listing's own page the
+			        full title is what the buyer came to read. overflow-wrap
+			        catches a long unbroken token, which is the only way 40px
+			        text can still escape this column. The 3-line clamp is a
+			        backstop for rows that predate the 70-character limit; a
+			        title within that limit never reaches it. */}
+			    <h1
+			      title={product.title}
+			      className="text-[clamp(26px,3vw,40px)] font-bold text-[var(--dark)] mt-0 mb-2.5 leading-[1.15] break-words [overflow-wrap:anywhere] [text-wrap:balance] [display:-webkit-box] [-webkit-line-clamp:3] [-webkit-box-orient:vertical] overflow-hidden"
+			    >
+			      {product.title}
+			    </h1>
 				{/* Quantity is shown as a count, matching the marketplace cards.
 				    "Unavailable" still covers a listing that has stock but is
 				    not active (archived, or reserved by a pending order). The

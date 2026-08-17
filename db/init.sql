@@ -67,14 +67,16 @@ CREATE TABLE IF NOT EXISTS listings (
     price DECIMAL(10, 2) NOT NULL,
     original_price DECIMAL(10, 2),
     currency VARCHAR(10) DEFAULT 'RM',
+    -- location holds the Malaysian district; state is its parent.
     location VARCHAR(100),
+    state VARCHAR(50),
     image VARCHAR(255),
     seller_name VARCHAR(255),
     rating DECIMAL(3, 1) DEFAULT 4.5,
     reviews INT DEFAULT 0,
     is_new BOOLEAN DEFAULT FALSE,
     is_featured BOOLEAN DEFAULT FALSE,
-    stock_quantity INT NOT NULL DEFAULT 1 CHECK (stock_quantity >= 0),
+    stock_quantity INT NOT NULL DEFAULT 1 CHECK (stock_quantity >= 0 AND stock_quantity <= 100),
     -- 'pending' is the window between checkout and the seller confirming
     -- delivery; only a delivered order makes a listing genuinely 'sold'.
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'pending', 'sold', 'archived')),
@@ -350,6 +352,7 @@ CREATE TABLE IF NOT EXISTS api_request_logs (
 CREATE INDEX IF NOT EXISTS idx_api_request_logs_key
 ON api_request_logs(api_key_id, created_at);
 
+-- Drives the attack view: "which addresses are failing, and how often".
 -- Create friendships table
 CREATE TABLE IF NOT EXISTS friendships (
     id SERIAL PRIMARY KEY,
@@ -701,7 +704,72 @@ WHERE l.id BETWEEN 20 AND 59
       WHERE o.listing_id = l.id AND o.status IN ('pending', 'completed')
   );
 
+-- Ceilings on the caller-supplied listing values, matching the Go constants in
+-- backend/products.go. The application rejects these first; this is the backstop.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_title_length') THEN
+        ALTER TABLE listings ADD CONSTRAINT listings_title_length
+        CHECK (char_length(title) <= 70);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_description_length') THEN
+        ALTER TABLE listings ADD CONSTRAINT listings_description_length
+        CHECK (description IS NULL OR char_length(description) <= 4000);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_price_ceiling') THEN
+        ALTER TABLE listings ADD CONSTRAINT listings_price_ceiling
+        CHECK (price <= 100000);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_original_price_ceiling') THEN
+        ALTER TABLE listings ADD CONSTRAINT listings_original_price_ceiling
+        CHECK (original_price IS NULL OR original_price <= 100000);
+    END IF;
+    -- Replaces the original >= 0 check, which had no upper bound.
+    ALTER TABLE listings DROP CONSTRAINT IF EXISTS listings_stock_quantity_nonnegative;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_stock_quantity_range') THEN
+        ALTER TABLE listings ADD CONSTRAINT listings_stock_quantity_range
+        CHECK (stock_quantity >= 0 AND stock_quantity <= 100);
+    END IF;
+END $$;
+
 -- Structured address columns, for databases created before they existed.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS postcode VARCHAR(5);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(50);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS district VARCHAR(100);
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS state VARCHAR(50);
+
+CREATE INDEX IF NOT EXISTS idx_listings_state_location
+    ON listings(state, location);
+
+-- Seeded listings stored towns in location; map them onto canonical districts.
+UPDATE listings l
+SET state = m.state, location = m.district
+FROM (VALUES
+    ('Kuala Lumpur',  'Wilayah Persekutuan Kuala Lumpur', 'Kuala Lumpur'),
+    ('Bangsar',       'Wilayah Persekutuan Kuala Lumpur', 'Kuala Lumpur'),
+    ('Mid Valley',    'Wilayah Persekutuan Kuala Lumpur', 'Kuala Lumpur'),
+    ('Mont Kiara',    'Wilayah Persekutuan Kuala Lumpur', 'Kuala Lumpur'),
+    ('Kepong',        'Wilayah Persekutuan Kuala Lumpur', 'Kuala Lumpur'),
+    ('Sentul',        'Wilayah Persekutuan Kuala Lumpur', 'Kuala Lumpur'),
+    ('Putrajaya',     'Wilayah Persekutuan Putrajaya',    'Putrajaya'),
+    ('Petaling Jaya', 'Selangor',        'Petaling'),
+    ('Shah Alam',     'Selangor',        'Petaling'),
+    ('Subang Jaya',   'Selangor',        'Petaling'),
+    ('Puchong',       'Selangor',        'Petaling'),
+    ('Damansara',     'Selangor',        'Petaling'),
+    ('Serdang',       'Selangor',        'Petaling'),
+    ('Setia Alam',    'Selangor',        'Klang'),
+    ('Klang',         'Selangor',        'Klang'),
+    ('Sentosa',       'Selangor',        'Klang'),
+    ('Cheras',        'Selangor',        'Hulu Langat'),
+    ('Ampang',        'Selangor',        'Hulu Langat'),
+    ('Kajang',        'Selangor',        'Hulu Langat'),
+    ('Bangi',         'Selangor',        'Hulu Langat'),
+    ('Cyberjaya',     'Selangor',        'Sepang'),
+    ('Melaka',        'Melaka',          'Melaka Tengah'),
+    ('Seremban',      'Negeri Sembilan', 'Seremban'),
+    ('Ipoh',          'Perak',           'Kinta'),
+    ('Penang',        'Pulau Pinang',    'Timur Laut'),
+    ('Johor Bahru',   'Johor',           'Johor Bahru')
+) AS m(town, state, district)
+WHERE l.location = m.town;

@@ -6,6 +6,7 @@ import { useI18n } from '@/context/LanguageContext';
 import Header from '@/components/Header/Header';
 import ListingImage from '@/components/ListingImage/ListingImage';
 import Link from 'next/link';
+import { MALAYSIA_STATES, districtsOf, formatLocation } from '@/lib/malaysia';
 
 interface Product
 {
@@ -18,6 +19,7 @@ interface Product
   flexibilityCategory: string;
   balanceCategory: string;
   location: string;
+  state: string;
   sellerId: string;
   sellerName: string;
   isNew: boolean;
@@ -52,13 +54,6 @@ const BALANCE_CATEGORIES = [
   'Head Light',
 ];
 
-const LOCATIONS = [
-  'All',
-  'Kuala Lumpur',
-  'Petaling Jaya',
-  'Shah Alam',
-];
-
 export default function Home()
 {
   const { user, logout } = useAuth();
@@ -67,7 +62,8 @@ export default function Home()
   const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
   const [selectedFlexibilities, setSelectedFlexibilities] = useState<string[]>([]);
   const [selectedBalances, setSelectedBalances] = useState<string[]>([]);
-  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedDistrict, setSelectedDistrict] = useState('');
   const [minPriceInput, setMinPriceInput] = useState('');
   const [maxPriceInput, setMaxPriceInput] = useState('');
   const [appliedMinPrice, setAppliedMinPrice] = useState('');
@@ -103,7 +99,7 @@ export default function Home()
 
   useEffect(() => {
 	setCurrentPage(1)
-  }, [selectedWeights, selectedFlexibilities, selectedBalances, selectedLocations, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy]);
+  }, [selectedWeights, selectedFlexibilities, selectedBalances, selectedState, selectedDistrict, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy]);
 
 
   //			FETCH PRODUCTS FROM API
@@ -131,12 +127,10 @@ export default function Home()
 			query.append('balanceCategory', b);
 			});
 		}
-		if (selectedLocations.length > 0)
-		{
-		  selectedLocations.forEach((loc) => {
-			query.append('location', loc);
-		  });
-		}
+		if (selectedState)
+			query.append('state', selectedState);
+		if (selectedDistrict)
+			query.append('location', selectedDistrict);
 		if (appliedMinPrice.trim())
 			query.append('minPrice', appliedMinPrice.trim());
 		if (appliedMaxPrice.trim())
@@ -167,6 +161,7 @@ export default function Home()
           flexibilityCategory: p.flexibilityCategory,
 		  balanceCategory: p.balanceCategory,
           location: p.location,
+          state: p.state,
           sellerId: p.sellerId,
 		  sellerName: p.sellerName,
           isNew: p.isNew,
@@ -186,7 +181,7 @@ export default function Home()
     };
 
     fetchProducts();
-  }, [selectedWeights, selectedFlexibilities, selectedBalances, selectedLocations, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy, currentPage]);
+  }, [selectedWeights, selectedFlexibilities, selectedBalances, selectedState, selectedDistrict, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy, currentPage]);
 
   return (
     <main className="flex flex-col min-h-screen px-5">
@@ -286,21 +281,31 @@ export default function Home()
 
             <div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
               <h3 className="text-sm font-semibold mb-3">Location</h3>
-              <div className="flex flex-col gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
-                {LOCATIONS.filter(c => c !== 'All').map((loc) => (
-                  <label key={loc}>
-                    <input type="checkbox" value={loc} checked={selectedLocations.includes(loc)}
-                      onChange={(e) => {
-                        const value = e.target.value;
-
-                        setSelectedLocations((prev) =>
-                          prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
-                        );
-                      }}
-                    />
-                    {loc}
-                  </label>
-                ))}
+              <div className="flex flex-col gap-2">
+                <select
+                  className="w-full border border-[var(--border)] rounded-md px-2.5 py-2 text-[13px] bg-[var(--background)] cursor-pointer"
+                  value={selectedState}
+                  onChange={(e) => {
+                    setSelectedState(e.target.value);
+                    setSelectedDistrict('');
+                  }}
+                >
+                  <option value="">All States</option>
+                  {MALAYSIA_STATES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <select
+                  className="w-full border border-[var(--border)] rounded-md px-2.5 py-2 text-[13px] bg-[var(--background)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  value={selectedDistrict}
+                  onChange={(e) => setSelectedDistrict(e.target.value)}
+                  disabled={!selectedState}
+                >
+                  <option value="">All Districts</option>
+                  {districtsOf(selectedState).map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -396,7 +401,7 @@ export default function Home()
                       <h4 className="text-sm font-semibold mb-2 text-[var(--dark)] leading-[1.4] h-[2.8em] overflow-hidden text-ellipsis line-clamp-2">{product.title}</h4>
 
                       <div className="text-xs text-[var(--secondary)] mb-2">
-                        <span className="block whitespace-nowrap overflow-hidden text-ellipsis">📍 {product.location}</span>
+                        <span className="block whitespace-nowrap overflow-hidden text-ellipsis">📍 {formatLocation(product.location, product.state)}</span>
                       </div>
 
                       <div className="mb-2">

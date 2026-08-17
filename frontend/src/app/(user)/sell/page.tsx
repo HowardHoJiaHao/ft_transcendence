@@ -28,9 +28,14 @@ import {
   WEIGHT_CATEGORIES,
   FLEXIBILITY_CATEGORIES,
   BALANCE_CATEGORIES,
+  LISTING_LIMITS,
 } from "@/lib/productOptions";
 
 type Condition = (typeof CONDITIONS)[number]; // treat conditions like this is enum, but string union type
+
+// Account-owned values: same field shape as the editable inputs, muted and inert.
+const READONLY_FIELD =
+  "w-full border border-[#e5e5e3] rounded-md px-3.5 py-3 text-[15px] text-[#555] bg-[#f7f7f5] box-border outline-none cursor-not-allowed";
 
 /* ─────────────────────────────────────────
    Inner component – reads search params
@@ -94,13 +99,20 @@ function SellPageInner() {
   const [legacyImage, setLegacyImage] = useState("");
   // The listing's current status, preserved across an edit.
   const [loadedStatus, setLoadedStatus] = useState("");
-  const [location, setLocation] = useState("");
   const [dealingMethods, setDealingMethods] = useState<string[]>([]);
+  // Both are the account's, shown read-only: a listing inherits them.
+  // Mirrors sellerProfile.incomplete() in the backend, so the form blocks on
+  // exactly what the server would reject.
+  const sellerStreet = user?.address?.trim() ?? "";
+  const sellerPostcode = user?.postcode?.trim() ?? "";
+  const sellerState = user?.state?.trim() ?? "";
+  const sellerDistrict = user?.district?.trim() ?? "";
+  const sellerPhone = user?.phoneNo?.trim() ?? "";
+  const addressComplete = Boolean(sellerStreet && sellerPostcode && sellerState && sellerDistrict);
+  const profileComplete = addressComplete && Boolean(sellerPhone);
   const [weightCategory, setWeightCategory] = useState("4U");
   const [flexibilityCategory, setFlexibilityCategory] = useState("Medium Flex");
   const [balanceCategory, setBalanceCategory] = useState("Even Balance");
-  // Contact
-  const [phoneNumber, setPhoneNumber] = useState("");
   // Acknowledgement
   const [acknowledged, setAcknowledged] = useState(false);
   /* this block is temporary page state */
@@ -124,9 +136,7 @@ function SellPageInner() {
     price: string;
     originalPrice: string;
     stockQuantity: string;
-    location: string;
     dealingMethods: string[];
-    phoneNumber: string;
     weightCategory: string;
     flexibilityCategory: string;
     balanceCategory: string;
@@ -157,11 +167,9 @@ function SellPageInner() {
           price: p.price?.toString() || "",
           originalPrice: p.originalPrice != null ? p.originalPrice.toString() : "",
           stockQuantity: (p.stockQuantity ?? 1).toString(),
-          location: p.location || "",
           dealingMethods: p.dealingMethod
             ? p.dealingMethod.split(", ").filter(Boolean)
             : [],
-          phoneNumber: p.phoneNumber || "",
           weightCategory: p.weightCategory || "4U",
           flexibilityCategory: p.flexibilityCategory || "Medium Flex",
           balanceCategory: p.balanceCategory || "Even Balance",
@@ -175,9 +183,7 @@ function SellPageInner() {
         setStockQuantity(loaded.stockQuantity);
         setLegacyImage(typeof p.image === "string" ? p.image : "");
         setLoadedStatus(typeof p.status === "string" ? p.status : "active");
-        setLocation(loaded.location);
         setDealingMethods(loaded.dealingMethods);
-        setPhoneNumber(loaded.phoneNumber);
         setWeightCategory(loaded.weightCategory);
         setFlexibilityCategory(loaded.flexibilityCategory);
         setBalanceCategory(loaded.balanceCategory);
@@ -214,9 +220,7 @@ function SellPageInner() {
         price,
         originalPrice,
         stockQuantity,
-        location,
         dealingMethods,
-        phoneNumber,
         weightCategory,
         flexibilityCategory,
         balanceCategory,
@@ -285,9 +289,7 @@ function SellPageInner() {
     setDescription("");
     setPrice("");
     setStockQuantity("1");
-    setLocation("");
     setDealingMethods([]);
-    setPhoneNumber("");
     setAcknowledged(false);
     setWeightCategory("4U");
     setFlexibilityCategory("Medium Flex");
@@ -433,9 +435,22 @@ function SellPageInner() {
       showToast(t("sell.titleRequired"), "error");
       return;
     }
+    if (title.trim().length > LISTING_LIMITS.title) {
+      showToast(t("sell.titleTooLong", { max: LISTING_LIMITS.title }), "error");
+      return;
+    }
+    const maxPriceLabel = LISTING_LIMITS.price.toLocaleString();
+    if (description.length > LISTING_LIMITS.description) {
+      showToast(t("sell.descriptionTooLong", { max: LISTING_LIMITS.description }), "error");
+      return;
+    }
     const parsedPrice = parseFloat(price);
     if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
-      showToast(t("sell.priceInvalid"), "error");
+      showToast(t("sell.priceInvalid", { max: maxPriceLabel }), "error");
+      return;
+    }
+    if (parsedPrice > LISTING_LIMITS.price) {
+      showToast(t("sell.priceTooHigh", { max: maxPriceLabel }), "error");
       return;
     }
     // Optional. Empty means "no discount", which the backend stores as NULL.
@@ -443,23 +458,31 @@ function SellPageInner() {
       ? Number.parseFloat(originalPrice)
       : null;
     if (parsedOriginalPrice !== null && (!Number.isFinite(parsedOriginalPrice) || parsedOriginalPrice <= 0)) {
-      showToast(t("sell.originalPriceInvalid"), "error");
+      showToast(t("sell.originalPriceInvalid", { max: maxPriceLabel }), "error");
+      return;
+    }
+    if (parsedOriginalPrice !== null && parsedOriginalPrice > LISTING_LIMITS.price) {
+      showToast(t("sell.priceTooHigh", { max: maxPriceLabel }), "error");
       return;
     }
     const parsedStockQuantity = Number.parseInt(stockQuantity, 10);
     if (!Number.isInteger(parsedStockQuantity) || parsedStockQuantity < 1) {
-      showToast(t("sell.stockInvalid"), "error");
+      showToast(t("sell.stockInvalid", { max: LISTING_LIMITS.stock }), "error");
+      return;
+    }
+    if (parsedStockQuantity > LISTING_LIMITS.stock) {
+      showToast(t("sell.stockTooHigh", { max: LISTING_LIMITS.stock }), "error");
       return;
     }
     if (!dealingMethods.length) {
       showToast(t("sell.dealingMethodRequired"), "error");
       return;
     }
-    // The backend no longer defaults a blank location to "Malaysia" — an
-    // unstated location is rejected rather than invented, so ask for it here
-    // instead of letting the submit fail with a server error.
-    if (!location.trim()) {
-      showToast(t("sell.locationRequired"), "error");
+    // Location and phone come from the account, so an incomplete profile has
+    // nothing to stamp on the listing. Say so here rather than letting the
+    // submit fail with a server error.
+    if (!profileComplete) {
+      showToast(t("sell.profileIncomplete"), "error");
       return;
     }
     // A listing with no photo shows a placeholder everywhere it appears, which
@@ -502,15 +525,11 @@ function SellPageInner() {
               category,
               condition,
               dealingMethod: dealingMethods.join(", "),
-              phoneNumber,
               title: title.trim(),
               description: description.trim(),
               price: parsedPrice,
               originalPrice: parsedOriginalPrice,
               stockQuantity: parsedStockQuantity,
-              // No "|| Malaysia" fallback: an unstated location is now rejected
-            // rather than invented, and the check above already blocked blanks.
-            location: location.trim(),
               weightCategory,
               flexibilityCategory,
               balanceCategory,
@@ -540,15 +559,11 @@ function SellPageInner() {
             category,
             condition,
             dealingMethod: dealingMethods.join(", "),
-            phoneNumber,
             title: title.trim(),
             description: description.trim(),
             price: parsedPrice,
             originalPrice: parsedOriginalPrice,
             stockQuantity: parsedStockQuantity,
-            // No "|| Malaysia" fallback: an unstated location is now rejected
-            // rather than invented, and the check above already blocked blanks.
-            location: location.trim(),
             weightCategory,
             flexibilityCategory,
             balanceCategory,
@@ -997,11 +1012,11 @@ function SellPageInner() {
                   <input
                     className="w-full border border-[#ccc] rounded-md px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none transition-[border-color] duration-150 focus:border-[#2563eb]"
                     placeholder={t("sell.titlePlaceholder")}
-                    maxLength={50}
+                    maxLength={LISTING_LIMITS.title}
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                   />
-                  <p className="text-right text-xs text-[#888] mt-1 mx-0 mb-0">{title.length}/50</p>
+                  <p className="text-right text-xs text-[#888] mt-1 mx-0 mb-0">{title.length}/{LISTING_LIMITS.title}</p>
                 </div>
 
                 {/* Description */}
@@ -1009,7 +1024,7 @@ function SellPageInner() {
                   <textarea
                     className="w-full border border-[#ccc] rounded-md px-3.5 py-3 text-[15px] text-[#333] bg-white resize-y min-h-[140px] box-border outline-none transition-[border-color] duration-150 font-[inherit] focus:border-[#2563eb]"
                     placeholder={t("sell.descriptionPlaceholder")}
-                    maxLength={8000}
+                    maxLength={LISTING_LIMITS.description}
                     rows={6}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -1017,7 +1032,7 @@ function SellPageInner() {
                   <p className="text-[11px] text-[#aaa] mt-1 mx-0 mb-0 leading-[1.5]">
                     {t("sell.descriptionHint")}
                   </p>
-                  <p className="text-right text-xs text-[#888] mt-1 mx-0 mb-0">{description.length}/8000</p>
+                  <p className="text-right text-xs text-[#888] mt-1 mx-0 mb-0">{description.length}/{LISTING_LIMITS.description}</p>
                 </div>
 
                 {/* Price */}
@@ -1029,6 +1044,7 @@ function SellPageInner() {
                       className="w-full border-none rounded-none flex-1 px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none focus:outline-none focus:shadow-none"
                       placeholder={t("sell.pricePlaceholder")}
                       min="0"
+                      max={LISTING_LIMITS.price}
                       step="0.01"
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
@@ -1047,6 +1063,7 @@ function SellPageInner() {
                       className="w-full border-none rounded-none flex-1 px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none focus:outline-none focus:shadow-none"
                       placeholder={t("sell.originalPricePlaceholder")}
                       min="0"
+                      max={LISTING_LIMITS.price}
                       step="0.01"
                       value={originalPrice}
                       onChange={(e) => setOriginalPrice(e.target.value)}
@@ -1064,6 +1081,7 @@ function SellPageInner() {
                     className="w-full border border-[#ccc] rounded-md px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none transition-[border-color] duration-150 focus:border-[#2563eb]"
                     placeholder={t("sell.stockPlaceholder")}
                     min="1"
+                    max={LISTING_LIMITS.stock}
                     step="1"
                     value={stockQuantity}
                     onChange={(e) => setStockQuantity(e.target.value.replace(/[^\d]/g, ""))}
@@ -1073,17 +1091,60 @@ function SellPageInner() {
                   </p>
                 </div>
 
-                {/* Location */}
+                {/* The profile's delivery address, read-only. It is the whole
+                    address rather than just the district so the seller can see
+                    exactly what the listing will carry. */}
                 <div className="mb-5">
-                  <div className="flex items-center border border-[#ccc] rounded-md overflow-hidden transition-[border-color] duration-150 focus-within:border-[#2563eb]">
-                    <input
-                      className="w-full border-none rounded-none flex-1 px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none focus:outline-none focus:shadow-none"
-                      placeholder={t("sell.locationPlaceholder")}
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                    />
-                    <span className="px-3.5 py-3 text-[#888]">🔍</span>
-                  </div>
+                  <label className="block text-[13px] text-[#666] mb-1">{t("sell.location")}</label>
+                  {addressComplete ? (
+                    <>
+                      {/* Same shape as the profile form, so it reads as the very
+                          fields it was copied from — just not editable here. */}
+                      <input
+                        value={sellerStreet}
+                        readOnly
+                        disabled
+                        aria-label={t("sell.street")}
+                        className={READONLY_FIELD}
+                      />
+                      <div className="grid grid-cols-3 gap-2 mt-2 max-[860px]:grid-cols-1">
+                        <input
+                          value={sellerPostcode}
+                          readOnly
+                          disabled
+                          aria-label={t("sell.postcode")}
+                          className={READONLY_FIELD}
+                        />
+                        <input
+                          value={sellerState}
+                          readOnly
+                          disabled
+                          aria-label={t("sell.state")}
+                          className={READONLY_FIELD}
+                        />
+                        <input
+                          value={sellerDistrict}
+                          readOnly
+                          disabled
+                          aria-label={t("sell.district")}
+                          className={READONLY_FIELD}
+                        />
+                      </div>
+                      <p className="text-[11px] text-[#aaa] mt-1 mx-0 mb-0 leading-[1.5]">
+                        {t("sell.fromAccount")}
+                      </p>
+                    </>
+                  ) : (
+                    <div className="w-full border border-[#f0d2c4] rounded-md px-3.5 py-3 text-sm bg-[#fdf6f2] text-[#8a4b2a]">
+                      <p className="m-0 mb-2 leading-[1.5]">{t("sell.addressMissing")}</p>
+                      <a
+                        href="/profile"
+                        className="inline-block text-[13px] font-semibold text-[#2563eb] no-underline hover:underline"
+                      >
+                        {t("sell.setUpInProfile")}
+                      </a>
+                    </div>
+                  )}
                 </div>
 
                 {/* Racket specs (shown only for Rackets category) */}
@@ -1164,17 +1225,31 @@ function SellPageInner() {
               <div className="bg-white rounded-lg p-6 shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
                 <h2 className="text-xl font-bold mt-0 mx-0 mb-2 text-[#222]">{t("sell.contactTitle")}</h2>
                 <div className="mb-5">
-                  <input
-                    className="w-full border border-[#ccc] rounded-md px-3.5 py-3 text-[15px] text-[#333] bg-white box-border outline-none transition-[border-color] duration-150 focus:border-[#2563eb]"
-                    placeholder={t("sell.phonePlaceholder")}
-                    maxLength={15}
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                  />
-                  <p className="text-[11px] text-[#aaa] mt-1 mx-0 mb-0 leading-[1.5]">
-                    {t("sell.phoneHint")}
-                  </p>
-                  <p className="text-right text-xs text-[#888] mt-1 mx-0 mb-0">{phoneNumber.length}/15</p>
+                  <label className="block text-[13px] text-[#666] mb-1">{t("sell.phone")}</label>
+                  {sellerPhone ? (
+                    <>
+                      <input
+                        value={sellerPhone}
+                        readOnly
+                        disabled
+                        aria-label={t("sell.phone")}
+                        className={READONLY_FIELD}
+                      />
+                      <p className="text-[11px] text-[#aaa] mt-1 mx-0 mb-0 leading-[1.5]">
+                        {t("sell.fromAccount")}
+                      </p>
+                    </>
+                  ) : (
+                    <div className="w-full border border-[#f0d2c4] rounded-md px-3.5 py-3 text-sm bg-[#fdf6f2] text-[#8a4b2a]">
+                      <p className="m-0 mb-2 leading-[1.5]">{t("sell.phoneMissing")}</p>
+                      <a
+                        href="/profile"
+                        className="inline-block text-[13px] font-semibold text-[#2563eb] no-underline hover:underline"
+                      >
+                        {t("sell.setUpInProfile")}
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
 

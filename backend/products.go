@@ -10,9 +10,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
+	"transcendence/modules/geo"
 )
 
 type Product struct {
@@ -29,6 +31,7 @@ type Product struct {
 	FlexibilityCategory string    `json:"flexibilityCategory"`
 	BalanceCategory     string    `json:"balanceCategory"`
 	Location            string    `json:"location"`
+	State               string    `json:"state"`
 	SellerId            int       `json:"sellerId"`
 	SellerName          string    `json:"sellerName"`
 	SellerAvatar        string    `json:"sellerAvatar"`
@@ -49,7 +52,6 @@ type CreateProductRequest struct {
 	Category            string   `json:"category"`
 	Condition           string   `json:"condition"`
 	DealingMethod       string   `json:"dealingMethod"`
-	PhoneNumber         string   `json:"phoneNumber"`
 	Title               string   `json:"title"`
 	Description         string   `json:"description"`
 	WeightCategory      string   `json:"weightCategory"`
@@ -58,6 +60,7 @@ type CreateProductRequest struct {
 	Price               float64  `json:"price"`
 	OriginalPrice       *float64 `json:"originalPrice,omitempty"`
 	Location            string   `json:"location"`
+	State               string   `json:"state"`
 	Image               string   `json:"image"`
 	IsNew               bool     `json:"isNew"`
 	IsFeatured          bool     `json:"isFeatured"`
@@ -70,10 +73,60 @@ type UpdateProductRequest struct {
 	Description   *string  `json:"description"`
 	Category      *string  `json:"category"`
 	Location      *string  `json:"location"`
+	State         *string  `json:"state"`
 	StockQuantity *int     `json:"stockQuantity,omitempty"`
 }
 
 const maxListingImageSize = 10 * 1024 * 1024
+
+// Shared caps for the caller-supplied listing values. Every write path — the
+// sell form, the developer API and the CSV importer — is held to these, and
+// db/init.sql carries matching CHECK constraints as the last line of defence.
+const (
+	maxListingTitleLen       = 70
+	maxListingDescriptionLen = 4000
+	maxListingPrice          = 100000.0
+	maxListingStock          = 100
+)
+
+// outOfRangeListingFields reports the caller-supplied values that are present
+// but outside their allowed range. Emptiness is missingListingFields' job; this
+// only judges what was actually sent.
+func outOfRangeListingFields(item CreateProductRequest) []listingFieldError {
+	var problems []listingFieldError
+
+	if utf8.RuneCountInString(strings.TrimSpace(item.Title)) > maxListingTitleLen {
+		problems = append(problems, listingFieldError{
+			Field:   "title",
+			Message: fmt.Sprintf("title must be %d characters or fewer", maxListingTitleLen),
+		})
+	}
+	if utf8.RuneCountInString(item.Description) > maxListingDescriptionLen {
+		problems = append(problems, listingFieldError{
+			Field:   "description",
+			Message: fmt.Sprintf("description must be %d characters or fewer", maxListingDescriptionLen),
+		})
+	}
+	if item.Price > maxListingPrice {
+		problems = append(problems, listingFieldError{
+			Field:   "price",
+			Message: fmt.Sprintf("price must not exceed %.0f", maxListingPrice),
+		})
+	}
+	if item.OriginalPrice != nil && *item.OriginalPrice > maxListingPrice {
+		problems = append(problems, listingFieldError{
+			Field:   "originalPrice",
+			Message: fmt.Sprintf("originalPrice must not exceed %.0f", maxListingPrice),
+		})
+	}
+	if item.StockQuantity != nil && *item.StockQuantity > maxListingStock {
+		problems = append(problems, listingFieldError{
+			Field:   "stockQuantity",
+			Message: fmt.Sprintf("stockQuantity must not exceed %d", maxListingStock),
+		})
+	}
+	return problems
+}
 
 // listingRow is the listings table for GORM. Product stays the API/read model
 // (joins and derived rating) and is not used for inserts.
@@ -92,6 +145,7 @@ type listingRow struct {
 	Price               float64  `gorm:"column:price"`
 	OriginalPrice       *float64 `gorm:"column:original_price"`
 	Location            string   `gorm:"column:location"`
+	State               string   `gorm:"column:state"`
 	Image               string   `gorm:"column:image"`
 	SellerName          string   `gorm:"column:seller_name"`
 	IsNew               bool     `gorm:"column:is_new"`
@@ -119,6 +173,60 @@ func lookupUsername(db *gorm.DB, userID int) (string, error) {
 	err := db.Select("username").First(&row, userID).Error
 	return row.Username, err
 }
+
+type sellerProfileRow struct {
+	ID       int     `gorm:"primaryKey"`
+	Username string  `gorm:"column:username"`
+	PhoneNo  *string `gorm:"column:phone_no"`
+	Address  *string `gorm:"column:address"`
+	Postcode *string `gorm:"column:postcode"`
+	State    *string `gorm:"column:state"`
+	District *string `gorm:"column:district"`
+}
+
+func (sellerProfileRow) TableName() string { return "users" }
+
+// sellerProfile is the account data a listing inherits instead of asking for.
+type sellerProfile struct {
+	Username string
+	PhoneNo  string
+	Address  string
+	Postcode string
+	State    string
+	District string
+}
+
+// A listing carries its seller's contact and location, so a profile missing
+// either cannot produce one.
+func (p sellerProfile) incomplete() bool {
+	return p.PhoneNo == "" || p.Address == "" || p.Postcode == "" ||
+		p.State == "" || p.District == ""
+}
+
+func lookupSellerProfile(db *gorm.DB, userID int) (sellerProfile, error) {
+	var row sellerProfileRow
+	err := db.Select("username", "phone_no", "address", "postcode", "state", "district").
+		First(&row, userID).Error
+	if err != nil {
+		return sellerProfile{}, err
+	}
+	text := func(value *string) string {
+		if value == nil {
+			return ""
+		}
+		return strings.TrimSpace(*value)
+	}
+	return sellerProfile{
+		Username: row.Username,
+		PhoneNo:  text(row.PhoneNo),
+		Address:  text(row.Address),
+		Postcode: text(row.Postcode),
+		State:    text(row.State),
+		District: text(row.District),
+	}, nil
+}
+
+const incompleteProfileError = "Add your phone number and address to your profile before posting an ad"
 
 // who owns this listing
 func loadListingSellerID(db *gorm.DB, listingID int) (int, error) {
@@ -149,9 +257,9 @@ func loadListingSellerAndStatus(db *gorm.DB, listingID int) (int, string, error)
 func createListingRow(db *gorm.DB, row *listingRow) error {
 	return gormNoTx(db).Select(
 		"SellerID", "Title", "Description", "WeightCategory", "FlexibilityCategory",
-		"BalanceCategory", "Price", "OriginalPrice", "Location", "Image", "SellerName",
+		"BalanceCategory", "Price", "OriginalPrice", "Location", "State", "Image", "SellerName",
 		"IsNew", "IsFeatured", "Status", "Category", "Condition", "DealingMethod",
-		"PhoneNumber", "StockQuantity",
+		"StockQuantity",
 	).Create(row).Error
 }
 
@@ -172,9 +280,9 @@ func updateListingColumns(db *gorm.DB, id int, fields map[string]interface{}) er
 // values. listing_reviews and the users row are the sources of truth.
 const listingSelectCols = `l.id, l.title, l.price, l.original_price, COALESCE(l.image, ''),
 	COALESCE(l.category, 'Others'), COALESCE(l.condition, 'Second-hand (Used)'),
-	COALESCE(l.dealing_method, ''), COALESCE(l.phone_number, ''),
+	COALESCE(l.dealing_method, ''), COALESCE(u.phone_no, ''),
 	COALESCE(l.weight_category, ''), COALESCE(l.flexibility_category, ''), COALESCE(l.balance_category, ''),
-	COALESCE(l.location, ''), l.seller_id, COALESCE(u.username, l.seller_name, ''), COALESCE(u.avatar_url, ''),
+	COALESCE(l.location, ''), COALESCE(l.state, ''), l.seller_id, COALESCE(u.username, l.seller_name, ''), COALESCE(u.avatar_url, ''),
 	ROUND(COALESCE(lr.avg_rating, 0), 1)::float8, COALESCE(lr.review_count, 0),
 	l.is_new, l.is_featured,
 	COALESCE(l.stock_quantity, 0), COALESCE(l.status, 'active'), COALESCE(l.views_count, 0),
@@ -206,6 +314,7 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 	flexibilityCategory := c.QueryParams()["flexibilityCategory"]
 	balanceCategory := c.QueryParams()["balanceCategory"]
 	location := c.QueryParams()["location"]
+	state := c.QueryParams()["state"]
 	search := c.QueryParam("search")
 	sortBy := c.QueryParam("sort")
 	limit := c.QueryParam("limit")
@@ -285,6 +394,18 @@ func getProducts(c echo.Context, gormDB *gorm.DB) error {
 			args = append(args, location[i])
 		}
 		whereClause += " AND l.location IN (" + placeholders + ")"
+	}
+	if len(state) > 0 {
+		startPos := len(args) + 1
+		placeholders := ""
+		for i := range state {
+			if i > 0 {
+				placeholders += ", "
+			}
+			placeholders += fmt.Sprintf("$%d", startPos+i)
+			args = append(args, state[i])
+		}
+		whereClause += " AND l.state IN (" + placeholders + ")"
 	}
 	if search != "" {
 		whereClause += fmt.Sprintf(" AND l.title ILIKE $%d", len(args)+1)
@@ -489,7 +610,7 @@ func scanProducts(rows *sql.Rows) ([]Product, error) {
 			&p.ID, &p.Title, &p.Price, &p.OriginalPrice, &p.Image,
 			&p.Category, &p.Condition, &p.DealingMethod, &p.PhoneNumber,
 			&p.WeightCategory, &p.FlexibilityCategory, &p.BalanceCategory,
-			&p.Location, &p.SellerId, &p.SellerName, &p.SellerAvatar, &p.Rating, &p.Reviews,
+			&p.Location, &p.State, &p.SellerId, &p.SellerName, &p.SellerAvatar, &p.Rating, &p.Reviews,
 			&p.IsNew, &p.IsFeatured, &p.StockQuantity, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
 		)
 		if err != nil {
@@ -613,7 +734,8 @@ func applyListingDefaults(req *CreateProductRequest) {
 
 // missingListingFields reports which caller-owned attributes were left empty.
 // It defaults nothing itself: callers run applyListingDefaults first, so only
-// location and dealingMethod can still be reported.
+// dealingMethod can still be reported. Location and phone are no longer here —
+// both are inherited from the seller's account rather than sent with a listing.
 //
 // Shared by createProduct and validateImportRow, so importing 100 listings is
 // not a way around a check that creating one would have applied. TrimSpace so a
@@ -635,7 +757,6 @@ func missingListingFields(item CreateProductRequest) []listingFieldError {
 		}
 	}
 	for _, field := range []struct{ name, value string }{
-		{"location", item.Location},
 		{"category", item.Category},
 		{"condition", item.Condition},
 		{"dealingMethod", item.DealingMethod},
@@ -711,6 +832,9 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	if req.Price <= 0 {
 		return c.JSON(400, map[string]string{"error": "price must be greater than 0"})
 	}
+	if problems := outOfRangeListingFields(req); len(problems) > 0 {
+		return c.JSON(400, map[string]string{"error": problems[0].Message})
+	}
 	// error handling
 	stockQuantity := 1
 	if req.StockQuantity != nil {
@@ -723,7 +847,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	// looks up the seller username
 	// Shared with products_import.go so a single-listing POST and a bulk import
 	// resolve the seller's name the same way.
-	sellerName, err := lookupUsername(gormDB, sellerID)
+	seller, err := lookupSellerProfile(gormDB, sellerID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return c.JSON(404, map[string]string{"error": "Seller not found"})
@@ -731,6 +855,7 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		log.Printf("Error fetching seller for product creation: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to validate seller"})
 	}
+	sellerName := seller.Username
 	// sellerName is NOT caller input — it came from the users row above. This
 	// fallback covers an account with a blank username, and stays a default
 	// because there is no caller to send an error to about it.
@@ -746,6 +871,14 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 	if missing := missingListingFields(req); len(missing) > 0 {
 		return c.JSON(400, map[string]string{"error": missing[0].Message})
 	}
+	// Location is inherited from the account, never taken from the request.
+	if seller.incomplete() {
+		return c.JSON(400, map[string]string{"error": incompleteProfileError})
+	}
+	canonicalState, canonicalDistrict, ok := geo.Resolve(seller.State, seller.District)
+	if !ok {
+		return c.JSON(400, map[string]string{"error": incompleteProfileError})
+	}
 
 	listing := listingRow{
 		SellerID:            sellerID,
@@ -756,7 +889,8 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		BalanceCategory:     req.BalanceCategory,
 		Price:               req.Price,
 		OriginalPrice:       req.OriginalPrice,
-		Location:            req.Location,
+		Location:            canonicalDistrict,
+		State:               canonicalState,
 		Image:               req.Image,
 		SellerName:          sellerName,
 		IsNew:               req.IsNew,
@@ -765,7 +899,6 @@ func createProduct(c echo.Context, gormDB *gorm.DB) error {
 		Category:            req.Category,
 		Condition:           req.Condition,
 		DealingMethod:       req.DealingMethod,
-		PhoneNumber:         req.PhoneNumber,
 		StockQuantity:       stockQuantity,
 	}
 	if err := createListingRow(gormDB, &listing); err != nil {
@@ -946,9 +1079,9 @@ type UpdateListingRequest struct {
 	Category            string   `json:"category"`
 	Condition           string   `json:"condition"`
 	DealingMethod       string   `json:"dealingMethod"`
-	PhoneNumber         string   `json:"phoneNumber"`
 	OriginalPrice       *float64 `json:"originalPrice"`
 	Location            string   `json:"location"`
+	State               string   `json:"state"`
 	WeightCategory      string   `json:"weightCategory"`
 	FlexibilityCategory string   `json:"flexibilityCategory"`
 	BalanceCategory     string   `json:"balanceCategory"`
@@ -968,10 +1101,10 @@ func (r UpdateListingRequest) asListing() CreateProductRequest {
 		Price:               r.Price,
 		OriginalPrice:       r.OriginalPrice,
 		Location:            r.Location,
+		State:               r.State,
 		Category:            r.Category,
 		Condition:           r.Condition,
 		DealingMethod:       r.DealingMethod,
-		PhoneNumber:         r.PhoneNumber,
 		WeightCategory:      r.WeightCategory,
 		FlexibilityCategory: r.FlexibilityCategory,
 		BalanceCategory:     r.BalanceCategory,
@@ -1032,6 +1165,22 @@ func updateProduct(c echo.Context, gormDB *gorm.DB) error {
 	if missing := missingListingFields(listing); len(missing) > 0 {
 		return c.JSON(400, map[string]string{"error": missing[0].Message})
 	}
+	if problems := outOfRangeListingFields(listing); len(problems) > 0 {
+		return c.JSON(400, map[string]string{"error": problems[0].Message})
+	}
+	// An edit re-reads the account, so moving house updates the listings too.
+	seller, err := lookupSellerProfile(gormDB, current.SellerID)
+	if err != nil {
+		log.Printf("Error fetching seller for listing %d: %v", id, err)
+		return c.JSON(500, map[string]string{"error": "Failed to validate seller"})
+	}
+	if seller.incomplete() {
+		return c.JSON(400, map[string]string{"error": incompleteProfileError})
+	}
+	canonicalState, canonicalDistrict, ok := geo.Resolve(seller.State, seller.District)
+	if !ok {
+		return c.JSON(400, map[string]string{"error": incompleteProfileError})
+	}
 
 	// Status: settable only between the two states a seller owns. My Shop's
 	// Archive and Republish are ordinary edits carrying a status
@@ -1078,11 +1227,11 @@ func updateProduct(c echo.Context, gormDB *gorm.DB) error {
 		"description":          listing.Description,
 		"price":                listing.Price,
 		"original_price":       listing.OriginalPrice,
-		"location":             listing.Location,
+		"location":             canonicalDistrict,
+		"state":                canonicalState,
 		"category":             listing.Category,
 		"condition":            listing.Condition,
 		"dealing_method":       listing.DealingMethod,
-		"phone_number":         listing.PhoneNumber,
 		"weight_category":      listing.WeightCategory,
 		"flexibility_category": listing.FlexibilityCategory,
 		"balance_category":     listing.BalanceCategory,
@@ -1170,6 +1319,17 @@ func updateProductForAPIKey(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(400, map[string]string{"error": "stockQuantity cannot be negative"})
 	}
 
+	// Merged values, so a patch is held to the same ceilings as a create even
+	// when it only sends one of the four.
+	if problems := outOfRangeListingFields(CreateProductRequest{
+		Title:         title,
+		Description:   description,
+		Price:         price,
+		StockQuantity: &stockQuantity,
+	}); len(problems) > 0 {
+		return c.JSON(400, map[string]string{"error": problems[0].Message})
+	}
+
 	// The racket specs are not patchable here; they only ever follow the
 	// category, so moving a listing out of Rackets clears them.
 	weightCategory := current.WeightCategory
@@ -1202,7 +1362,7 @@ func fetchProductByID(sqlDB *sql.DB, id int) (Product, error) {
 		&p.ID, &p.Title, &p.Price, &p.OriginalPrice, &p.Image,
 		&p.Category, &p.Condition, &p.DealingMethod, &p.PhoneNumber,
 		&p.WeightCategory, &p.FlexibilityCategory, &p.BalanceCategory,
-		&p.Location, &p.SellerId, &p.SellerName, &p.SellerAvatar, &p.Rating, &p.Reviews,
+		&p.Location, &p.State, &p.SellerId, &p.SellerName, &p.SellerAvatar, &p.Rating, &p.Reviews,
 		&p.IsNew, &p.IsFeatured, &p.StockQuantity, &p.Status, &p.ViewsCount, &p.CreatedAt, &p.Description,
 	)
 	return p, err

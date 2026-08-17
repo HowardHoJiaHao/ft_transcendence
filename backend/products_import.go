@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
+	"transcendence/modules/geo"
 )
 
 const maxImportRows = 500
@@ -67,6 +68,12 @@ func validateImportRow(row int, item CreateProductRequest) []ImportRowError {
 	// would be immediately unbuyable, so reject it rather than import it.
 	if item.StockQuantity != nil && *item.StockQuantity < 1 {
 		errs = append(errs, ImportRowError{Row: row, Field: "stockQuantity", Message: "stockQuantity must be at least 1"})
+	}
+
+	// The same ceilings a single-listing POST is held to, so a CSV row cannot
+	// land a listing the sell form would have rejected.
+	for _, problem := range outOfRangeListingFields(item) {
+		errs = append(errs, ImportRowError{Row: row, Field: problem.Field, Message: problem.Message})
 	}
 
 	// Fill the dropdown attributes Post an Ad pre-selects, exactly as
@@ -148,13 +155,23 @@ func importProducts(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(400, map[string]string{"error": "too many items in one import (max 500)"})
 	}
 
-	// STEP 3 — Get seller's name
-	sellerName := "Unknown Seller"
-	if name, err := lookupUsername(gormDB, sellerID); err == nil {
-		sellerName = name
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		log.Printf("Error looking up seller name for import: %v", err)
+	// STEP 3 — Get the seller's account. Imported listings inherit their
+	// location from it, exactly as a single-listing POST does.
+	seller, err := lookupSellerProfile(gormDB, sellerID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("Error looking up seller for import: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to validate seller"})
+	}
+	sellerName := seller.Username
+	if sellerName == "" {
+		sellerName = "Unknown Seller"
+	}
+	if seller.incomplete() {
+		return c.JSON(400, map[string]string{"error": incompleteProfileError})
+	}
+	canonicalState, canonicalDistrict, ok := geo.Resolve(seller.State, seller.District)
+	if !ok {
+		return c.JSON(400, map[string]string{"error": incompleteProfileError})
 	}
 
 	// STEP 4 — Validate every row before touching the database.
@@ -184,9 +201,9 @@ func importProducts(c echo.Context, gormDB *gorm.DB) error {
 
 	insertQuery := `INSERT INTO listings (
 		seller_id, title, description, weight_category, flexibility_category, balance_category,
-		price, original_price, location, image, seller_name, is_new, is_featured, status,
-		category, condition, dealing_method, phone_number, stock_quantity
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'active',$14,$15,$16,$17,$18)
+		price, original_price, location, state, image, seller_name, is_new, is_featured, status,
+		category, condition, dealing_method, stock_quantity
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'active',$15,$16,$17,$18)
 	RETURNING id`
 
 	// Pre-sized: the exact final length is known, so this allocates once.
@@ -209,8 +226,8 @@ func importProducts(c echo.Context, gormDB *gorm.DB) error {
 		var productID int
 		if err := tx.QueryRow(insertQuery,
 			item.SellerID, item.Title, item.Description, item.WeightCategory, item.FlexibilityCategory,
-			item.BalanceCategory, item.Price, item.OriginalPrice, item.Location, item.Image, item.SellerName,
-			item.IsNew, item.IsFeatured, item.Category, item.Condition, item.DealingMethod, item.PhoneNumber,
+			item.BalanceCategory, item.Price, item.OriginalPrice, canonicalDistrict, canonicalState, item.Image, sellerName,
+			item.IsNew, item.IsFeatured, item.Category, item.Condition, item.DealingMethod,
 			stockQuantity,
 		).Scan(&productID); err != nil {
 			// Returning here triggers the deferred Rollback, discarding every row inserted so far.

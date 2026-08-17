@@ -122,8 +122,24 @@ Everything the form pre-selects for you is defaulted here to the same value.
 |---|---|---|
 | `title` | string | non-empty |
 | `price` | number | must be `> 0` |
-| `location` | string | non-empty — never invented, the form asks for it too |
 | `dealingMethod` | string | non-empty. Site uses `Meet Up`, `Mailing or Delivery`, or both comma-joined |
+
+**Value ceilings**, enforced identically on create, update, the developer API and
+CSV import, with matching `CHECK` constraints in the database:
+
+| Field | Range |
+|---|---|
+| `title` | 1–70 characters |
+| `description` | 0–4000 characters |
+| `price` | greater than 0, at most 100000 |
+| `originalPrice` | greater than 0 when set, at most 100000 |
+| `stockQuantity` | 1–100 on create; 0–100 on update, where `0` means out of stock |
+
+**Taken from your account, not from the request:** `location`, `state` and
+`phoneNumber` are read from the authenticated seller's profile. Sending them is
+ignored. If your profile is missing a phone number or a complete Malaysian
+address, creating a listing returns
+`400 Add your phone number and address to your profile before posting an ad`.
 
 **Defaulted — omit them and you get what the form pre-selects:**
 
@@ -134,7 +150,6 @@ Everything the form pre-selects for you is defaulted here to the same value.
 | `weightCategory` | `"4U"` † | `1U`–`8U` (badminton racket weight class) |
 | `flexibilityCategory` | `"Medium Flex"` † | `Stiff Shaft`, `Medium Flex`, `High Flexibility` |
 | `balanceCategory` | `"Even Balance"` † | `Head Heavy`, `Even Balance`, `Head Light` |
-| `phoneNumber` | `""` | any string |
 | `description` | `""` | any string |
 
 † **The three racket specs are kept only when `category` is `Rackets`.** On any

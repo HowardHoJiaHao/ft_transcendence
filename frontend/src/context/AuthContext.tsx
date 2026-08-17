@@ -13,6 +13,10 @@ type User = {
   firstName: string;
   lastName: string;
   phoneNo?: string;
+  address?: string;
+  postcode?: string;
+  state?: string;
+  district?: string;
   gender?: string;
   dateOfBirth?: string;
   avatarUrl?: string;

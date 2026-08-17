@@ -12,6 +12,7 @@ import {
   WEIGHT_CATEGORIES,
   FLEXIBILITY_CATEGORIES,
   BALANCE_CATEGORIES,
+  LISTING_LIMITS,
 } from '@/lib/productOptions';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
@@ -32,12 +33,10 @@ interface ImportItem {
   category?: string;
   condition?: string;
   stockQuantity?: number;
-  location: string;
   dealingMethod: string;
   weightCategory?: string;
   flexibilityCategory?: string;
   balanceCategory?: string;
-  phoneNumber?: string;
 }
 
 // One parsed CSV line plus its client-side validation errors.
@@ -55,25 +54,25 @@ interface ServerRowError {
 
 // Every column a row must fill. The file is rejected outright if any of these
 // headers is absent, since every row would fail without them.
-const REQUIRED_COLUMNS = ['title', 'price', 'location', 'dealingMethod'];
+const REQUIRED_COLUMNS = ['title', 'price', 'dealingMethod'];
 
 // Columns the template offers; header matching is case/space/underscore-insensitive.
 const TEMPLATE_COLUMNS = [
   'title', 'description', 'price', 'category', 'condition',
   'weightCategory', 'flexibilityCategory', 'balanceCategory',
-  'stockQuantity', 'location', 'dealingMethod', 'phoneNumber', 'originalPrice',
+  'stockQuantity', 'dealingMethod', 'originalPrice',
 ];
 // Two sample rows rather than one.
 const TEMPLATE_EXAMPLES = [
   [
     'Yonex Astrox 88D Pro', 'Lightly used, restrung last month', '450', 'Rackets',
     'Second-hand (Used)', '4U', 'Stiff Shaft', 'Head Heavy',
-    '1', 'Kuala Lumpur', 'Meet Up', '0123456789', '699',
+    '1', 'Meet Up', '699',
   ],
   [
     'Yonex AC102EX Grip', '', '12', 'Grips',
     '', '', '', '',
-    '', 'Penang', 'Mailing or Delivery', '', '',
+    '', 'Mailing or Delivery', '',
   ],
 ];
 
@@ -90,9 +89,8 @@ const DEFAULTS = {
 // The required columns, for the reference table. Only these four have no
 // server-side default, so a blank cell in one of them is a genuine error.
 const REQUIRED_COLUMN_NOTES: { name: string; note: string }[] = [
-  { name: 'title', note: 'Listing headline. Free text, cannot be blank. Example: Yonex Astrox 88D Pro' },
+  { name: 'title', note: `Listing headline. Cannot be blank, up to ${LISTING_LIMITS.title} characters. Example: Yonex Astrox 88D Pro` },
   { name: 'price', note: 'Asking price in RM. Must be a number above 0. Example: 450' },
-  { name: 'location', note: 'Where the item is. Free text, cannot be blank. Example: Kuala Lumpur' },
   {
     name: 'dealingMethod',
     note: `How the item changes hands. Cannot be blank. All values: ${DEALING_METHODS.join(' · ')}. For both, write "Meet Up, Mailing or Delivery" — keep the quotes, the value contains a comma.`,
@@ -102,14 +100,13 @@ const REQUIRED_COLUMN_NOTES: { name: string; note: string }[] = [
 // Every optional column, for the reference table. A blank cell is acceptable in
 // all of them; each note states what the listing gets instead.
 const OPTIONAL_COLUMNS: { name: string; note: string }[] = [
-  { name: 'description', note: 'Free text detail. Wrap in "quotes" if it contains a comma. Empty leaves the listing without one.' },
+  { name: 'description', note: `Free text detail, up to ${LISTING_LIMITS.description} characters. Wrap in "quotes" if it contains a comma. Empty leaves the listing without one.` },
   { name: 'category', note: `Product type. Empty defaults to "${DEFAULTS.category}". All values: ${CATEGORIES.join(' · ')}` },
   { name: 'condition', note: `Item condition. Empty defaults to "${DEFAULTS.condition}". All values: ${CONDITIONS.join(' · ')}` },
   { name: 'weightCategory', note: `Racket weight class, kept only when category is "Rackets". Empty defaults to "${DEFAULTS.weightCategory}". All values: ${WEIGHT_CATEGORIES.join(' · ')}` },
   { name: 'flexibilityCategory', note: `Shaft flex, kept only when category is "Rackets". Empty defaults to "${DEFAULTS.flexibilityCategory}". All values: ${FLEXIBILITY_CATEGORIES.join(' · ')}` },
   { name: 'balanceCategory', note: `Balance point, kept only when category is "Rackets". Empty defaults to "${DEFAULTS.balanceCategory}". All values: ${BALANCE_CATEGORIES.join(' · ')}` },
-  { name: 'stockQuantity', note: `Units available. Whole number, at least 1. Empty defaults to ${DEFAULTS.stockQuantity}.` },
-  { name: 'phoneNumber', note: 'Contact number shown on the listing. Empty leaves it off. Example: 0123456789' },
+  { name: 'stockQuantity', note: `Units available. Whole number from 1 to ${LISTING_LIMITS.stock}. Empty defaults to ${DEFAULTS.stockQuantity}.` },
   { name: 'originalPrice', note: 'Pre-discount price, shown struck through above the real one. Must be above 0 if given. Example: 699' },
 ];
 
@@ -151,12 +148,8 @@ export default function BulkImport() {
 
     // The only two listing attributes the backend refuses to invent — the sell
     // form does not pre-select them either, so a blank cell is error rather .
-    ([
-      ['location', item.location],
-      ['dealingMethod', item.dealingMethod],
-    ] as const).forEach(([name, value]) => {
-      if (!value.trim()) errors.push(t('import.errFieldRequired', { field: name }));
-    });
+    if (!item.dealingMethod.trim())
+      errors.push(t('import.errFieldRequired', { field: 'dealingMethod' }));
 
     // stockQuantity: optional
     if (stockRaw.trim() !== '' && (!/^\d+$/.test(stockRaw.trim()) || Number(stockRaw) < 1))
@@ -165,6 +158,16 @@ export default function BulkImport() {
     // originalPrice: optional, but if present must be a positive number.
     if (originalRaw.trim() !== '' && (Number.isNaN(Number(originalRaw)) || Number(originalRaw) <= 0))
       errors.push(t('import.errOriginalPriceInvalid'));
+
+    // The same ceilings the sell form and the API enforce.
+    if (item.title.trim().length > LISTING_LIMITS.title)
+      errors.push(t('import.errTitleTooLong', { max: LISTING_LIMITS.title }));
+    if ((item.description ?? '').length > LISTING_LIMITS.description)
+      errors.push(t('import.errDescriptionTooLong', { max: LISTING_LIMITS.description }));
+    if (Number(priceRaw) > LISTING_LIMITS.price || Number(originalRaw) > LISTING_LIMITS.price)
+      errors.push(t('import.errPriceTooHigh', { max: LISTING_LIMITS.price }));
+    if (Number(stockRaw) > LISTING_LIMITS.stock)
+      errors.push(t('import.errStockTooHigh', { max: LISTING_LIMITS.stock }));
 
     return errors;
   };
@@ -228,12 +231,10 @@ export default function BulkImport() {
           category: cell(raw, 'category') || undefined,
           condition: cell(raw, 'condition') || undefined,
           stockQuantity: stockRaw ? Number(stockRaw) : undefined,
-          location: cell(raw, 'location'),
           dealingMethod: cell(raw, 'dealingMethod'),
           weightCategory: cell(raw, 'weightCategory') || undefined,
           flexibilityCategory: cell(raw, 'flexibilityCategory') || undefined,
           balanceCategory: cell(raw, 'balanceCategory') || undefined,
-          phoneNumber: cell(raw, 'phoneNumber') || undefined,
         };
 
         return { line: idx + 1, item, errors: validateRow(item, priceRaw, stockRaw, originalRaw) };
@@ -435,7 +436,7 @@ export default function BulkImport() {
           <>
             <div className="w-full overflow-x-auto mt-4">
               <table className="w-full border-collapse text-sm [&_th]:text-left [&_th]:px-3 [&_th]:py-2.5 [&_th]:border-b-2 [&_th]:border-b-[#eee] [&_th]:text-[#666] [&_th]:font-semibold [&_th]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2.5 [&_td]:border-b [&_td]:border-b-[#f0f0f0] [&_tr:last-child_td]:border-b-0">
-                {/* Every column the CSV carries except location, phoneNumber
+                {/* Every column the CSV carries except location, state
                     and the three racket specs — those are either long free text
                     or only meaningful for one category, and the row is already
                     wide. The table scrolls horizontally rather than wrapping. */}
