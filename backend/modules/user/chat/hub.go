@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -208,8 +209,13 @@ func (c *Client) readPump(h *Hub) {
 			log.Printf("JSON parse error: %v", err)
 			continue
 		}
-		if inbound.ReceiverId <= 0 || inbound.ReceiverId == c.UserId || strings.TrimSpace(inbound.Content) == "" {
+		inbound.Content = strings.TrimSpace(inbound.Content)
+		if inbound.ReceiverId <= 0 || inbound.ReceiverId == c.UserId || inbound.Content == "" {
 			log.Printf("Rejected invalid private message from user %d", c.UserId)
+			continue
+		}
+		if utf8.RuneCountInString(inbound.Content) > MaxMessageLen {
+			log.Printf("Rejected oversized private message from user %d", c.UserId)
 			continue
 		}
 

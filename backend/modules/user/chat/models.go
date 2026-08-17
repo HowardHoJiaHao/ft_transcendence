@@ -4,6 +4,9 @@ import (
 	"time"
 )
 
+// MaxMessageLen is counted in runes so multibyte text is not unfairly cut short.
+const MaxMessageLen = 2000
+
 type Message struct {
 	Id         int       `json:"id" gorm:"primaryKey"`
 	SenderId   int       `json:"sender_id" gorm:"not null"`

@@ -8,7 +8,7 @@ import { useWebSocketContext } from '@/context/WebSocketContext';
 import { useI18n } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast/ToastContext';
 import Header from '@/components/Header/Header';
-import ChatModal from './ChatModal';
+import ChatModal, { type ChatPartner } from './ChatModal';
 import type { Conversation, DirectoryUser, PrivateMessage } from '@/types/websocket';
 import { DEFAULT_AVATAR, resolveAvatarUrl, AVATAR_SIZE, AVATAR_FILL, avatarClass, avatarFallbackClass } from '@/lib/avatar';
 
@@ -29,7 +29,7 @@ export default function ChatPage() {
 	const { showToast } = useToast();
 	const [conversations, setConversations] = useState<Conversation[]>([]);
 	const [people, setPeople] = useState<DirectoryUser[]>([]);
-	const [selectedPartner, setSelectedPartner] = useState<number | null>(null);
+	const [selectedPartner, setSelectedPartner] = useState<ChatPartner | null>(null);
 	const [messages, setMessages] = useState<PrivateMessage[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [peopleLoading, setPeopleLoading] = useState(false);
@@ -136,10 +136,10 @@ export default function ChatPage() {
 		}
 	};
 
-	const openChat = async (partnerId: number) => {
+	const openChat = async (partner: ChatPartner) => {
 		try {
 			const token = localStorage.getItem('token') || `token_${user?.id}`;
-			const res = await fetch(`/api/v1/messages/${partnerId}`, {
+			const res = await fetch(`/api/v1/messages/${partner.id}`, {
 				headers: { Authorization: `Bearer ${token}` },
 			});
 			if (res.ok) {
@@ -151,18 +151,25 @@ export default function ChatPage() {
 		} catch (err) {
 			console.error('Failed to fetch messages: ', err);
 		}
-		setSelectedPartner(partnerId);
+		setSelectedPartner(partner);
 	};
 
+	// Waits for the conversation list so the deep link can name the partner in
+	// the modal header rather than opening an unlabelled window.
 	useEffect(() => {
-		if (!user || deepLinkOpenedRef.current) return;
+		if (!user || loading || deepLinkOpenedRef.current) return;
 		const rawPartner = new URLSearchParams(window.location.search).get('partner');
 		if (!rawPartner || !/^[1-9]\d*$/.test(rawPartner)) return;
 		const partnerID = Number(rawPartner);
 		if (!Number.isSafeInteger(partnerID)) return;
 		deepLinkOpenedRef.current = true;
-		void openChat(partnerID);
-	}, [user]);
+		const known = conversations.find(conversation => conversation.partner_id === partnerID);
+		void openChat({
+			id: partnerID,
+			username: known?.partner_username ?? t('chat.unknownUser'),
+			avatarUrl: known?.partner_avatar_url ?? null,
+		});
+	}, [conversations, loading, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const addFriend = async (person: DirectoryUser) => {
 		setContextMenu(null);
@@ -219,7 +226,7 @@ export default function ChatPage() {
 					) : (
 						<ul className="list-none p-0 m-0 bg-white rounded-xl border border-[#eee] overflow-hidden">
 							{conversations.map((conversation) => (
-								<li key={conversation.partner_id} onClick={() => void openChat(conversation.partner_id)} className="flex items-center p-3 border-b last:border-b-0 border-[#eee] cursor-pointer hover:bg-[#f5f5f5]">
+								<li key={conversation.partner_id} onClick={() => void openChat({ id: conversation.partner_id, username: conversation.partner_username, avatarUrl: conversation.partner_avatar_url })} className="flex items-center p-3 border-b last:border-b-0 border-[#eee] cursor-pointer hover:bg-[#f5f5f5]">
 									<div className="mr-2.5">
 										{conversation.partner_avatar_url ? (
 											<img
@@ -264,7 +271,7 @@ export default function ChatPage() {
 									return (
 										<li key={person.id} className="border-b last:border-b-0 border-[#f0f0f0]">
 											<div className="flex items-center gap-2 px-3 py-2.5 hover:bg-[#f8fafc]">
-												<button onClick={() => void openChat(person.id)} onContextMenu={(event) => { event.preventDefault(); openContextMenu(person, event.clientX, event.clientY); }} onKeyDown={(event) => { if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); openContextMenu(person, rect.right, rect.bottom); } }} className="flex items-center gap-2 min-w-0 flex-1 text-left bg-transparent border-0 p-0 cursor-pointer">
+												<button onClick={() => void openChat({ id: person.id, username: person.username, avatarUrl: person.avatar_url })} onContextMenu={(event) => { event.preventDefault(); openContextMenu(person, event.clientX, event.clientY); }} onKeyDown={(event) => { if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); openContextMenu(person, rect.right, rect.bottom); } }} className="flex items-center gap-2 min-w-0 flex-1 text-left bg-transparent border-0 p-0 cursor-pointer">
 													<span className={`relative shrink-0 block ${AVATAR_SIZE.list}`}>
 														{person.avatar_url ? (
 															<img
@@ -301,7 +308,7 @@ export default function ChatPage() {
 				</div>
 			)}
 			<p className="sr-only" aria-live="polite">{actionMessage}</p>
-			{selectedPartner !== null && <ChatModal partnerId={selectedPartner} messages={messages} onClose={() => setSelectedPartner(null)} />}
+			{selectedPartner !== null && <ChatModal partner={selectedPartner} messages={messages} onClose={() => setSelectedPartner(null)} />}
 		</main>
 	);
 }

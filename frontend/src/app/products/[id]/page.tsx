@@ -618,7 +618,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 
 		{chatOpen && product && (
 			<ChatModal
-				partnerId={product.sellerId}
+				partner={{ id: product.sellerId, username: product.sellerName, avatarUrl: product.sellerAvatar }}
 				messages={chatMessages}
 				onClose={() => setChatOpen(false)}
 			/>

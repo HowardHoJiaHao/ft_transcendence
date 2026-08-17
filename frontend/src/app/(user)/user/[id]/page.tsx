@@ -326,7 +326,7 @@ export default function UserPage()
            )}
        </div>
 	  {chatOpen && (
-	    <ChatModal partnerId={seller!.id}  messages={chatMessages} onClose={() => setChatOpen(false)}/>
+	    <ChatModal partner={{ id: seller!.id, username: seller!.username, avatarUrl: seller!.avatarUrl }} messages={chatMessages} onClose={() => setChatOpen(false)}/>
 	  )}
 	  </div>
 	</main>
