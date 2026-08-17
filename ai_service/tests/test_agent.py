@@ -48,6 +48,13 @@ class LimitGraph:
 
 
 class AgentTests(unittest.IsolatedAsyncioTestCase):
+    def test_system_prompt_refuses_off_topic_entertainment(self):
+        prompt = agent.SYSTEM_PROMPT.lower()
+        self.assertIn("off-topic", prompt)
+        self.assertIn("emoji", prompt)
+        self.assertIn("do not produce the requested entertainment", prompt)
+        self.assertIn("off-topic", agent.REWRITE_PROMPT.lower())
+
     def test_current_frontend_message_is_not_duplicated(self):
         messages = agent.build_request_messages(
             [{"role": "user", "content": "Find a 5U racket"}],
