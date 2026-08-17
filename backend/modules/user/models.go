@@ -99,6 +99,8 @@ type ResendOtpRequest struct {
 
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+	ConfirmPassword string `json:"confirmPassword"`
 }
 
 type ConfirmPasswordChangeRequest struct {

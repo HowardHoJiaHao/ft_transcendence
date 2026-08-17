@@ -121,6 +121,15 @@ func (h *Handler) RequestPasswordChange(c echo.Context) error {
 	if err := c.Bind(&req); err != nil || strings.TrimSpace(req.CurrentPassword) == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Current password is required"})
 	}
+	if strings.TrimSpace(req.NewPassword) == "" || strings.TrimSpace(req.ConfirmPassword) == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "New password and confirmation are required"})
+	}
+	if req.NewPassword != req.ConfirmPassword {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "New passwords do not match"})
+	}
+	if req.CurrentPassword == req.NewPassword {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "New password must be different from the current password"})
+	}
 	u, err := h.repo.GetUserByID(userID)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User not found"})
@@ -149,6 +158,11 @@ func (h *Handler) ConfirmPasswordChange(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
 	}
+	req.TempToken = strings.TrimSpace(req.TempToken)
+	req.OtpCode = strings.TrimSpace(req.OtpCode)
+	if req.TempToken == "" || req.OtpCode == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tempToken and otpCode are required"})
+	}
 	if req.NewPassword != req.ConfirmPassword {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "New passwords do not match"})
 	}
@@ -159,12 +173,19 @@ func (h *Handler) ConfirmPasswordChange(c echo.Context) error {
 	if u.OAuthProvider == "google" {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "Google-authenticated accounts cannot change their password"})
 	}
+	withPassword, err := h.repo.GetUserByEmailWithPassword(u.Email)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User not found"})
+	}
+	if bcrypt.CompareHashAndPassword([]byte(withPassword.PasswordHash), []byte(req.NewPassword)) == nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "New password must be different from the current password"})
+	}
 	passwordRequest := user.RegisterRequest{Username: u.Username, Password: req.NewPassword}
 	if err := h.service.CheckAndHashNewPassword(&passwordRequest); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	email, err := h.repo.VerifyOTPAndConsume(req.TempToken, req.OtpCode)
-	if err != nil || email != u.Email {
+	if err != nil || !strings.EqualFold(email, u.Email) {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid or expired OTP"})
 	}
 	if err := h.repo.UpdatePassword(userID, passwordRequest.Password); err != nil {
