@@ -194,7 +194,7 @@ Secrets come from Infisical Cloud via `scripts/with-infisical-env.sh`. There sho
 
 **Do not bind-mount app source** (`./backend`, `./frontend`, `./ai_service`) into running services. Code is `COPY`’d into images.
 
-**Do not bind-mount** `monitoring/alertmanager/discord_webhook_bridge.py` as if it were config — that is application code; bake it with `COPY`.
+The Discord relay script is baked into `monitoring/alertmanager/Dockerfile` (`COPY`). Only its log folder is bind-mounted.
 
 Do not give `backend` / `frontend` / `ai` / `nginx` the Docker socket or host `/`.
 
