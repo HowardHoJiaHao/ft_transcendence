@@ -409,9 +409,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 					: <span className="font-bold text-[#1a7f37]">{t('product.quantity', { count: availableStock })}</span>}
 				  {alreadyInCart && isAvailable ? ' · in your cart' : ''}
 				</p>
-		  	    <p className="text-2xl font-bold text-[var(--primary)] mb-5">${product.price.toFixed(2)}
+		  	    <p className="text-2xl font-bold text-[var(--primary)] mb-5">RM {product.price.toFixed(2)}
 				  {product.originalPrice && (
-                    <span className="line-through text-[var(--secondary)] ml-2"> ${product.originalPrice.toFixed(2)} </span> )}
+                    <span className="line-through text-[var(--secondary)] ml-2"> RM {product.originalPrice.toFixed(2)} </span> )}
 				</p>
 
 				{/* The details a buyer decides on, kept beside the photo instead
