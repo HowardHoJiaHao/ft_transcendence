@@ -372,7 +372,7 @@ export default function Home()
             ) : products.length > 0 ? (
               <div className="grid grid-cols-4 gap-4 max-[768px]:grid-cols-2">
                 {products.map((product) => (
-                  <div key={product.id} className={`group bg-white rounded-lg overflow-hidden shadow-[var(--shadow)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[var(--shadow-lg)] ${product.stockQuantity <= 0 || product.status === 'sold' ? 'opacity-85' : ''}`}>
+                  <div key={product.id} className={`group min-w-0 bg-white rounded-lg overflow-hidden shadow-[var(--shadow)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[var(--shadow-lg)] ${product.stockQuantity <= 0 || product.status === 'sold' ? 'opacity-85' : ''}`}>
                     <div className="relative w-full h-[200px] overflow-hidden">
                       <ListingImage
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -398,7 +398,7 @@ export default function Home()
                     </div>
 
                     <div className="p-3">
-                      <h4 className="text-sm font-semibold mb-2 text-[var(--dark)] leading-[1.4] h-[2.8em] overflow-hidden text-ellipsis line-clamp-2">{product.title}</h4>
+                      <h4 className="text-sm font-semibold mb-2 text-[var(--dark)] leading-[1.4] h-[2.8em] overflow-hidden text-ellipsis line-clamp-2 [overflow-wrap:anywhere]">{product.title}</h4>
 
                       <div className="text-xs text-[var(--secondary)] mb-2">
                         <span className="block whitespace-nowrap overflow-hidden text-ellipsis">📍 {formatLocation(product.location, product.state)}</span>

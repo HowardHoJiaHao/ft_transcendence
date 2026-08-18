@@ -288,7 +288,7 @@ export default function UserPage()
                      )}
                    </div>
                    <div className="p-3">
-                     <h4 className="text-sm font-semibold mb-2 text-[var(--dark)] leading-[1.4] h-[2.8em] overflow-hidden text-ellipsis line-clamp-2">{product.title}</h4>
+                     <h4 className="text-sm font-semibold mb-2 text-[var(--dark)] leading-[1.4] h-[2.8em] overflow-hidden text-ellipsis line-clamp-2 [overflow-wrap:anywhere]">{product.title}</h4>
                      <div className="text-xs text-[var(--secondary)] mb-2">
                        <span className="block whitespace-nowrap overflow-hidden text-ellipsis">📍 {formatLocation(product.location, product.state)}</span>
                      </div>

@@ -491,8 +491,8 @@ export default function CartPage() {
 				  {items.map(item => (
 					<div key={item.id} className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] max-[768px]:flex-wrap">
 					  <ListingImage src={item.image} alt={item.title} className="w-20 h-20 object-cover rounded-lg"/>
-					  <div className="flex-1">
-						<h3 className="text-base mb-1">{item.title}</h3>
+					  <div className="flex-1 min-w-0">
+						<h3 className="text-base mb-1 [overflow-wrap:anywhere] line-clamp-2">{item.title}</h3>
 						<p className="text-[#059669] font-bold">RM {item.price.toFixed(2)}</p>
 					  </div>
 					  {/* Listings sell as a whole lot, so the quantity is the
