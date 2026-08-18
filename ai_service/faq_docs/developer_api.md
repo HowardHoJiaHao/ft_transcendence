@@ -29,6 +29,15 @@ On the Developer API page:
 
 If a key leaks (committed to git, pasted in chat, left in a screenshot), revoke it and create a new one.
 
+## 2a. Keys expire after 30 days
+
+Every key is valid for **30 days from the moment it is created**. This is not optional and it cannot be extended — a leaked key stops working on its own.
+
+* The keys table shows an **Expires** date and flags the key as **Expired** once that date passes.
+* An expired key returns **401** with `API key has expired. Create a new one from the Developer API page.`
+* Nothing is renewed automatically. Create a fresh key before the old one lapses and swap it into your script.
+* Expiry is checked on every request, so an expired key stops working the moment it lapses, mid-run included.
+
 ## 3. How to call it
 
 Send the key on every public request:
@@ -78,7 +87,7 @@ Updates are partial: send only the fields you want to change. Status is not edit
 * Common statuses:
   * 200 / 201 — success
   * 400 — missing or invalid field
-  * 401 — missing or invalid key
+  * 401 — missing, invalid, or expired key
   * 403 — revoked key, or you do not own the listing
   * 404 — not found
   * 409 — listing pending/sold, or it still has orders
