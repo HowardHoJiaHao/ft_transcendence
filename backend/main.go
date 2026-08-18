@@ -13,7 +13,7 @@ import (
 	"transcendence/modules/ai"
 	"transcendence/modules/apikey"
 	"transcendence/modules/listing"
-	listingfiles "transcendence/modules/listing/files"
+	"transcendence/modules/listing/files"
 	"transcendence/modules/listing/importcsv"
 	"transcendence/modules/listing/reviews"
 	"transcendence/modules/order"
@@ -39,7 +39,7 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	defer cleanup() //run the line before exiting fx
+	defer cleanup() //run the line before exiting fx, schedules cleanup if main finished, example clean connection
 
 	//create echo instance
 	e := echo.New()
@@ -50,30 +50,37 @@ func main() {
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"http://localhost:3000", "http://localhost", "https://localhost"}, //only allow from these origins
 		AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"},       //only allow from these methods
-	}))
+	})) // this is cors, a browser rules about which website will call this api, just an allow list for browser call
 
 	//routes
-	e.GET("/health", func(c echo.Context) error { return healthCheckHandler(c, rawDB) })
-	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
-	v1 := e.Group("/api/v1")
+	e.GET("/health", func(c echo.Context) error { return healthCheckHandler(c, rawDB) })	//health check
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))	//devops prometheus
+	v1 := e.Group("/api/v1")	//declare prefix
 
+	// build the shared objects those route will e used, and plug them into each other
+	// thinking of assembling the machine before turning it on
 	// Shared user, real-time, and notification services. Notifications reuse
 	// the authenticated chat WebSocket rather than opening a second connection.
-	baseRepo := user.NewRepository(rawDB, gormDB)
-	authService := auth.NewService(baseRepo)
-	authHandler := auth.NewHandler(baseRepo, authService)
+	// user, login, profile, friends
+	baseRepo := user.NewRepository(rawDB, gormDB) // one user database layer
+	authService := auth.NewService(baseRepo) // login, register, jwt
+	authHandler := auth.NewHandler(baseRepo, authService) // login, register, jwt
 	profileService := profile.NewService(baseRepo)
 	profileHandler := profile.NewHandler(baseRepo, profileService)
 	friendsRepo := friends.NewRepository(baseRepo)
 	friendsHandler := friends.NewHandler(friendsRepo, authService)
 	chatRepo := chat.NewRepository(baseRepo)
 	chatHub := chat.NewHub(chatRepo)
+
+	// chat + notification (one websocket)
 	notificationRepo := notifications.NewRepository(rawDB)
 	notificationService := notifications.NewService(notificationRepo)
-	notificationService.Publisher = chatHub.SendPrivateMessage
+	notificationService.Publisher = chatHub.SendPrivateMessage // a  new notifcation is pushed on the same chat socket
 	notificationHandler := notifications.NewHandler(notificationService)
-	chatRepo.Notifications = notificationRepo
-	chatHub.Notifications = notificationService
+	chatRepo.Notifications = notificationRepo //saving a chat message can also write a notifcation row
+	chatHub.Notifications = notificationService //the hub can raise notification
+
+	// stripe
 	stripeConfig := order.LoadStripeConfigFromEnv()
 	stripePayments := order.NewStripePaymentService(
 		rawDB,
@@ -84,13 +91,16 @@ func main() {
 	v1.POST("/webhooks/stripe", func(c echo.Context) error {
 		return order.HandleStripeWebhook(c, stripeWebhooks)
 	})
-	go chatHub.Run()
+
+	go chatHub.Run() // start the hub, register stripe webhook, register each handler route
+	// this block asnwer, who talks to the db, who talks to stripe, who push to the socket
+
 	chatHandler := chat.NewHandler(chatHub, chatRepo, authService)
 	chatHandler.Notifications = notificationService
 	friendsHandler.Notifications = notificationService
 
 	listingHandler := listing.NewHandler(gormDB, rawDB)
-	listingFilesHandler := listingfiles.NewHandler(gormDB, rawDB)
+	listingFilesHandler := files.NewHandler(gormDB, rawDB)
 	listingReviewsHandler := reviews.NewHandler(gormDB, rawDB, notificationService)
 	listingImportHandler := importcsv.NewHandler(gormDB, rawDB)
 	orderHandler := order.NewHandler(gormDB, rawDB, notificationService, stripePayments)
