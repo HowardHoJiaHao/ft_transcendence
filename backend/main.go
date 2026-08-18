@@ -13,7 +13,7 @@ import (
 	"transcendence/modules/ai"
 	"transcendence/modules/apikey"
 	"transcendence/modules/listing"
-	"transcendence/modules/listing/files"
+	listingfiles "transcendence/modules/listing/files"
 	"transcendence/modules/listing/importcsv"
 	"transcendence/modules/listing/reviews"
 	"transcendence/modules/order"
@@ -39,7 +39,7 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	defer cleanup() //run the line before exiting fx, schedules cleanup if main finished, example clean connection
+	defer cleanup() //run the line before exiting fx
 
 	//create echo instance
 	e := echo.New()
@@ -50,37 +50,33 @@ func main() {
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"http://localhost:3000", "http://localhost", "https://localhost"}, //only allow from these origins
 		AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"},       //only allow from these methods
-	})) // this is cors, a browser rules about which website will call this api, just an allow list for browser call
+	}))
 
 	//routes
-	e.GET("/health", func(c echo.Context) error { return healthCheckHandler(c, rawDB) })	//health check
-	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))	//devops prometheus
-	v1 := e.Group("/api/v1")	//declare prefix
+	e.GET("/health", func(c echo.Context) error { return healthCheckHandler(c, rawDB) })
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
+	v1 := e.Group("/api/v1")
 
-	// build the shared objects those route will e used, and plug them into each other
-	// thinking of assembling the machine before turning it on
+	// this block is about to build object/ or create a struct, preparation for later register router
 	// Shared user, real-time, and notification services. Notifications reuse
 	// the authenticated chat WebSocket rather than opening a second connection.
-	// user, login, profile, friends
-	baseRepo := user.NewRepository(rawDB, gormDB) // one user database layer
-	authService := auth.NewService(baseRepo) // login, register, jwt
-	authHandler := auth.NewHandler(baseRepo, authService) // login, register, jwt
+	//
+	// one base repo is reused for all module
+	baseRepo := user.NewRepository(rawDB, gormDB)
+	authService := auth.NewService(baseRepo)
+	authHandler := auth.NewHandler(baseRepo, authService)
 	profileService := profile.NewService(baseRepo)
 	profileHandler := profile.NewHandler(baseRepo, profileService)
 	friendsRepo := friends.NewRepository(baseRepo)
 	friendsHandler := friends.NewHandler(friendsRepo, authService)
 	chatRepo := chat.NewRepository(baseRepo)
 	chatHub := chat.NewHub(chatRepo)
-
-	// chat + notification (one websocket)
-	notificationRepo := notifications.NewRepository(rawDB)
+	notificationRepo := notifications.NewRepository(rawDB) //users, chat, notification share one websocket
 	notificationService := notifications.NewService(notificationRepo)
-	notificationService.Publisher = chatHub.SendPrivateMessage // a  new notifcation is pushed on the same chat socket
+	notificationService.Publisher = chatHub.SendPrivateMessage
 	notificationHandler := notifications.NewHandler(notificationService)
-	chatRepo.Notifications = notificationRepo //saving a chat message can also write a notifcation row
-	chatHub.Notifications = notificationService //the hub can raise notification
-
-	// stripe
+	chatRepo.Notifications = notificationRepo
+	chatHub.Notifications = notificationService
 	stripeConfig := order.LoadStripeConfigFromEnv()
 	stripePayments := order.NewStripePaymentService(
 		rawDB,
@@ -91,16 +87,13 @@ func main() {
 	v1.POST("/webhooks/stripe", func(c echo.Context) error {
 		return order.HandleStripeWebhook(c, stripeWebhooks)
 	})
-
-	go chatHub.Run() // start the hub, register stripe webhook, register each handler route
-	// this block asnwer, who talks to the db, who talks to stripe, who push to the socket
-
+	go chatHub.Run()  // hub is for websocket
 	chatHandler := chat.NewHandler(chatHub, chatRepo, authService)
 	chatHandler.Notifications = notificationService
 	friendsHandler.Notifications = notificationService
 
 	listingHandler := listing.NewHandler(gormDB, rawDB)
-	listingFilesHandler := files.NewHandler(gormDB, rawDB)
+	listingFilesHandler := listingfiles.NewHandler(gormDB, rawDB)
 	listingReviewsHandler := reviews.NewHandler(gormDB, rawDB, notificationService)
 	listingImportHandler := importcsv.NewHandler(gormDB, rawDB)
 	orderHandler := order.NewHandler(gormDB, rawDB, notificationService, stripePayments)
@@ -110,6 +103,7 @@ func main() {
 	adminHandler := admin.NewHandler(rawDB)
 	aiHandler := ai.NewHandler(rawDB)
 
+	// Register api routes for each module, component
 	listingHandler.RegisterRoutes(v1)
 	listingFilesHandler.RegisterRoutes(v1)
 	listingReviewsHandler.RegisterRoutes(v1)
@@ -137,8 +131,10 @@ func main() {
 	public.Use(myMiddleware.APIKeyAuth(rawDB))
 	listingHandler.RegisterPublicAPI(public)
 
-	// Register routes
+	// Register api routes
 	authHandler.RegisterRoutes(v1)
+
+	
 	// concatenate for example "/api/v1" + "/product" = "/api/v1/products"
 	protected := e.Group("/api/v1")
 	protected.Use(myMiddleware.JWTAuth(rawDB))
