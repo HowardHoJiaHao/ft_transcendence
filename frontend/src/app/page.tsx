@@ -76,7 +76,8 @@ export default function Home()
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const itemsPerPage = 10;
+  // 12 fills the 4-column grid exactly (3 full rows); 10 left a ragged last row.
+  const itemsPerPage = 12;
 
   //			SEARH INITIALIZATION (FROM OTHER PAGE SEARCH)
   useEffect(() => {
