@@ -15,7 +15,7 @@ RUN go mod download
 # Copy source code first, first . refer to /backend/, second . refer to workdir /app
 COPY . .
 # test
-# compile it, main.go, products.go, orders.go... to /app/main , now a go program has created
+# compile it, main.go and modules/... to /app/main , now a go program has created
 RUN CGO_ENABLED=1 GOOS=linux go build -mod=readonly -a -installsuffix cgo -o main .
 
 # Build the application with -mod=mod to allow downloading during build. GOOS=linux ensure output works on Linux

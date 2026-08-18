@@ -439,17 +439,17 @@ Plus user profile / friends / chat routes registered by their modules
 | Piece | File |
 |---|---|
 | API-key auth + rate limiting + request logging | `backend/myMiddleware/apikey.go` |
-| Key management handlers | `backend/api_keys.go` |
+| Key management handlers | `backend/modules/apikey/` |
 | Public + internal route registration | `backend/main.go` |
-| Products / orders handlers | `backend/products.go`, `backend/orders.go` |
-| Bulk import (validate all, insert in one transaction) | `backend/products_import.go` |
-| Listing file upload / serve / delete | `backend/listing_files.go` |
+| Products / orders handlers | `backend/modules/listing/`, `backend/modules/order/` |
+| Bulk import (validate all, insert in one transaction) | `backend/modules/listing/importcsv/` |
+| Listing file upload / serve / delete | `backend/modules/listing/files/` |
 | Tables (`api_keys`, `api_request_logs`, `listing_files`, …) | `db/init.sql`, reference in `db/SCHEMA.md` |
 | Developer API UI (create key / docs / logs) | `frontend/src/app/(user)/profile/developer-api/` |
 | Bulk import UI (CSV parse, preview, upload) | `frontend/src/components/BulkImport/`, `frontend/src/lib/csv.ts` |
 
 The two `PUT /products/:id` routes deliberately use **different handlers** in
-`products.go`: `updateProduct` for the JWT form (whole-form replace) and
+`backend/modules/listing/`: `updateProduct` for the JWT form (whole-form replace) and
 `updateProductForAPIKey` for the developer API (six-field patch). They share
 `updateTarget` and `loadListingForUpdate` for the existence, ownership and
 status guards, so the two surfaces cannot drift on authorization.

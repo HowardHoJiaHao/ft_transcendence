@@ -725,7 +725,7 @@ WHERE l.id BETWEEN 20 AND 59
   );
 
 -- Ceilings on the caller-supplied listing values, matching the Go constants in
--- backend/products.go. The application rejects these first; this is the backstop.
+-- backend/modules/listing/. The application rejects these first; this is the backstop.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_title_length') THEN

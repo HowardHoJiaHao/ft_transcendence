@@ -16,7 +16,7 @@ import {
 } from '@/lib/productOptions';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-// Keep in sync with maxImportRows in backend/products_import.go.
+// Keep in sync with maxImportRows in backend/modules/listing/importcsv/.
 const MAX_ROWS = 500;
 
 // Mirrors the backend CreateProductRequest fields the CSV can fill.
@@ -133,7 +133,7 @@ export default function BulkImport() {
     downloadCsv('product-import-template.csv', TEMPLATE_COLUMNS, TEMPLATE_EXAMPLES);
 
   // Client-side mirror of the backend's per-row validation (validateImportRow
-  // in products_import.go). Returns a list of human-readable messages for one
+  // in listing/importcsv). Returns a list of human-readable messages for one
   // row — empty means the row looks importable.
   const validateRow = (item: ImportItem, priceRaw: string, stockRaw: string, originalRaw: string) => {
     const errors: string[] = [];

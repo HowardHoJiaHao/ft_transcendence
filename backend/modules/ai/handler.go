@@ -1,4 +1,4 @@
-package main
+package ai
 
 import (
 	"bytes"
@@ -8,11 +8,10 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
-	auth "transcendence/modules/user/auth"
+	"transcendence/myMiddleware"
 )
 
 // AIChatMessage represents a single message in the chat history.
@@ -33,48 +32,28 @@ type AIChatRequest struct {
 // share http client with a timeout to avoid hanging connections to the AI service
 var aiHTTPClient = &http.Client{Timeout: 70 * time.Second}
 
-// this is helper for the public routes that show more to a signed-in caller
-// who is talking?
-// a missing Authorization header means an anonymous visitor, so it returns
-// (0, "", nil) instead of an error and lets the caller decide what to withhold
-// right now only getProductByID uses it, to hide seller phone numbers from
-// anonymous visitors while still serving the rest of the listing
-// the AI chat no longer calls this: RacketBot is login-only and sits behind
-// JWTAuth in the protected group
-func getOptionalJWTAuth(c echo.Context, db *sql.DB) (int, string, error) {
-	authHeader := c.Request().Header.Get("Authorization")
-	if authHeader == "" {
-		return 0, "", nil
-	}
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return 0, "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid auth header")
-	}
+type Handler struct {
+	rawDB *sql.DB
+}
 
-	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-	claims, err := auth.ValidateToken(tokenStr)
-	if err != nil {
-		return 0, "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid token")
-	}
-	if claims.Role != "member" || claims.UserId <= 0 {
-		return 0, "", echo.NewHTTPError(http.StatusForbidden, "Member access required")
-	}
-	var status string
-	if err := db.QueryRow(
-		"SELECT account_status FROM users WHERE id = $1",
-		claims.UserId,
-	).Scan(&status); err != nil {
-		return 0, "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid user")
-	}
-	if status != "active" {
-		return 0, "", echo.NewHTTPError(http.StatusForbidden, "Account is not active")
-	}
-	return claims.UserId, tokenStr, nil
+func NewHandler(rawDB *sql.DB) *Handler {
+	return &Handler{rawDB: rawDB}
+}
+
+func (h *Handler) RegisterRoutes(v1 *echo.Group) {
+	protected := v1.Group("")
+	protected.Use(myMiddleware.JWTAuth(h.rawDB))
+	// ai chat route, this is a logged-in only route. RacketBot answers order,
+	// profile and account questions through user-scoped tools, so there is no
+	// useful guest mode: JWTAuth resolves the member first, and handleAIChat
+	// forwards that userId and token on to the AI chat service.
+	protected.POST("/ai/chat", h.Chat)
 }
 
 // this is the function that handles the AI chat request, it will send the request to the python fastapi service, and stream the response back to the frontend
 // registered on the protected group, so JWTAuth has already turned away
 // anonymous callers, expired tokens and non-active accounts before we get here
-func handleAIChat(c echo.Context) error {
+func (h *Handler) Chat(c echo.Context) error {
 	// read the chat, browser sends in json body
 	// declare empty go struct
 	var userReq struct {

@@ -301,8 +301,8 @@ secondhand item, sold at most once.
 | `is_new` | boolean | "Brand new" badge |
 | `is_featured` | boolean | Promotes to featured/homepage sections |
 | `stock_quantity` | int NOT NULL, default 1, CHECK `>= 0` | Units available — the lot size. **Both** checkout paths require the buyer to take the whole lot (`item.Quantity != stockQuantity` → 409 "This listing must be bought in full") and zero it; a seller wanting to sell smaller amounts splits the lot into separate listings. Added to existing volumes by a `backend/db.go` migration, so it is not in every old dump |
-| `status` | varchar(20), default `'active'` | `active` / `pending` / `sold` / `archived` — all four are real stored values (CHECK `listings_status_allowed`; existing volumes get the fourth value via the migration at `backend/db.go` that drops the old three-value `listings_status_check`). Drives My Shop tabs and the seller dashboard funnel. `pending` is written at checkout — the item is reserved but not yet handed over — and becomes `sold` only when the seller confirms. **Also computed at display time:** `getSellerDashboardItems` in `backend/seller_dashboard.go` still overrides the stored value with `pending` for any non-archived listing that has an order in `orders.status='pending'`, so a listing that sold part of its stock and still owes a handover surfaces as needing action |
-| `views_count` | int, default 0 | Page-view counter, incremented by `recordListingView()` in `backend/products.go` on each `GET /products/:id` (skipped if the viewer is the seller) |
+| `status` | varchar(20), default `'active'` | `active` / `pending` / `sold` / `archived` — all four are real stored values (CHECK `listings_status_allowed`; existing volumes get the fourth value via the migration at `backend/db.go` that drops the old three-value `listings_status_check`). Drives My Shop tabs and the seller dashboard funnel. `pending` is written at checkout — the item is reserved but not yet handed over — and becomes `sold` only when the seller confirms. **Also computed at display time:** `getSellerDashboardItems` in `backend/modules/order/dashboard/` still overrides the stored value with `pending` for any non-archived listing that has an order in `orders.status='pending'`, so a listing that sold part of its stock and still owes a handover surfaces as needing action |
+| `views_count` | int, default 0 | Page-view counter, incremented by `recordListingView()` in `backend/modules/listing/` on each `GET /products/:id` (skipped if the viewer is the seller) |
 | `created_at`, `updated_at` | timestamp | Audit timestamps; `created_at` is also "date posted" and the anchor for days-listed/time-to-sell calculations |
 
 ---
@@ -310,7 +310,7 @@ secondhand item, sold at most once.
 ## listing_images
 
 Meant to hold multiple photos per listing. **Effectively unused** —
-`uploadListingImages()` in `backend/products.go` writes files straight to
+`uploadListingImages()` in `backend/modules/listing/` writes files straight to
 `static/listings/{listingId}_{index}.ext` on disk and only updates
 `listings.image`; it never inserts a row here.
 
@@ -329,7 +329,7 @@ Meant to hold multiple photos per listing. **Effectively unused** —
 ## listing_files
 
 The attachment table that `listing_images` never became. **Actively used** by
-`backend/listing_files.go` — images and documents attached to a listing, with
+`backend/modules/listing/files/` — images and documents attached to a listing, with
 the bytes on disk and only metadata here.
 
 | Column | Type | Use |
@@ -371,7 +371,7 @@ span several listings.
 ### One checkout creates many order rows
 
 `POST /api/v1/orders` takes an `items` array, and the insert sits **inside a
-loop over that array** (`backend/orders.go`). One listing per row, one row per
+loop over that array** (`backend/modules/order/`). One listing per row, one row per
 item, each with its own `id`. There is no `order_items` table and no
 "parent order" row.
 
@@ -422,7 +422,7 @@ Consequences worth remembering:
   the listing to `stock_quantity = 0, status = 'pending'` — reserved, *not*
   sold.
 - **stripe** — delegates to `stripePayments.CreateCheckout`
-  (`backend/stripe_payments.go`), which inserts a `payments` row first, then
+  (`backend/modules/order/stripe_payments.go`), which inserts a `payments` row first, then
   one order per item carrying that `payment_id`. It enforces the same whole-lot
   rule and leaves the listing at `stock_quantity = 0, status = 'pending'`, so
   both paths reach an identical listing state. It additionally requires every
@@ -448,7 +448,7 @@ Since listings sell whole, a listing has at most one *completed* order — but
 it still accumulates order rows, because cancelling frees it to be sold again.
 
 That ceiling of one is enforced, not just conventional: `updateProduct`
-(`backend/products.go`) refuses to edit a `sold` listing, and refuses to move
+(`backend/modules/listing/`) refuses to edit a `sold` listing, and refuses to move
 any listing back to `active` once it has a completed order — including the
 archive-then-Republish route round it. A seller with another of the same item
 posts a new listing, so the second sale gets its own row and its own history.
@@ -487,7 +487,7 @@ override fresh on every request.
 ## payments
 
 Stripe checkout records, separate from order fulfilment. **Actively used** by
-`backend/stripe_payments.go`. One payment funds one-or-more same-seller order
+`backend/modules/order/stripe_payments.go`. One payment funds one-or-more same-seller order
 rows; meetup orders have no payment row at all (`orders.payment_id` is NULL).
 
 | Column | Type | Use |
@@ -513,7 +513,7 @@ rows; meetup orders have no payment row at all (`orders.payment_id` is NULL).
 ## stripe_webhook_events
 
 Replay guard for Stripe webhooks. **Actively used** by
-`backend/stripe_webhooks.go` — Stripe redelivers events, so the ID is recorded
+`backend/modules/order/stripe_webhooks.go` — Stripe redelivers events, so the ID is recorded
 and a repeat delivery is skipped rather than processed twice.
 
 | Column | Type | Use |
@@ -529,7 +529,7 @@ and a repeat delivery is skipped rather than processed twice.
 
 Buyer feedback on a listing. **Actively used** — written by
 `createListingReview` and read by `getListingReviews` in
-`backend/listing_reviews.go` (`POST`/`GET /api/v1/products/:id/reviews`).
+`backend/modules/listing/reviews/` (`POST`/`GET /api/v1/products/:id/reviews`).
 
 An older `reviews` table (seller-level feedback) was dropped by a migration in
 `backend/db.go`; this replaces it. The `rating`/`reviews` columns cached on
@@ -586,7 +586,7 @@ The friend graph. Actively used by `backend/modules/user/friends/`.
 
 In-app notification feed behind the header bell. **Actively used** by
 `backend/modules/user/notifications/`, with events raised from
-`listing_reviews.go`, `orders.go`, the chat hub and the friends module.
+`modules/listing/reviews/`, `modules/order/`, the chat hub and the friends module.
 
 | Column | Type | Use |
 |---|---|---|
@@ -608,7 +608,7 @@ one partial `WHERE read_at IS NULL` so the unread count stays cheap.
 
 Powers the public developer API (secured, rate-limited access to marketplace
 data). **Actively used** — `backend/myMiddleware/apikey.go` validates keys and
-`backend/api_keys.go` manages them. See `API_DOCUMENTATION.md`.
+`backend/modules/apikey/` manages them. See `API_DOCUMENTATION.md`.
 
 | Column | Type | Use |
 |---|---|---|
@@ -706,7 +706,7 @@ index on `search_vector`.
 ## recommendation_training_feedback
 
 Post-purchase survey answers that become training data for the racket
-recommender. Written by `createRecommendationSurvey` in `backend/orders.go`,
+recommender. Written by `createRecommendationSurvey` in `backend/modules/order/survey/`,
 read by `ai_service/training.py`.
 
 | Column | Type | Use |
@@ -732,7 +732,7 @@ model was never trained on.
 ## ml_training_runs
 
 Queue and audit history for recommender retraining. Written by
-`backend/ml_admin.go` (admin-triggered), progressed by `ai_service/training.py`.
+`backend/modules/admin/ml/` (admin-triggered), progressed by `ai_service/training.py`.
 
 | Column | Type | Use |
 |---|---|---|
@@ -796,7 +796,7 @@ consumed by `ai_service/training.py`)
 **Columns that exist but nothing reads/writes them:** `listings.currency`
 (hardcoded `'RM'` everywhere). `users.oauth_id` / `users.oauth_provider` are
 no longer in this list — Google OAuth now writes them (`backend/modules/user/repository.go`,
-read back in `backend/admin.go`), with a partial unique index on the pair.
+read back in `backend/modules/admin/`), with a partial unique index on the pair.
 
 **Not in `db/init.sql`:** `otps` (GORM `AutoMigrate`), plus columns added by
 runtime migrations in `backend/db.go` — `listings.stock_quantity`,

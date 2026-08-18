@@ -1,4 +1,4 @@
-package main
+package reviews
 
 import (
 	"database/sql"
@@ -12,7 +12,27 @@ import (
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 	"transcendence/modules/user/notifications"
+	"transcendence/myMiddleware"
 )
+
+type Handler struct {
+	gormDB        *gorm.DB
+	rawDB         *sql.DB
+	Notifications *notifications.Service
+}
+
+func NewHandler(gormDB *gorm.DB, rawDB *sql.DB, notifications *notifications.Service) *Handler {
+	return &Handler{gormDB: gormDB, rawDB: rawDB, Notifications: notifications}
+}
+
+func (h *Handler) RegisterRoutes(v1 *echo.Group) {
+	v1.GET("/products/:id/reviews", h.getListingReviews)
+
+	protected := v1.Group("")
+	protected.Use(myMiddleware.JWTAuth(h.rawDB))
+	protected.GET("/products/:id/review-eligibility", h.getListingReviewEligibility)
+	protected.POST("/products/:id/reviews", h.createListingReview)
+}
 
 const (
 	defaultReviewPageSize = 10
@@ -66,12 +86,12 @@ func listingExists(db *sql.DB, listingID int) (bool, error) {
 	return exists, err
 }
 
-func getListingReviews(c echo.Context, gormDB *gorm.DB) error {
+func (h *Handler) getListingReviews(c echo.Context) error {
 	listingID, err := parseReviewListingID(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid product id"})
 	}
-	sqlDB, err := gormDB.DB()
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "database connection error"})
 	}
@@ -190,7 +210,7 @@ func reviewEligibility(db *sql.DB, listingID, userID int) (listingReviewEligibil
 	return listingReviewEligibility{CanReview: true}, nil
 }
 
-func getListingReviewEligibility(c echo.Context, gormDB *gorm.DB) error {
+func (h *Handler) getListingReviewEligibility(c echo.Context) error {
 	listingID, err := parseReviewListingID(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid product id"})
@@ -199,7 +219,7 @@ func getListingReviewEligibility(c echo.Context, gormDB *gorm.DB) error {
 	if !ok || userID <= 0 {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	}
-	sqlDB, err := gormDB.DB()
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "database connection error"})
 	}
@@ -213,7 +233,7 @@ func getListingReviewEligibility(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(http.StatusOK, eligibility)
 }
 
-func createListingReview(c echo.Context, gormDB *gorm.DB, notificationService *notifications.Service) error {
+func (h *Handler) createListingReview(c echo.Context) error {
 	listingID, err := parseReviewListingID(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid product id"})
@@ -234,7 +254,7 @@ func createListingReview(c echo.Context, gormDB *gorm.DB, notificationService *n
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "comment must contain between 1 and 1000 characters"})
 	}
 
-	sqlDB, err := gormDB.DB()
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "database connection error"})
 	}
@@ -309,10 +329,10 @@ func createListingReview(c echo.Context, gormDB *gorm.DB, notificationService *n
 	}
 
 	var notificationID int64
-	if notificationService != nil && notificationService.Repo != nil {
+	if h.Notifications != nil && h.Notifications.Repo != nil {
 		actorID := userID
 		resourceID := review.ID
-		notificationID, err = notificationService.Repo.CreateTx(
+		notificationID, err = h.Notifications.Repo.CreateTx(
 			tx, sellerID, &actorID, notifications.TypeReviewAdded, &resourceID,
 			map[string]interface{}{
 				"listingId":    listingID,
@@ -328,7 +348,7 @@ func createListingReview(c echo.Context, gormDB *gorm.DB, notificationService *n
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create review"})
 	}
 	if notificationID > 0 {
-		notificationService.PublishByID(sellerID, notificationID)
+		h.Notifications.PublishByID(sellerID, notificationID)
 	}
 	return c.JSON(http.StatusCreated, review)
 }

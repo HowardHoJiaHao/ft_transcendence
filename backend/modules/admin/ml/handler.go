@@ -1,4 +1,4 @@
-package main
+package ml
 
 import (
 	"database/sql"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v4"
+	"transcendence/modules/order/survey"
 )
 
 const baselineTrainingRows = 1000
@@ -35,7 +36,7 @@ type mlTrainingRun struct {
 	FinishedAt      *time.Time             `json:"finishedAt,omitempty"`
 }
 
-func getMLStatus(c echo.Context, db *sql.DB) error {
+func GetStatus(c echo.Context, db *sql.DB) error {
 	var surveyRows int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM recommendation_training_feedback`).Scan(&surveyRows); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to load ML status"})
@@ -84,7 +85,7 @@ func getMLStatus(c echo.Context, db *sql.DB) error {
 	})
 }
 
-func listMLFeedback(c echo.Context, db *sql.DB) error {
+func ListFeedback(c echo.Context, db *sql.DB) error {
 	rows, err := db.Query(`
 		SELECT
 			id, order_id, buyer_id, age_group, gender, experience_level,
@@ -98,9 +99,9 @@ func listMLFeedback(c echo.Context, db *sql.DB) error {
 	}
 	defer rows.Close()
 
-	feedback := []recommendationTrainingFeedback{}
+	feedback := []survey.RecommendationTrainingFeedback{}
 	for rows.Next() {
-		var item recommendationTrainingFeedback
+		var item survey.RecommendationTrainingFeedback
 		if err := rows.Scan(
 			&item.ID,
 			&item.OrderID,
@@ -123,7 +124,7 @@ func listMLFeedback(c echo.Context, db *sql.DB) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{"feedback": feedback})
 }
 
-func listMLRuns(c echo.Context, db *sql.DB) error {
+func ListRuns(c echo.Context, db *sql.DB) error {
 	rows, err := db.Query(`
 		SELECT
 			id, requested_by, requested_by_role, status, progress, stage,
@@ -148,7 +149,7 @@ func listMLRuns(c echo.Context, db *sql.DB) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{"runs": runs})
 }
 
-func getMLRun(c echo.Context, db *sql.DB) error {
+func GetRun(c echo.Context, db *sql.DB) error {
 	runID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || runID <= 0 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid training run ID"})
@@ -172,7 +173,7 @@ func getMLRun(c echo.Context, db *sql.DB) error {
 	return c.JSON(http.StatusOK, run)
 }
 
-func createMLRetrainingRun(c echo.Context, db *sql.DB) error {
+func CreateRetrainingRun(c echo.Context, db *sql.DB) error {
 	role, _ := c.Get("userRole").(string)
 	if role != "admin" && role != "moderator" {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "Administrator or moderator access required"})

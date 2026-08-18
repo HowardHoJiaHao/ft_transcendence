@@ -60,7 +60,7 @@ type Endpoint = {
 
 /* Key-management endpoint docs — commented out: the Keys tab GUI on this page
    already creates, lists and revokes keys, so documenting the same calls was
-   duplicate surface. The endpoints themselves are still live (backend/api_keys.go,
+   duplicate surface. The endpoints themselves are still live (backend/modules/apikey/,
    routes in main.go); only this documentation is hidden. Restore this array and
    its JSX block below to bring the section back.
 const managementEndpoints: Endpoint[] = [

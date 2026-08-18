@@ -1,4 +1,4 @@
-package main
+package files
 
 import (
 	"bytes"
@@ -19,7 +19,27 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
+	"transcendence/myMiddleware"
 )
+
+type Handler struct {
+	gormDB *gorm.DB
+	rawDB  *sql.DB
+}
+
+func NewHandler(gormDB *gorm.DB, rawDB *sql.DB) *Handler {
+	return &Handler{gormDB: gormDB, rawDB: rawDB}
+}
+
+func (h *Handler) RegisterRoutes(v1 *echo.Group) {
+	v1.GET("/products/:id/files", h.listListingFiles)
+	v1.GET("/files/:fileId/content", h.serveListingFile)
+
+	protected := v1.Group("")
+	protected.Use(myMiddleware.JWTAuth(h.rawDB))
+	protected.POST("/products/:id/files", h.uploadListingFiles)
+	protected.DELETE("/products/:id/files/:fileId", h.deleteListingFile)
+}
 
 const (
 	listingFilesRoot       = "storage/listings"
@@ -70,12 +90,12 @@ func scanListingFileRow(scanner interface{ Scan(...any) error }) (listingFileRes
 	return file, err
 }
 
-func listListingFiles(c echo.Context, gormDB *gorm.DB) error {
+func (h *Handler) listListingFiles(c echo.Context) error {
 	listingID, err := strconv.Atoi(c.Param("id"))
 	if err != nil || listingID <= 0 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid listing id"})
 	}
-	db, err := gormDB.DB()
+	db, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "database connection error"})
 	}
@@ -115,7 +135,7 @@ func listListingFiles(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(http.StatusOK, map[string]any{"files": files})
 }
 
-func uploadListingFiles(c echo.Context, gormDB *gorm.DB) error {
+func (h *Handler) uploadListingFiles(c echo.Context) error {
 	listingID, err := strconv.Atoi(c.Param("id"))
 	if err != nil || listingID <= 0 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid listing id"})
@@ -124,7 +144,7 @@ func uploadListingFiles(c echo.Context, gormDB *gorm.DB) error {
 	if !ok {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid authorization token"})
 	}
-	db, err := gormDB.DB()
+	db, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "database connection error"})
 	}
@@ -356,12 +376,12 @@ func safeOriginalName(name string) string {
 	return name
 }
 
-func serveListingFile(c echo.Context, gormDB *gorm.DB) error {
+func (h *Handler) serveListingFile(c echo.Context) error {
 	fileID, err := strconv.ParseInt(c.Param("fileId"), 10, 64)
 	if err != nil || fileID <= 0 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid file id"})
 	}
-	db, err := gormDB.DB()
+	db, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "database connection error"})
 	}
@@ -408,7 +428,7 @@ func serveListingFile(c echo.Context, gormDB *gorm.DB) error {
 	return nil
 }
 
-func deleteListingFile(c echo.Context, gormDB *gorm.DB) error {
+func (h *Handler) deleteListingFile(c echo.Context) error {
 	listingID, err := strconv.Atoi(c.Param("id"))
 	if err != nil || listingID <= 0 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid listing id"})
@@ -421,7 +441,7 @@ func deleteListingFile(c echo.Context, gormDB *gorm.DB) error {
 	if !ok {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid authorization token"})
 	}
-	db, err := gormDB.DB()
+	db, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "database connection error"})
 	}
@@ -490,7 +510,7 @@ func deleteListingFile(c echo.Context, gormDB *gorm.DB) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func removeListingFileDirectory(listingID int) error {
+func RemoveListingFileDirectory(listingID int) error {
 	dir := filepath.Join(listingFilesRoot, strconv.Itoa(listingID))
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {

@@ -1,4 +1,4 @@
-package main
+package order
 
 import (
 	"context"
@@ -24,7 +24,7 @@ type StripeWebhookService struct {
 	notificationService *notifications.Service
 }
 
-func newStripeWebhookService(
+func NewStripeWebhookService(
 	db *sql.DB,
 	config StripeConfig,
 	notificationService *notifications.Service,
@@ -36,7 +36,7 @@ func newStripeWebhookService(
 	}
 }
 
-func handleStripeWebhook(c echo.Context, service *StripeWebhookService) error {
+func HandleStripeWebhook(c echo.Context, service *StripeWebhookService) error {
 	if service == nil || service.db == nil ||
 		!strings.HasPrefix(service.webhookSecret, "whsec_") {
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{

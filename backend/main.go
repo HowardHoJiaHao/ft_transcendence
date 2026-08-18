@@ -9,6 +9,16 @@ import (
 	"github.com/labstack/echo/v4/middleware" //middleware parts
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"transcendence/modules/admin"
+	"transcendence/modules/ai"
+	"transcendence/modules/apikey"
+	"transcendence/modules/listing"
+	listingfiles "transcendence/modules/listing/files"
+	"transcendence/modules/listing/importcsv"
+	"transcendence/modules/listing/reviews"
+	"transcendence/modules/order"
+	"transcendence/modules/order/dashboard"
+	"transcendence/modules/order/survey"
 	"transcendence/modules/user"
 	"transcendence/modules/user/auth"
 	"transcendence/modules/user/chat"
@@ -47,24 +57,6 @@ func main() {
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 	v1 := e.Group("/api/v1")
 
-	// Product routes
-	v1.GET("/products", func(c echo.Context) error { return getProducts(c, gormDB) })
-	v1.GET("/products/:id", func(c echo.Context) error { return getProductByID(c, gormDB) })
-	v1.GET("/products/:id/files", func(c echo.Context) error { return listListingFiles(c, gormDB) })
-	v1.GET("/files/:fileId/content", func(c echo.Context) error { return serveListingFile(c, gormDB) })
-	v1.GET("/products/:id/reviews", func(c echo.Context) error { return getListingReviews(c, gormDB) })
-
-	// protected product routes
-	// concatenate for example "/api/v1" + "/product" = "/api/v1/products"
-	protected := e.Group("/api/v1")
-	protected.Use(myMiddleware.JWTAuth(rawDB))
-
-	// ai chat route, this is a logged-in only route. RacketBot answers order,
-	// profile and account questions through user-scoped tools, so there is no
-	// useful guest mode: JWTAuth resolves the member first, and handleAIChat
-	// forwards that userId and token on to the AI chat service.
-	protected.POST("/ai/chat", func(c echo.Context) error { return handleAIChat(c) })
-
 	// Shared user, real-time, and notification services. Notifications reuse
 	// the authenticated chat WebSocket rather than opening a second connection.
 	baseRepo := user.NewRepository(rawDB, gormDB)
@@ -82,65 +74,41 @@ func main() {
 	notificationHandler := notifications.NewHandler(notificationService)
 	chatRepo.Notifications = notificationRepo
 	chatHub.Notifications = notificationService
-	stripeConfig := loadStripeConfigFromEnv()
-	stripePayments := newStripePaymentService(
+	stripeConfig := order.LoadStripeConfigFromEnv()
+	stripePayments := order.NewStripePaymentService(
 		rawDB,
 		stripeConfig,
-		newRealStripeCheckoutClient(stripeConfig.SecretKey),
+		order.NewRealStripeCheckoutClient(stripeConfig.SecretKey),
 	)
-	stripeWebhooks := newStripeWebhookService(rawDB, stripeConfig, notificationService)
+	stripeWebhooks := order.NewStripeWebhookService(rawDB, stripeConfig, notificationService)
 	v1.POST("/webhooks/stripe", func(c echo.Context) error {
-		return handleStripeWebhook(c, stripeWebhooks)
+		return order.HandleStripeWebhook(c, stripeWebhooks)
 	})
 	go chatHub.Run()
 	chatHandler := chat.NewHandler(chatHub, chatRepo, authService)
 	chatHandler.Notifications = notificationService
 	friendsHandler.Notifications = notificationService
 
-	// protected means this route is logged-in only
-	// this is to create new products, will be concatenate with the /api/v1/ as suffix
-	// when a post request to /api/v1/products reach echo
-	// then it will call this createProduct handler
-	protected.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
-	protected.POST("/products/import", func(c echo.Context) error { return importProducts(c, gormDB) })
-	protected.PUT("/products/:id", func(c echo.Context) error { return updateProduct(c, gormDB) })
-	protected.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
-	protected.POST("/products/:id/files", func(c echo.Context) error { return uploadListingFiles(c, gormDB) })
-	protected.DELETE("/products/:id/files/:fileId", func(c echo.Context) error {
-		return deleteListingFile(c, gormDB)
-	})
-	protected.GET("/products/:id/review-eligibility", func(c echo.Context) error { return getListingReviewEligibility(c, gormDB) })
-	protected.POST("/products/:id/reviews", func(c echo.Context) error {
-		return createListingReview(c, gormDB, notificationService)
-	})
+	listingHandler := listing.NewHandler(gormDB, rawDB)
+	listingFilesHandler := listingfiles.NewHandler(gormDB, rawDB)
+	listingReviewsHandler := reviews.NewHandler(gormDB, rawDB, notificationService)
+	listingImportHandler := importcsv.NewHandler(gormDB, rawDB)
+	orderHandler := order.NewHandler(gormDB, rawDB, notificationService, stripePayments)
+	dashboardHandler := dashboard.NewHandler(gormDB, rawDB)
+	surveyHandler := survey.NewHandler(gormDB, rawDB)
+	apiKeyHandler := apikey.NewHandler(gormDB, rawDB)
+	adminHandler := admin.NewHandler(rawDB)
+	aiHandler := ai.NewHandler(rawDB)
 
-	protected.POST("/orders", func(c echo.Context) error {
-		return createOrdersWithServices(c, gormDB, notificationService, stripePayments)
-	})
-	protected.GET("/orders", func(c echo.Context) error { return getOrders(c, gormDB) }) // howai AI maybe. merge residue 21 june
-	protected.PUT("/orders/:id/complete", func(c echo.Context) error {
-		return completeOrderWithNotifications(c, gormDB, notificationService)
-	})
-	protected.PUT("/orders/:id/cancel", func(c echo.Context) error { return cancelOrder(c, gormDB) })
-	protected.GET("/orders/:id", func(c echo.Context) error { return getOrderByID(c, gormDB) }) //howai AI maybe. merge residue 21 june
-	protected.GET("/orders/:id/recommendation-survey", func(c echo.Context) error {
-		return getRecommendationSurvey(c, gormDB)
-	})
-	protected.POST("/orders/:id/recommendation-survey", func(c echo.Context) error {
-		return createRecommendationSurvey(c, gormDB)
-	})
-
-	// Seller dashboard routes
-	protected.GET("/seller/orders", func(c echo.Context) error { return getSellerOrders(c, gormDB) })
-	protected.GET("/seller/dashboard/items", func(c echo.Context) error { return getSellerDashboardItems(c, gormDB) })
-	protected.GET("/seller/dashboard/summary", func(c echo.Context) error { return getSellerDashboardSummary(c, gormDB) })
-	protected.GET("/seller/dashboard/categories", func(c echo.Context) error { return getSellerDashboardCategories(c, gormDB) })
-
-	// API key management (JWT-authed): generate/list/revoke keys, view request logs
-	protected.POST("/api-keys", func(c echo.Context) error { return createAPIKey(c, gormDB) })
-	protected.GET("/api-keys", func(c echo.Context) error { return listAPIKeys(c, gormDB) })
-	protected.DELETE("/api-keys/:id", func(c echo.Context) error { return revokeAPIKey(c, gormDB) })
-	protected.GET("/api-keys/logs", func(c echo.Context) error { return getAPIKeyLogs(c, gormDB) })
+	listingHandler.RegisterRoutes(v1)
+	listingFilesHandler.RegisterRoutes(v1)
+	listingReviewsHandler.RegisterRoutes(v1)
+	listingImportHandler.RegisterRoutes(v1)
+	orderHandler.RegisterRoutes(v1)
+	dashboardHandler.RegisterRoutes(v1)
+	surveyHandler.RegisterRoutes(v1)
+	apiKeyHandler.RegisterRoutes(v1)
+	aiHandler.RegisterRoutes(v1)
 
 	// ─── PUBLIC DEVELOPER API ────────────────────────────────────────────────
 	//
@@ -157,23 +125,20 @@ func main() {
 	// the JWT group (POST /api/v1/products/import)
 	public := e.Group("/api/public/v1")
 	public.Use(myMiddleware.APIKeyAuth(rawDB))
-	public.GET("/products", func(c echo.Context) error { return getProductsForAPIKey(c, gormDB) })
-	public.GET("/products/:id", func(c echo.Context) error { return getProductByIDForAPIKey(c, gormDB) })
-	public.POST("/products", func(c echo.Context) error { return createProduct(c, gormDB) })
-	// Its own handler, not the JWT route's: the web edit form replaces a whole
-	// listing, while this surface stays a narrow six-field patch.
-	public.PUT("/products/:id", func(c echo.Context) error { return updateProductForAPIKey(c, gormDB) })
-	public.DELETE("/products/:id", func(c echo.Context) error { return deleteProduct(c, gormDB) })
+	listingHandler.RegisterPublicAPI(public)
 
 	// Register routes
 	authHandler.RegisterRoutes(v1)
+	// concatenate for example "/api/v1" + "/product" = "/api/v1/products"
+	protected := e.Group("/api/v1")
+	protected.Use(myMiddleware.JWTAuth(rawDB))
 	protected.POST("/auth/change-password/request", authHandler.RequestPasswordChange)
 	protected.POST("/auth/change-password/confirm", authHandler.ConfirmPasswordChange)
 	profileHandler.RegisterRoutes(v1)
 	friendsHandler.RegisterRoutes(v1)
 	chatHandler.RegisterRoutes(v1)
 	notificationHandler.RegisterRoutes(v1)
-	registerAdminRoutes(v1, rawDB)
+	adminHandler.RegisterRoutes(v1)
 
 	//start server
 	port := os.Getenv("SERVER_PORT")

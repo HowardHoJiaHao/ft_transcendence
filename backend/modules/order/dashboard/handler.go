@@ -1,4 +1,4 @@
-package main
+package dashboard
 
 import (
 	"database/sql"
@@ -10,7 +10,25 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
+	"transcendence/myMiddleware"
 )
+
+type Handler struct {
+	gormDB *gorm.DB
+	rawDB  *sql.DB
+}
+
+func NewHandler(gormDB *gorm.DB, rawDB *sql.DB) *Handler {
+	return &Handler{gormDB: gormDB, rawDB: rawDB}
+}
+
+func (h *Handler) RegisterRoutes(v1 *echo.Group) {
+	protected := v1.Group("")
+	protected.Use(myMiddleware.JWTAuth(h.rawDB))
+	protected.GET("/seller/dashboard/items", h.getSellerDashboardItems)
+	protected.GET("/seller/dashboard/summary", h.getSellerDashboardSummary)
+	protected.GET("/seller/dashboard/categories", h.getSellerDashboardCategories)
+}
 
 type SellerItemStat struct {
 	ListingID  int     `json:"listingId"`
@@ -146,8 +164,8 @@ func groupByCategory(sold []categorySoldRow) []CategoryStat {
 // It takes no query parameters. Filtering, sorting and pagination all happen
 // client-side on the My Items table, and there is deliberately no date range —
 // this is an inventory list, not a report.
-func getSellerDashboardItems(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) getSellerDashboardItems(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -249,8 +267,8 @@ func getSellerDashboardItems(c echo.Context, gormDB *gorm.DB) error {
 //
 //  1. one row of six scalars  → the KPI tiles
 //  2. month × category rows   → the stacked chart
-func getSellerDashboardSummary(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) getSellerDashboardSummary(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -342,8 +360,8 @@ func getSellerDashboardSummary(c echo.Context, gormDB *gorm.DB) error {
 //
 // GET /api/v1/seller/dashboard/categories?from=YYYY-MM-DD&to=YYYY-MM-DD
 // GET /api/v1/seller/dashboard/categories?months=N
-func getSellerDashboardCategories(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) getSellerDashboardCategories(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}

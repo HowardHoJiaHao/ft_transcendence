@@ -42,8 +42,13 @@ Frontend API calls are **same-origin** through the WAF. `NEXT_PUBLIC_API_URL` de
 | Path | Role |
 |---|---|
 | `frontend/` | Next.js 15 App Router, React 19, TypeScript, Tailwind v4 |
-| `backend/` | Go 1.25 + Echo. Marketplace, auth, orders, Stripe, admin, AI proxy |
+| `backend/` | Go 1.25 + Echo. Composition root (`main.go`) + DB bootstrap (`db.go`) |
 | `backend/modules/user/` | Auth, profile, friends, chat hub, notifications |
+| `backend/modules/listing/` | Product/listing CRUD, files, reviews, CSV import |
+| `backend/modules/order/` | Checkout, Stripe, seller dashboard, recommendation survey |
+| `backend/modules/apikey/` | JWT API-key management |
+| `backend/modules/admin/` | Admin users + ML training admin |
+| `backend/modules/ai/` | RacketBot proxy |
 | `backend/myMiddleware/` | JWT and API-key middleware |
 | `ai_service/` | FastAPI RacketBot: agent, tools, RAG, recommender, training worker |
 | `ai_service/faq_docs/` | Markdown knowledge ingested into `knowledge_chunks` |
@@ -74,7 +79,7 @@ Notable routes (not exhaustive):
 
 - Public: products list/detail, files content, reviews, `POST /api/v1/ai/chat`, Stripe webhook, `/health`, `/metrics`.
 - JWT: product write, file upload, orders, seller dashboard, API keys, reviews, recommendation survey.
-- User module registers auth, profile, friends, chat (`/api/v1/ws`), notifications, admin.
+- User module registers auth, profile, friends, chat (`/api/v1/ws`), notifications. Listing, order, apikey, admin, and AI register the same way.
 
 Auth details that bite:
 

@@ -1,4 +1,4 @@
-package main
+package admin
 
 import (
 	"crypto/subtle"
@@ -14,9 +14,19 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
+	"transcendence/modules/admin/ml"
+	"transcendence/modules/apikey"
 	"transcendence/modules/user/auth"
 	"transcendence/myMiddleware"
 )
+
+type Handler struct {
+	db *sql.DB
+}
+
+func NewHandler(db *sql.DB) *Handler {
+	return &Handler{db: db}
+}
 
 const deletedUserDisplayName = "Deleted user"
 
@@ -71,24 +81,24 @@ type adminSummary struct {
 }
 
 // admin routes are registered under /api/v1/admin, and require a valid admin JWT token for access. The login route is available at /api/v1/admin/auth/login for initial authentication.
-func registerAdminRoutes(v1 *echo.Group, db *sql.DB) {
+func (h *Handler) RegisterRoutes(v1 *echo.Group) {
 	v1.POST("/admin/auth/login", adminLogin) // this one is for the bootstrap login
 	admin := v1.Group("/admin")
-	admin.Use(myMiddleware.AdminAuth(db))
-	admin.GET("/summary", func(c echo.Context) error { return getAdminSummary(c, db) }) // first load
-	admin.GET("/users", func(c echo.Context) error { return listAdminUsers(c, db) })    // first load
-	admin.GET("/users/:id", func(c echo.Context) error { return getAdminUser(c, db) })
-	admin.POST("/users", func(c echo.Context) error { return createAdminUser(c, db) })
-	admin.PATCH("/users/:id", func(c echo.Context) error { return updateAdminUser(c, db) })
-	admin.PATCH("/users/:id/role", func(c echo.Context) error { return updateAdminUserRole(c, db) })
-	admin.PATCH("/users/:id/status", func(c echo.Context) error { return updateAdminUserStatus(c, db) })
-	admin.DELETE("/users/:id", func(c echo.Context) error { return deleteAdminUser(c, db) })
-	admin.GET("/api-attempts", func(c echo.Context) error { return getAPIAttackAttempts(c, db) })
-	admin.GET("/ml/status", func(c echo.Context) error { return getMLStatus(c, db) })
-	admin.GET("/ml/feedback", func(c echo.Context) error { return listMLFeedback(c, db) })
-	admin.GET("/ml/runs", func(c echo.Context) error { return listMLRuns(c, db) })
-	admin.POST("/ml/retrain", func(c echo.Context) error { return createMLRetrainingRun(c, db) })
-	admin.GET("/ml/runs/:id", func(c echo.Context) error { return getMLRun(c, db) })
+	admin.Use(myMiddleware.AdminAuth(h.db))
+	admin.GET("/summary", func(c echo.Context) error { return h.getAdminSummary(c) }) // first load
+	admin.GET("/users", func(c echo.Context) error { return h.listAdminUsers(c) })    // first load
+	admin.GET("/users/:id", func(c echo.Context) error { return h.getAdminUser(c) })
+	admin.POST("/users", func(c echo.Context) error { return h.createAdminUser(c) })
+	admin.PATCH("/users/:id", func(c echo.Context) error { return h.updateAdminUser(c) })
+	admin.PATCH("/users/:id/role", func(c echo.Context) error { return h.updateAdminUserRole(c) })
+	admin.PATCH("/users/:id/status", func(c echo.Context) error { return h.updateAdminUserStatus(c) })
+	admin.DELETE("/users/:id", func(c echo.Context) error { return h.deleteAdminUser(c) })
+	admin.GET("/api-attempts", func(c echo.Context) error { return apikey.GetAPIAttackAttempts(c, h.db) })
+	admin.GET("/ml/status", func(c echo.Context) error { return ml.GetStatus(c, h.db) })
+	admin.GET("/ml/feedback", func(c echo.Context) error { return ml.ListFeedback(c, h.db) })
+	admin.GET("/ml/runs", func(c echo.Context) error { return ml.ListRuns(c, h.db) })
+	admin.POST("/ml/retrain", func(c echo.Context) error { return ml.CreateRetrainingRun(c, h.db) })
+	admin.GET("/ml/runs/:id", func(c echo.Context) error { return ml.GetRun(c, h.db) })
 }
 
 func adminLogin(c echo.Context) error {
@@ -165,7 +175,7 @@ const adminUserSelect = `
 		role, account_status, deleted_at
 	FROM users`
 
-func listAdminUsers(c echo.Context, db *sql.DB) error {
+func (h *Handler) listAdminUsers(c echo.Context) error {
 	query := adminUserSelect + " WHERE 1=1"
 	args := []interface{}{}
 	if status := c.QueryParam("status"); status != "" {
@@ -188,7 +198,7 @@ func listAdminUsers(c echo.Context, db *sql.DB) error {
 		args = append(args, "%"+search+"%")
 	}
 	query += " ORDER BY id ASC"
-	rows, err := db.Query(query, args...)
+	rows, err := h.db.Query(query, args...)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch users"})
 	}
@@ -208,12 +218,12 @@ func listAdminUsers(c echo.Context, db *sql.DB) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{"users": users, "viewerRole": role})
 }
 
-func getAdminUser(c echo.Context, db *sql.DB) error {
+func (h *Handler) getAdminUser(c echo.Context) error {
 	userID, err := parseUserID(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	u, err := scanAdminUser(db.QueryRow(adminUserSelect+" WHERE id = $1", userID))
+	u, err := scanAdminUser(h.db.QueryRow(adminUserSelect+" WHERE id = $1", userID))
 	if err == sql.ErrNoRows {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
 	}
@@ -223,9 +233,9 @@ func getAdminUser(c echo.Context, db *sql.DB) error {
 	return c.JSON(http.StatusOK, u)
 }
 
-func getAdminSummary(c echo.Context, db *sql.DB) error {
+func (h *Handler) getAdminSummary(c echo.Context) error {
 	var summary adminSummary
-	err := db.QueryRow(`
+	err := h.db.QueryRow(`
 		SELECT
 			(SELECT COUNT(*) FROM users WHERE account_status <> 'deleted'),
 			(SELECT COUNT(*) FROM users WHERE account_status = 'active'),
@@ -249,7 +259,7 @@ func getAdminSummary(c echo.Context, db *sql.DB) error {
 	return c.JSON(http.StatusOK, summary)
 }
 
-func createAdminUser(c echo.Context, db *sql.DB) error {
+func (h *Handler) createAdminUser(c echo.Context) error {
 	if !requireAdminRole(c) {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "Administrator access required"})
 	}
@@ -275,7 +285,7 @@ func createAdminUser(c echo.Context, db *sql.DB) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to secure password"})
 	}
 	var userID int
-	err = db.QueryRow(`
+	err = h.db.QueryRow(`
 		INSERT INTO users (
 			username, email, password_hash, first_name, last_name,
 			is_verified, requires_2fa, role
@@ -286,14 +296,14 @@ func createAdminUser(c echo.Context, db *sql.DB) error {
 	if err != nil {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "Username or email already exists"})
 	}
-	u, err := scanAdminUser(db.QueryRow(adminUserSelect+" WHERE id = $1", userID))
+	u, err := scanAdminUser(h.db.QueryRow(adminUserSelect+" WHERE id = $1", userID))
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "User created but could not be loaded"})
 	}
 	return c.JSON(http.StatusCreated, u)
 }
 
-func updateAdminUser(c echo.Context, db *sql.DB) error {
+func (h *Handler) updateAdminUser(c echo.Context) error {
 	if !requireAdminRole(c) {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "Administrator access required"})
 	}
@@ -315,7 +325,7 @@ func updateAdminUser(c echo.Context, db *sql.DB) error {
 	if _, err := mail.ParseAddress(req.Email); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid email"})
 	}
-	result, err := db.Exec(`
+	result, err := h.db.Exec(`
 		UPDATE users
 		SET username = $1, email = $2, first_name = $3, last_name = $4,
 			updated_at = CURRENT_TIMESTAMP
@@ -329,14 +339,14 @@ func updateAdminUser(c echo.Context, db *sql.DB) error {
 	if affected == 0 {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "Active user not found"})
 	}
-	u, err := scanAdminUser(db.QueryRow(adminUserSelect+" WHERE id = $1", userID))
+	u, err := scanAdminUser(h.db.QueryRow(adminUserSelect+" WHERE id = $1", userID))
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "User updated but could not be loaded"})
 	}
 	return c.JSON(http.StatusOK, u)
 }
 
-func updateAdminUserRole(c echo.Context, db *sql.DB) error {
+func (h *Handler) updateAdminUserRole(c echo.Context) error {
 	if !requireAdminRole(c) {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "Administrator access required"})
 	}
@@ -351,7 +361,7 @@ func updateAdminUserRole(c echo.Context, db *sql.DB) error {
 	if err := c.Bind(&req); err != nil || !isValidRole(req.Role) {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "role must be user, moderator, or admin"})
 	}
-	result, err := db.Exec(`
+	result, err := h.db.Exec(`
 		UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP
 		WHERE id = $2 AND account_status <> 'deleted'`,
 		req.Role, userID,
@@ -366,7 +376,7 @@ func updateAdminUserRole(c echo.Context, db *sql.DB) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "Role updated", "role": req.Role})
 }
 
-func updateAdminUserStatus(c echo.Context, db *sql.DB) error {
+func (h *Handler) updateAdminUserStatus(c echo.Context) error {
 	userID, err := parseUserID(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -379,7 +389,7 @@ func updateAdminUserStatus(c echo.Context, db *sql.DB) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "accountStatus must be active or suspended"})
 	}
 	var targetRole, currentStatus string
-	if err := db.QueryRow("SELECT role, account_status FROM users WHERE id = $1", userID).Scan(&targetRole, &currentStatus); err == sql.ErrNoRows {
+	if err := h.db.QueryRow("SELECT role, account_status FROM users WHERE id = $1", userID).Scan(&targetRole, &currentStatus); err == sql.ErrNoRows {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
 	} else if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to read user"})
@@ -390,7 +400,7 @@ func updateAdminUserStatus(c echo.Context, db *sql.DB) error {
 	if !isAdminRole(c) && targetRole != "user" {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "Moderators may only manage ordinary users"})
 	}
-	if _, err := db.Exec(
+	if _, err := h.db.Exec(
 		"UPDATE users SET account_status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
 		req.AccountStatus, userID,
 	); err != nil {
@@ -399,7 +409,7 @@ func updateAdminUserStatus(c echo.Context, db *sql.DB) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "Account status updated", "accountStatus": req.AccountStatus})
 }
 
-func deleteAdminUser(c echo.Context, db *sql.DB) error {
+func (h *Handler) deleteAdminUser(c echo.Context) error {
 	if !requireAdminRole(c) {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "Administrator access required"})
 	}
@@ -411,7 +421,7 @@ func deleteAdminUser(c echo.Context, db *sql.DB) error {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "You cannot delete your own account"})
 	}
 
-	tx, err := db.Begin()
+	tx, err := h.db.Begin()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to start deletion"})
 	}

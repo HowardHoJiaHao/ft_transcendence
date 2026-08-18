@@ -1,6 +1,7 @@
-package main
+package importcsv
 
 import (
+	"database/sql"
 	"errors"
 	"log"
 	"strings"
@@ -8,14 +9,31 @@ import (
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 	"transcendence/modules/geo"
+	"transcendence/modules/listing"
+	"transcendence/myMiddleware"
 )
+
+type Handler struct {
+	gormDB *gorm.DB
+	rawDB  *sql.DB
+}
+
+func NewHandler(gormDB *gorm.DB, rawDB *sql.DB) *Handler {
+	return &Handler{gormDB: gormDB, rawDB: rawDB}
+}
+
+func (h *Handler) RegisterRoutes(v1 *echo.Group) {
+	protected := v1.Group("")
+	protected.Use(myMiddleware.JWTAuth(h.rawDB))
+	protected.POST("/products/import", h.importProducts)
+}
 
 const maxImportRows = 500
 
 // Request body shape. Items reuses CreateProductRequest so a bulk-imported
 // listing and a singly-created one accept exactly the same fields.
 type ImportProductsRequest struct {
-	Items []CreateProductRequest `json:"items"`
+	Items []listing.CreateProductRequest `json:"items"`
 }
 
 // One validation failure, addressed to a row of the uploaded file.
@@ -44,7 +62,7 @@ type ImportProductsResponse struct {
 // validateImportRow checks a single row against the same rules createProduct
 // enforces for a one-off listing, so importing 100 products cannot slip past
 // constraints that creating them individually would have caught.
-func validateImportRow(row int, item CreateProductRequest) []ImportRowError {
+func validateImportRow(row int, item listing.CreateProductRequest) []ImportRowError {
 	var errs []ImportRowError
 
 	// title: required. TrimSpace so a cell of only spaces counts as empty.
@@ -72,7 +90,7 @@ func validateImportRow(row int, item CreateProductRequest) []ImportRowError {
 
 	// The same ceilings a single-listing POST is held to, so a CSV row cannot
 	// land a listing the sell form would have rejected.
-	for _, problem := range outOfRangeListingFields(item) {
+	for _, problem := range listing.OutOfRangeListingFields(item) {
 		errs = append(errs, ImportRowError{Row: row, Field: problem.Field, Message: problem.Message})
 	}
 
@@ -84,12 +102,12 @@ func validateImportRow(row int, item CreateProductRequest) []ImportRowError {
 	//
 	// Running BEFORE the check below is what leaves only location and
 	// dealingMethod able to fail: the two the form itself refuses to invent.
-	applyListingDefaults(&item)
+	listing.ApplyListingDefaults(&item)
 
 	// The caller-owned listing attributes, shared with createProduct so a CSV
 	// row cannot land a listing the sell form would have rejected. Reported
 	// individually so the import preview can highlight each offending column.
-	for _, missing := range missingListingFields(item) {
+	for _, missing := range listing.MissingListingFields(item) {
 		errs = append(errs, ImportRowError{Row: row, Field: missing.Field, Message: missing.Message})
 	}
 
@@ -105,7 +123,7 @@ func validateImportRow(row int, item CreateProductRequest) []ImportRowError {
 // defaulted. That is the security-relevant line in this file: whatever the
 // request body claimed about ownership is discarded and replaced with the
 // authenticated caller's identity.
-func applyImportDefaults(item *CreateProductRequest, sellerID int, sellerName string) {
+func applyImportDefaults(item *listing.CreateProductRequest, sellerID int, sellerName string) {
 	item.SellerID = sellerID
 	item.SellerName = sellerName
 	// Discarded for the same reason createProduct discards it: an image becomes
@@ -118,7 +136,7 @@ func applyImportDefaults(item *CreateProductRequest, sellerID int, sellerName st
 	// cell imports identically to a blank field on a single-listing POST.
 	// validateImportRow already ran this over its own copy, so the row is known
 	// to survive missingListingFields once these are filled in.
-	applyListingDefaults(item)
+	listing.ApplyListingDefaults(item)
 }
 
 // importProducts handles a bulk import request end to end.
@@ -130,8 +148,8 @@ func applyImportDefaults(item *CreateProductRequest, sellerID int, sellerName st
 //  3. look up seller    — one query, reused for every row
 //  4. validate ALL rows — no database writes yet
 //  5. insert ALL rows   — one transaction, commit only if every row lands
-func importProducts(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) importProducts(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -157,7 +175,7 @@ func importProducts(c echo.Context, gormDB *gorm.DB) error {
 
 	// STEP 3 — Get the seller's account. Imported listings inherit their
 	// location from it, exactly as a single-listing POST does.
-	seller, err := lookupSellerProfile(gormDB, sellerID)
+	seller, err := listing.LookupSellerProfile(h.gormDB, sellerID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		log.Printf("Error looking up seller for import: %v", err)
 		return c.JSON(500, map[string]string{"error": "Failed to validate seller"})
@@ -166,12 +184,12 @@ func importProducts(c echo.Context, gormDB *gorm.DB) error {
 	if sellerName == "" {
 		sellerName = "Unknown Seller"
 	}
-	if seller.incomplete() {
-		return c.JSON(400, map[string]string{"error": incompleteProfileError})
+	if seller.Incomplete() {
+		return c.JSON(400, map[string]string{"error": listing.IncompleteProfileError})
 	}
 	canonicalState, canonicalDistrict, ok := geo.Resolve(seller.State, seller.District)
 	if !ok {
-		return c.JSON(400, map[string]string{"error": incompleteProfileError})
+		return c.JSON(400, map[string]string{"error": listing.IncompleteProfileError})
 	}
 
 	// STEP 4 — Validate every row before touching the database.

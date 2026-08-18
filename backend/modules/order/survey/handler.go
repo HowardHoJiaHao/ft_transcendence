@@ -1,4 +1,4 @@
-package main
+package survey
 
 import (
 	"database/sql"
@@ -8,7 +8,24 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
+	"transcendence/myMiddleware"
 )
+
+type Handler struct {
+	gormDB *gorm.DB
+	rawDB  *sql.DB
+}
+
+func NewHandler(gormDB *gorm.DB, rawDB *sql.DB) *Handler {
+	return &Handler{gormDB: gormDB, rawDB: rawDB}
+}
+
+func (h *Handler) RegisterRoutes(v1 *echo.Group) {
+	protected := v1.Group("")
+	protected.Use(myMiddleware.JWTAuth(h.rawDB))
+	protected.GET("/orders/:id/recommendation-survey", h.getRecommendationSurvey)
+	protected.POST("/orders/:id/recommendation-survey", h.createRecommendationSurvey)
+}
 
 var recommendationSurveyValues = map[string]map[string]bool{
 	"age_group": {
@@ -38,7 +55,7 @@ type recommendationSurveyRequest struct {
 	BudgetRange     string `json:"budget_range"`
 }
 
-type recommendationTrainingFeedback struct {
+type RecommendationTrainingFeedback struct {
 	ID                  int64     `json:"id"`
 	OrderID             int       `json:"orderId"`
 	BuyerID             int       `json:"buyerId,omitempty"`
@@ -66,8 +83,8 @@ func surveyDB(gormDB *gorm.DB) (*sql.DB, error) {
 	return gormDB.DB()
 }
 
-func getRecommendationSurvey(c echo.Context, gormDB *gorm.DB) error {
-	db, err := surveyDB(gormDB)
+func (h *Handler) getRecommendationSurvey(c echo.Context) error {
+	db, err := surveyDB(h.gormDB)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database connection error"})
 	}
@@ -107,8 +124,8 @@ func getRecommendationSurvey(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-func createRecommendationSurvey(c echo.Context, gormDB *gorm.DB) error {
-	db, err := surveyDB(gormDB)
+func (h *Handler) createRecommendationSurvey(c echo.Context) error {
+	db, err := surveyDB(h.gormDB)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database connection error"})
 	}
@@ -125,7 +142,7 @@ func createRecommendationSurvey(c echo.Context, gormDB *gorm.DB) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Survey contains invalid option values"})
 	}
 
-	var feedback recommendationTrainingFeedback
+	var feedback RecommendationTrainingFeedback
 	err = db.QueryRow(`
 		INSERT INTO recommendation_training_feedback (
 			order_id, buyer_id, age_group, gender, experience_level,
@@ -196,8 +213,8 @@ func findRecommendationFeedback(
 	db *sql.DB,
 	orderID int,
 	buyerID int,
-) (recommendationTrainingFeedback, error) {
-	var feedback recommendationTrainingFeedback
+) (RecommendationTrainingFeedback, error) {
+	var feedback RecommendationTrainingFeedback
 	err := db.QueryRow(`
 		SELECT
 			id, order_id, buyer_id, age_group, gender, experience_level,

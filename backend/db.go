@@ -213,7 +213,7 @@ func runListingsMigration(db *sql.DB) error {
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20) DEFAULT ''`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS state VARCHAR(50)`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS stock_quantity INT NOT NULL DEFAULT 1`,
-		// Ceilings matching the Go constants in products.go.
+		// Ceilings matching the Go constants in modules/listing/.
 		`DO $$
 		BEGIN
 			IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'listings_title_length') THEN

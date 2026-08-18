@@ -59,7 +59,7 @@ username, email, password, firstName: username, lastName: '',
 
 A 51-character username is legal in the form. The `INSERT` then fails on `first_name`. `CreateUser` errors are all mapped to **409** “User with this email or username already exists”, which is wrong for a length failure.
 
-The same hole exists on **admin create/edit** (`frontend/src/app/admin/users/page.tsx` + `backend/admin.go`): username, email, first name, and last name have no `maxLength`. Overflow becomes 409, not a field error.
+The same hole exists on **admin create/edit** (`frontend/src/app/admin/users/page.tsx` + `backend/modules/admin/`): username, email, first name, and last name have no `maxLength`. Overflow becomes 409, not a field error.
 
 ### 2. Signup email has no length or format check
 

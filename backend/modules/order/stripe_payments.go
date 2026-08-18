@@ -1,4 +1,4 @@
-package main
+package order
 
 import (
 	"context"
@@ -34,7 +34,7 @@ type StripeConfig struct {
 	CancelURL          string
 }
 
-func loadStripeConfigFromEnv() StripeConfig {
+func LoadStripeConfigFromEnv() StripeConfig {
 	return StripeConfig{
 		SecretKey:          strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
 		ConnectedAccountID: strings.TrimSpace(os.Getenv("STRIPE_TEST_CONNECTED_ACCOUNT_ID")),
@@ -117,7 +117,7 @@ type realStripeCheckoutClient struct {
 	client *stripe.Client
 }
 
-func newRealStripeCheckoutClient(secretKey string) StripeCheckoutClient {
+func NewRealStripeCheckoutClient(secretKey string) StripeCheckoutClient {
 	if secretKey == "" {
 		return nil
 	}
@@ -207,7 +207,7 @@ type StripePaymentService struct {
 	now    func() time.Time
 }
 
-func newStripePaymentService(db *sql.DB, config StripeConfig, client StripeCheckoutClient) *StripePaymentService {
+func NewStripePaymentService(db *sql.DB, config StripeConfig, client StripeCheckoutClient) *StripePaymentService {
 	return &StripePaymentService{
 		db:     db,
 		config: config,
@@ -216,9 +216,9 @@ func newStripePaymentService(db *sql.DB, config StripeConfig, client StripeCheck
 	}
 }
 
-func newStripePaymentServiceFromEnv(db *sql.DB) *StripePaymentService {
-	config := loadStripeConfigFromEnv()
-	return newStripePaymentService(db, config, newRealStripeCheckoutClient(config.SecretKey))
+func NewStripePaymentServiceFromEnv(db *sql.DB) *StripePaymentService {
+	config := LoadStripeConfigFromEnv()
+	return NewStripePaymentService(db, config, NewRealStripeCheckoutClient(config.SecretKey))
 }
 
 type stripePaymentRecord struct {

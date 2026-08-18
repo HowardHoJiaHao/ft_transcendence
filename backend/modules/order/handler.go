@@ -1,4 +1,4 @@
-package main
+package order
 
 import (
 	"database/sql"
@@ -9,7 +9,30 @@ import (
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 	"transcendence/modules/user/notifications"
+	"transcendence/myMiddleware"
 )
+
+type Handler struct {
+	gormDB        *gorm.DB
+	rawDB         *sql.DB
+	Notifications *notifications.Service
+	Stripe        *StripePaymentService
+}
+
+func NewHandler(gormDB *gorm.DB, rawDB *sql.DB, notifications *notifications.Service, stripe *StripePaymentService) *Handler {
+	return &Handler{gormDB: gormDB, rawDB: rawDB, Notifications: notifications, Stripe: stripe}
+}
+
+func (h *Handler) RegisterRoutes(v1 *echo.Group) {
+	protected := v1.Group("")
+	protected.Use(myMiddleware.JWTAuth(h.rawDB))
+	protected.POST("/orders", h.createOrdersWithServices)
+	protected.GET("/orders", h.getOrders) // howai AI maybe. merge residue 21 june
+	protected.PUT("/orders/:id/complete", h.completeOrderWithNotifications)
+	protected.PUT("/orders/:id/cancel", h.cancelOrder)
+	protected.GET("/orders/:id", h.getOrderByID) //howai AI maybe. merge residue 21 june
+	protected.GET("/seller/orders", h.getSellerOrders)
+}
 
 type Order struct {
 	ID            int       `json:"id"`
@@ -58,7 +81,8 @@ type CreateOrdersResponse struct {
 }
 
 func createOrders(c echo.Context, gormDB *gorm.DB) error {
-	return createOrdersWithServices(c, gormDB, nil, nil)
+	h := &Handler{gormDB: gormDB}
+	return h.createOrdersWithServices(c)
 }
 
 type pendingNotification struct {
@@ -71,16 +95,12 @@ func createOrdersWithNotifications(
 	gormDB *gorm.DB,
 	notificationService *notifications.Service,
 ) error {
-	return createOrdersWithServices(c, gormDB, notificationService, nil)
+	h := &Handler{gormDB: gormDB, Notifications: notificationService}
+	return h.createOrdersWithServices(c)
 }
 
-func createOrdersWithServices(
-	c echo.Context,
-	gormDB *gorm.DB,
-	notificationService *notifications.Service,
-	stripePayments *StripePaymentService,
-) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) createOrdersWithServices(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -120,10 +140,10 @@ func createOrdersWithServices(
 		return c.JSON(400, map[string]string{"error": "Unsupported payment method"})
 	}
 	if paymentMethod == "stripe" {
-		if stripePayments == nil {
+		if h.Stripe == nil {
 			return c.JSON(503, map[string]string{"error": "Stripe sandbox checkout is not configured"})
 		}
-		response, checkoutErr := stripePayments.CreateCheckout(
+		response, checkoutErr := h.Stripe.CreateCheckout(
 			c.Request().Context(),
 			buyerID,
 			req.Items,
@@ -218,7 +238,7 @@ func createOrdersWithServices(
 			return c.JSON(500, map[string]string{"error": "Failed to update listing stock"})
 		}
 
-		if notificationService != nil {
+		if h.Notifications != nil {
 			var listingTitle string
 			if err = tx.QueryRow(
 				`SELECT title FROM listings WHERE id = $1`,
@@ -229,7 +249,7 @@ func createOrdersWithServices(
 			}
 			actorID := buyerID
 			resourceID := order.ID
-			notificationID, createErr := notificationService.Repo.CreateTx(
+			notificationID, createErr := h.Notifications.Repo.CreateTx(
 				tx,
 				sellerID,
 				&actorID,
@@ -261,7 +281,7 @@ func createOrdersWithServices(
 		return c.JSON(500, map[string]string{"error": "Failed to complete checkout"})
 	}
 	for _, pending := range pendingNotifications {
-		notificationService.PublishByID(pending.userID, pending.notificationID)
+		h.Notifications.PublishByID(pending.userID, pending.notificationID)
 	}
 
 	return c.JSON(201, CreateOrdersResponse{
@@ -270,8 +290,8 @@ func createOrdersWithServices(
 	})
 }
 
-func getOrders(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) getOrders(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -361,8 +381,8 @@ func getOrders(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(200, orders)
 }
 
-func getSellerOrders(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) getSellerOrders(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -439,19 +459,16 @@ func getSellerOrders(c echo.Context, gormDB *gorm.DB) error {
 }
 
 func completeOrder(c echo.Context, gormDB *gorm.DB) error {
-	return completeOrderWithNotifications(c, gormDB, nil)
+	h := &Handler{gormDB: gormDB}
+	return h.completeOrderWithNotifications(c)
 }
 
-func completeOrderWithNotifications(
-	c echo.Context,
-	gormDB *gorm.DB,
-	notificationService *notifications.Service,
-) error {
-	if notificationService == nil {
-		return completeOrderWithoutNotifications(c, gormDB)
+func (h *Handler) completeOrderWithNotifications(c echo.Context) error {
+	if h.Notifications == nil {
+		return h.completeOrderWithoutNotifications(c)
 	}
 
-	sqlDB, err := gormDB.DB()
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -513,7 +530,7 @@ func completeOrderWithNotifications(
 	}
 	actorID := sellerID
 	resourceID := orderID
-	notificationID, err := notificationService.Repo.CreateTx(
+	notificationID, err := h.Notifications.Repo.CreateTx(
 		tx,
 		buyerID,
 		&actorID,
@@ -531,13 +548,13 @@ func completeOrderWithNotifications(
 	if err := tx.Commit(); err != nil {
 		return c.JSON(500, map[string]string{"error": "Failed to complete order"})
 	}
-	notificationService.PublishByID(buyerID, notificationID)
+	h.Notifications.PublishByID(buyerID, notificationID)
 
 	return c.JSON(200, map[string]string{"message": "Order marked as delivered"})
 }
 
-func completeOrderWithoutNotifications(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) completeOrderWithoutNotifications(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -609,8 +626,8 @@ func completeOrderWithoutNotifications(c echo.Context, gormDB *gorm.DB) error {
 //
 // Either party may cancel while the order is still pending; once delivered it
 // is history and stays put.
-func cancelOrder(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) cancelOrder(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -667,8 +684,8 @@ func cancelOrder(c echo.Context, gormDB *gorm.DB) error {
 	return c.JSON(200, map[string]string{"message": "Order cancelled"})
 }
 
-func getOrderByID(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) getOrderByID(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}

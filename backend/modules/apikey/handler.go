@@ -1,4 +1,4 @@
-package main
+package apikey
 
 // Developer API keys — issue, list, revoke and audit the credentials that
 // authenticate the public /api/public/v1 routes.
@@ -59,6 +59,24 @@ import (
 	"transcendence/myMiddleware"
 )
 
+type Handler struct {
+	gormDB *gorm.DB
+	rawDB  *sql.DB
+}
+
+func NewHandler(gormDB *gorm.DB, rawDB *sql.DB) *Handler {
+	return &Handler{gormDB: gormDB, rawDB: rawDB}
+}
+
+func (h *Handler) RegisterRoutes(v1 *echo.Group) {
+	protected := v1.Group("")
+	protected.Use(myMiddleware.JWTAuth(h.rawDB))
+	protected.POST("/api-keys", h.createAPIKey)
+	protected.GET("/api-keys", h.listAPIKeys)
+	protected.DELETE("/api-keys/:id", h.revokeAPIKey)
+	protected.GET("/api-keys/logs", h.getAPIKeyLogs)
+}
+
 // APIKeyInfo is the key as the management UI sees it. Note what is absent:
 // there is no field for the key itself. Only the hash is stored.
 type APIKeyInfo struct {
@@ -100,8 +118,8 @@ type APIAttackAttempt struct {
 // moment the plaintext exists anywhere outside the caller's own hands: it is
 // returned in this one response and then thrown away, because only its SHA-256
 // hash reaches the database.
-func createAPIKey(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) createAPIKey(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -163,8 +181,8 @@ func createAPIKey(c echo.Context, gormDB *gorm.DB) error {
 // stored and therefore cannot be shown again. Revoked keys are included: the
 // UI greys them out rather than hiding them, so a user can see that a key they
 // once issued is now dead instead of wondering where it went.
-func listAPIKeys(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) listAPIKeys(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -218,8 +236,8 @@ func listAPIKeys(c echo.Context, gormDB *gorm.DB) error {
 // Revocation takes effect on the very next request: APIKeyAuth re-reads
 // is_active from the database each time and answers 403, so there is no cached
 // state to wait out.
-func revokeAPIKey(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) revokeAPIKey(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -248,8 +266,8 @@ func revokeAPIKey(c echo.Context, gormDB *gorm.DB) error {
 
 // getAPIKeyLogs returns the recent public-API request log across every key the
 // user owns — the read side of the audit trail that APIKeyAuth writes after each call.
-func getAPIKeyLogs(c echo.Context, gormDB *gorm.DB) error {
-	sqlDB, err := gormDB.DB()
+func (h *Handler) getAPIKeyLogs(c echo.Context) error {
+	sqlDB, err := h.gormDB.DB()
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
@@ -321,7 +339,7 @@ func getAPIKeyLogs(c echo.Context, gormDB *gorm.DB) error {
 // one key retried a thousand times is a misconfigured integration, a thousand
 // different keys tried once each is somebody guessing. The fingerprint column
 // makes that countable without ever storing a usable credential.
-func getAPIAttackAttempts(c echo.Context, db *sql.DB) error {
+func GetAPIAttackAttempts(c echo.Context, db *sql.DB) error {
 	hours := 24
 	if h := c.QueryParam("hours"); h != "" {
 		if parsed, err := strconv.Atoi(h); err == nil && parsed > 0 && parsed <= 720 {
