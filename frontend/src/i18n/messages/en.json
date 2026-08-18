@@ -292,7 +292,22 @@
     "goToPage": "Go to page {page}",
     "filterByKey": "Filter the request log by key",
     "allKeys": "All keys",
-    "revoked": "revoked"
+    "revoked": "revoked",
+    "docsQuickstart": "Quickstart",
+    "docsStep1Lead": "Create a key",
+    "docsStep1Rest": "in the Create Secret Key tab and copy it — it is shown only once.",
+    "docsStep2Lead": "Send it on every request",
+    "docsStep2Rest": "as a header:",
+    "docsStep3Lead": "Call any endpoint below.",
+    "docsStep3Rest": "Each key is rate-limited (default 100 requests/minute) and every call is recorded in your Request Log.",
+    "docsBaseUrl": "Base URL",
+    "docsRateLimit": "Rate limit",
+    "docsRateLimitBody": "Per key, per minute (default 100). Exceeding it returns 429 until the next minute window.",
+    "docsKeyLifetime": "Key lifetime",
+    "docsKeyLifetimeLead": "Every key expires 30 days after it is created.",
+    "docsKeyLifetimeRest": "Calls with an expired key return 401 — create a replacement in the Create Secret Key tab, where each key's expiry date is listed.",
+    "docsAuditLog": "Audit log",
+    "docsAuditLogBody": "Every request is logged: method, path, status, IP, and time — see the Request Log tab."
   },
   "auth": {
     "adminLogin": "Admin login",

@@ -292,7 +292,22 @@
     "goToPage": "前往第 {page} 页",
     "filterByKey": "按密钥筛选请求日志",
     "allKeys": "所有密钥",
-    "revoked": "已撤销"
+    "revoked": "已撤销",
+    "docsQuickstart": "快速开始",
+    "docsStep1Lead": "创建密钥",
+    "docsStep1Rest": "在「创建密钥」标签中创建并立即复制 — 它只显示一次。",
+    "docsStep2Lead": "每次请求都要发送",
+    "docsStep2Rest": "作为请求头：",
+    "docsStep3Lead": "调用下方任一端点。",
+    "docsStep3Rest": "每个密钥都有速率限制（默认每分钟 100 次请求），且每次调用都会记录在你的请求日志中。",
+    "docsBaseUrl": "基础 URL",
+    "docsRateLimit": "速率限制",
+    "docsRateLimitBody": "按密钥、按分钟计算（默认 100）。超出后返回 429，直到下一分钟窗口。",
+    "docsKeyLifetime": "密钥有效期",
+    "docsKeyLifetimeLead": "每个密钥在创建后 30 天过期。",
+    "docsKeyLifetimeRest": "使用已过期的密钥调用会返回 401 — 请在「创建密钥」标签中创建新密钥，该处会列出每个密钥的到期日期。",
+    "docsAuditLog": "审计日志",
+    "docsAuditLogBody": "每个请求都会被记录：方法、路径、状态、IP 和时间 — 参见请求日志标签。"
   },
   "auth": {
     "adminLogin": "管理员登录",

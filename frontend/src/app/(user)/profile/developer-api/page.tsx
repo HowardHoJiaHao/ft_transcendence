@@ -264,7 +264,7 @@ const statusCodes: Array<[string, string]> = [
   ['200', 'OK'],
   ['201', 'Created (POST)'],
   ['400', 'Bad request — missing/invalid fields'],
-  ['401', 'Missing or invalid API key / JWT'],
+  ['401', 'Missing, invalid, or expired API key / JWT'],
   ['403', 'Key revoked, or you don’t own the target listing'],
   ['404', 'Not found'],
   ['409', 'Conflict — the listing is pending or sold, or still has orders'],
@@ -649,39 +649,41 @@ export default function DeveloperApiPage() {
             {activeTab === 'docs' && (
               <>
                 <div className="bg-white border border-[#e8e8e6] rounded-xl px-5 py-[18px] mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] last:mb-0">
-                  <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">🚀 Quickstart</h2>
+                  <h2 className="flex items-center gap-2 text-base font-bold text-[#222] mt-0 mx-0 before:content-[''] before:w-1 before:h-[18px] before:bg-[#2a78d6] before:rounded-sm before:shrink-0 mb-3">🚀 {t('devApi.docsQuickstart')}</h2>
                   <ol className="mt-0 mx-0 mb-4 pl-5 text-[#444] text-sm leading-[1.7] [&_li]:mb-1.5">
                     <li>
-                      <strong>Create a key</strong> in the “Create Secret Key” tab and copy it —
-                      it is shown only once.
+                      <strong>{t('devApi.docsStep1Lead')}</strong> {t('devApi.docsStep1Rest')}
                     </li>
                     <li>
-                      <strong>Send it on every request</strong> as a header:{' '}
+                      <strong>{t('devApi.docsStep2Lead')}</strong> {t('devApi.docsStep2Rest')}{' '}
                       <code className="bg-[#f5f5f3] border border-[#e8e8e6] rounded-md px-[7px] py-px text-[12.5px] text-[#c2185b]">X-API-Key: sk_live_...</code>
                     </li>
                     <li>
-                      <strong>Call any endpoint below.</strong> Each key is rate-limited
-                      (default 100 requests/minute) and every call is recorded in your
-                      Request Log.
+                      <strong>{t('devApi.docsStep3Lead')}</strong> {t('devApi.docsStep3Rest')}
                     </li>
                   </ol>
                   <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
                     <div className="bg-[#fafaf8] border border-[#eee] rounded-lg px-3.5 py-3">
-                      <p className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mt-0 mx-0 mb-1.5">Base URL</p>
+                      <p className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mt-0 mx-0 mb-1.5">{t('devApi.docsBaseUrl')}</p>
                       <code className="bg-[#f5f5f3] border border-[#e8e8e6] rounded-md px-[7px] py-px text-[12.5px] text-[#c2185b]">https://localhost/api/public/v1</code>
                     </div>
                     <div className="bg-[#fafaf8] border border-[#eee] rounded-lg px-3.5 py-3">
-                      <p className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mt-0 mx-0 mb-1.5">Rate limit</p>
+                      <p className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mt-0 mx-0 mb-1.5">{t('devApi.docsRateLimit')}</p>
                       <p className="text-[13px] text-[#444] m-0 leading-[1.5]">
-                        Per key, per minute (default 100). Exceeding it returns 429 until the
-                        next minute window.
+                        {t('devApi.docsRateLimitBody')}
                       </p>
                     </div>
                     <div className="bg-[#fafaf8] border border-[#eee] rounded-lg px-3.5 py-3">
-                      <p className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mt-0 mx-0 mb-1.5">Audit log</p>
+                      <p className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mt-0 mx-0 mb-1.5">{t('devApi.docsKeyLifetime')}</p>
                       <p className="text-[13px] text-[#444] m-0 leading-[1.5]">
-                        Every request is logged: method, path, status, IP, and time — see the
-                        Request Log tab.
+                        <strong>{t('devApi.docsKeyLifetimeLead')}</strong>{' '}
+                        {t('devApi.docsKeyLifetimeRest')}
+                      </p>
+                    </div>
+                    <div className="bg-[#fafaf8] border border-[#eee] rounded-lg px-3.5 py-3">
+                      <p className="text-[11px] text-[#898781] uppercase tracking-[0.4px] font-bold mt-0 mx-0 mb-1.5">{t('devApi.docsAuditLog')}</p>
+                      <p className="text-[13px] text-[#444] m-0 leading-[1.5]">
+                        {t('devApi.docsAuditLogBody')}
                       </p>
                     </div>
                   </div>

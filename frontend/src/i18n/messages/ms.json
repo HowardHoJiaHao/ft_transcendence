@@ -292,7 +292,22 @@
     "goToPage": "Pergi ke halaman {page}",
     "filterByKey": "Tapis log permintaan mengikut kunci",
     "allKeys": "Semua kunci",
-    "revoked": "dibatalkan"
+    "revoked": "dibatalkan",
+    "docsQuickstart": "Mula Pantas",
+    "docsStep1Lead": "Cipta kunci",
+    "docsStep1Rest": "dalam tab Cipta Kunci Rahsia dan salin — ia dipaparkan sekali sahaja.",
+    "docsStep2Lead": "Hantar pada setiap permintaan",
+    "docsStep2Rest": "sebagai pengepala:",
+    "docsStep3Lead": "Panggil mana-mana titik akhir di bawah.",
+    "docsStep3Rest": "Setiap kunci mempunyai had kadar (lalai 100 permintaan/minit) dan setiap panggilan direkodkan dalam Log Permintaan anda.",
+    "docsBaseUrl": "URL Asas",
+    "docsRateLimit": "Had kadar",
+    "docsRateLimitBody": "Setiap kunci, setiap minit (lalai 100). Melebihinya mengembalikan 429 sehingga tetingkap minit berikutnya.",
+    "docsKeyLifetime": "Tempoh sah kunci",
+    "docsKeyLifetimeLead": "Setiap kunci tamat tempoh 30 hari selepas ia dicipta.",
+    "docsKeyLifetimeRest": "Panggilan dengan kunci yang telah tamat tempoh mengembalikan 401 — cipta kunci gantian dalam tab Cipta Kunci Rahsia, di mana tarikh tamat tempoh setiap kunci disenaraikan.",
+    "docsAuditLog": "Log audit",
+    "docsAuditLogBody": "Setiap permintaan direkodkan: kaedah, laluan, status, IP dan masa — lihat tab Log Permintaan."
   },
   "auth": {
     "adminLogin": "Log masuk pentadbir",
