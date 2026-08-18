@@ -33,16 +33,21 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_ROOT = Path(MODEL_DIR)
 MODEL_SEED_DIR = Path(os.getenv("RACKET_RECOMMENDER_SEED_DIR", "/app/model_seed"))
+_BASELINE_DATASET_NAME = "dummy_racket_recommendation_data.csv"
 BASELINE_DATASET_PATH = Path(
     os.getenv(
         "RACKET_RECOMMENDER_BASELINE_DATASET",
-        str(BASE_DIR / "training_data" / "dummy_racket_recommendation_data.csv"),
+        str(BASE_DIR / "ml_models" / _BASELINE_DATASET_NAME),
     )
 )
 if not BASELINE_DATASET_PATH.exists():
-    BASELINE_DATASET_PATH = (
-        BASE_DIR.parent / "docs" / "prd" / "dummy_racket_recommendation_data.csv"
-    )
+    for candidate in (
+        MODEL_SEED_DIR / _BASELINE_DATASET_NAME,
+        BASE_DIR / "training_data" / _BASELINE_DATASET_NAME,
+    ):
+        if candidate.exists():
+            BASELINE_DATASET_PATH = candidate
+            break
 
 SNAPSHOT_COLUMNS = FEATURE_COLUMNS + TARGET_COLUMNS + ["source", "source_id"]
 

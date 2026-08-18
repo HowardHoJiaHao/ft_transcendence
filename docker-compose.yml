@@ -191,7 +191,7 @@ services:
       DB_NAME: ${DB_NAME}
       BACKEND_URL: http://backend:8080
       RACKET_RECOMMENDER_MODEL_DIR: /app/ml_models
-      RACKET_RECOMMENDER_BASELINE_DATASET: /app/training_data/dummy_racket_recommendation_data.csv
+      RACKET_RECOMMENDER_BASELINE_DATASET: /app/model_seed/dummy_racket_recommendation_data.csv
       RACKET_RECOMMENDER_SEED_DIR: /app/model_seed
     expose:
       - "8000"

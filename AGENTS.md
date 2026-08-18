@@ -54,7 +54,7 @@ Frontend API calls are **same-origin** through the WAF. `NEXT_PUBLIC_API_URL` de
 | `monitoring/` | Prometheus, Grafana, Loki, Promtail, Alertmanager, blackbox |
 | `backup/` | Scheduled `pg_dump` |
 | `storage/` | Host bind for listing files + avatars (`./storage` → `/app/storage`) |
-| `docs/AI/` | Recommender PRD, dummy CSV, Colab trainer |
+
 | `API_DOCUMENTATION.md` | Public key API + internal JWT API |
 | `scripts/` | Infisical injection, Stripe demo setup, WAF tests |
 | `Makefile` | How humans start the stack |

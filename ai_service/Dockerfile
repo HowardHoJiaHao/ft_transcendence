@@ -14,7 +14,6 @@ RUN pip install --no-cache-dir --default-timeout=120 --retries=10 -r requirement
 
 COPY ai_service/. .
 COPY ai_service/ml_models /app/model_seed
-COPY docs/AI/dummy_racket_recommendation_data.csv /app/training_data/dummy_racket_recommendation_data.csv
 
 EXPOSE 8000
 

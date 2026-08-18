@@ -10,6 +10,244 @@ The `otps` table is not in `db/init.sql` — it's created by GORM's
 
 ---
 
+## Entity-relationship diagram
+
+Declared foreign keys only. `users` is the hub: almost every marketplace,
+social, payment, and developer-API table points at it. Isolated tables
+(`otps`, `stripe_webhook_events`, `knowledge_chunks`, `faq_embeddings`) have
+no FKs.
+
+Cardinality: `||--o{` = one-to-many, `||--o|` = one-to-zero-or-one.
+Edge labels are the FK column and `ON DELETE` action. Mermaid only allows one
+`PK` / `FK` / `UK` tag per entity, so those markers are omitted from columns
+and the relationships carry the foreign keys. `users.account_role` in the
+graph is the `users.role` column (`user` / `moderator` / `admin`).
+
+```mermaid
+erDiagram
+    users {
+        serial id PK
+        varchar username
+        varchar email
+        varchar password_hash
+        varchar account_role
+        varchar account_status
+        varchar oauth_id
+        varchar oauth_provider
+        boolean requires_2fa
+    }
+
+    listings {
+        serial id PK
+        int seller_id
+        varchar title
+        numeric price
+        int stock_quantity
+        varchar status
+        int views_count
+    }
+
+    listing_files {
+        bigserial id PK
+        int listing_id
+        varchar storage_name
+        varchar file_kind
+        int display_order
+    }
+
+    listing_images {
+        serial id PK
+        int listing_id
+        varchar image_url
+        boolean is_primary
+    }
+
+    orders {
+        serial id PK
+        int buyer_id
+        int seller_id
+        int listing_id
+        bigint payment_id
+        int quantity
+        numeric total_price
+        varchar status
+        varchar payment_method
+    }
+
+    payments {
+        bigserial id PK
+        uuid checkout_request_id
+        int buyer_id
+        int seller_id
+        varchar status
+        bigint amount_minor
+        text stripe_checkout_session_id
+    }
+
+    listing_reviews {
+        bigserial id PK
+        int listing_id
+        int reviewer_id
+        int order_id
+        smallint rating
+    }
+
+    recommendation_training_feedback {
+        bigserial id PK
+        int order_id
+        int buyer_id
+        varchar age_group
+        varchar play_style
+        varchar weight_category
+    }
+
+    messages {
+        serial id PK
+        int sender_id
+        int receiver_id
+        text content
+        boolean is_read
+    }
+
+    friendships {
+        serial id PK
+        int user_id1
+        int user_id2
+        varchar status
+    }
+
+    notifications {
+        bigserial id PK
+        int user_id
+        int actor_id
+        varchar notification_type
+        int resource_id
+        timestamptz read_at
+    }
+
+    api_keys {
+        serial id PK
+        int user_id
+        varchar key_hash
+        boolean is_active
+        int rate_limit
+        timestamp expires_at
+    }
+
+    api_request_logs {
+        serial id PK
+        int api_key_id
+        int user_id
+        varchar method
+        varchar path
+        varchar outcome
+    }
+
+    ml_training_runs {
+        bigserial id PK
+        int requested_by
+        varchar status
+        boolean is_active
+        varchar model_version
+    }
+
+    analytics {
+        serial id PK
+        varchar event_type
+        int listing_id
+    }
+
+    otps {
+        varchar email PK
+        char code
+        timestamptz expiry_date
+        boolean used
+        varchar temp_token
+    }
+
+    stripe_webhook_events {
+        text stripe_event_id PK
+        text event_type
+        text stripe_object_id
+        timestamp processed_at
+    }
+
+    knowledge_chunks {
+        bigserial id PK
+        varchar chunk_id
+        varchar ingestion_version
+        boolean is_active
+        vector embedding
+        tsvector search_vector
+    }
+
+    faq_embeddings {
+        serial id PK
+        varchar source_file
+        text chunk_text
+        vector embedding
+    }
+
+    users ||--o{ listings : "seller_id CASCADE"
+    users ||--o{ orders : "buyer_id CASCADE"
+    users ||--o{ orders : "seller_id CASCADE"
+    users ||--o{ payments : "buyer_id RESTRICT"
+    users ||--o{ payments : "seller_id RESTRICT"
+    users ||--o{ listing_reviews : "reviewer_id CASCADE"
+    users ||--o{ messages : "sender_id CASCADE"
+    users ||--o{ messages : "receiver_id CASCADE"
+    users ||--o{ friendships : "user_id1 CASCADE"
+    users ||--o{ friendships : "user_id2 CASCADE"
+    users ||--o{ notifications : "user_id CASCADE"
+    users ||--o| notifications : "actor_id SET NULL"
+    users ||--o{ api_keys : "user_id CASCADE"
+    users ||--o{ api_request_logs : "user_id SET NULL"
+    users ||--o{ recommendation_training_feedback : "buyer_id CASCADE"
+    users ||--o{ ml_training_runs : "requested_by SET NULL"
+
+    listings ||--o{ listing_files : "listing_id CASCADE"
+    listings ||--o{ listing_images : "listing_id CASCADE"
+    listings ||--o{ orders : "listing_id RESTRICT"
+    listings ||--o{ listing_reviews : "listing_id CASCADE"
+    listings ||--o{ analytics : "listing_id default"
+
+    payments ||--o{ orders : "payment_id RESTRICT"
+
+    orders ||--o| listing_reviews : "order_id RESTRICT"
+    orders ||--o| recommendation_training_feedback : "order_id CASCADE"
+
+    api_keys ||--o{ api_request_logs : "api_key_id SET NULL"
+```
+
+### How to read the edges
+
+| Relationship | Meaning in this product |
+|---|---|
+| `users` → `listings` | A seller owns many listings; deleting the seller cascades the ads |
+| `listings` → `orders` | One listing, many order rows over time (cancel then sell again). **RESTRICT** so deleting an ad cannot erase purchase history |
+| `users` → `orders` (buyer **and** seller) | Both parties are denormalized on the order; meetup carts may mix sellers |
+| `payments` → `orders` | One Stripe payment can fund several same-seller order lines; meetup orders have `payment_id` NULL |
+| `orders` → `listing_reviews` | At most one review per buyer per listing, only after a completed order |
+| `orders` → `recommendation_training_feedback` | At most one survey per order |
+| `users` ↔ `messages` / `friendships` | Two FKs to `users` on the same row (sender/receiver, user_id1/user_id2) |
+| `notifications.actor_id` | Optional; **SET NULL** so the bell item survives if the actor is deleted |
+| `api_keys` → `api_request_logs` | **SET NULL** so revoking a key does not wipe the audit trail |
+| `ml_training_runs.requested_by` | **SET NULL** so training history survives the admin account |
+
+### Present, but not drawn as an edge
+
+These columns exist but are **not** foreign keys:
+
+- `notifications.resource_id` — listing, order, or message ID depending on `notification_type`
+- `stripe_webhook_events.stripe_object_id` — Stripe session/intent string, not `payments.id`
+- `otps.email` — primary key is the email string, not `users.id`
+- `knowledge_chunks` / `faq_embeddings` — standalone RAG stores; no user or listing FK
+
+Unused tables still have FKs and appear above: `listing_images`, `analytics`,
+`faq_embeddings`. They are not written by current application code.
+
+---
+
 ## users
 
 Account records for every person on the platform.
