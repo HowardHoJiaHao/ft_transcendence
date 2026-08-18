@@ -347,7 +347,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		<main className="flex flex-col min-h-screen px-5 w-full">
 		  <Header/>
 		    <div className="bg-white p-5 rounded-xl shadow-[var(--shadow)] flex w-[90%] max-w-[1138px] h-auto min-h-[450px] my-6 mx-auto gap-[30px] max-[600px]:flex-col max-[600px]:m-5">
-		  	  <div className="flex-[0_0_50%] overflow-hidden rounded-lg aspect-[4/5] max-h-[520px]">
+		  	  <div className="flex-1 min-w-0 overflow-hidden rounded-lg aspect-[4/5] max-h-[520px]">
 					<div className="relative w-full h-full">
 						<ListingImage
 							className="w-full h-full object-cover block"
@@ -381,16 +381,18 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 					</div>
 		  	  </div>
 
-		  	  <div className="flex-[0_0_50%]">
+		  	  <div className="flex-1 min-w-0">
 			    {/* Wraps rather than truncating: on the listing's own page the
 			        full title is what the buyer came to read. overflow-wrap
-			        catches a long unbroken token, which is the only way 40px
-			        text can still escape this column. The 3-line clamp is a
-			        backstop for rows that predate the 70-character limit; a
-			        title within that limit never reaches it. */}
+			        catches a long unbroken token, which is the only way 34px
+			        text can still escape this column — it must be the only
+			        overflow-wrap here, since a competing break-word loses the
+			        min-content shrink that min-w-0 relies on. The 3-line clamp
+			        is a backstop for rows that predate the 70-character limit;
+			        a title within that limit never reaches it. */}
 			    <h1
 			      title={product.title}
-			      className="text-[clamp(26px,3vw,40px)] font-bold text-[var(--dark)] mt-0 mb-2.5 leading-[1.15] break-words [overflow-wrap:anywhere] [text-wrap:balance] [display:-webkit-box] [-webkit-line-clamp:3] [-webkit-box-orient:vertical] overflow-hidden"
+			      className="text-[clamp(24px,2.6vw,34px)] font-bold text-[var(--dark)] mt-0 mb-2.5 leading-[1.15] min-w-0 [overflow-wrap:anywhere] [display:-webkit-box] [-webkit-line-clamp:3] [-webkit-box-orient:vertical] overflow-hidden"
 			    >
 			      {product.title}
 			    </h1>
