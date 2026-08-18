@@ -46,6 +46,7 @@ func (h *Handler) getProducts(c echo.Context) error {
 		return c.JSON(500, map[string]string{"error": "Database connection error"})
 	}
 
+	category := c.QueryParams()["category"]
 	weightCategory := c.QueryParams()["weightCategory"]
 	flexibilityCategory := c.QueryParams()["flexibilityCategory"]
 	balanceCategory := c.QueryParams()["balanceCategory"]
@@ -83,6 +84,18 @@ func (h *Handler) getProducts(c echo.Context) error {
 	whereClause := " WHERE 1=1"
 	var args []interface{}
 
+	if len(category) > 0 {
+		startPos := len(args) + 1
+		placeholders := ""
+		for i := range category {
+			if i > 0 {
+				placeholders += ", "
+			}
+			placeholders += fmt.Sprintf("$%d", startPos+i)
+			args = append(args, category[i])
+		}
+		whereClause += " AND l.category IN (" + placeholders + ")"
+	}
 	if len(weightCategory) > 0 {
 		startPos := len(args) + 1
 		placeholders := ""

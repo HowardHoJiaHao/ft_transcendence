@@ -7,6 +7,7 @@ import Header from '@/components/Header/Header';
 import ListingImage from '@/components/ListingImage/ListingImage';
 import Link from 'next/link';
 import { MALAYSIA_STATES, districtsOf, formatLocation } from '@/lib/malaysia';
+import { CATEGORIES } from '@/lib/productOptions';
 
 interface Product
 {
@@ -15,6 +16,7 @@ interface Product
   price: number;
   originalPrice?: number;
   image: string;
+  category: string;
   weightCategory: string;
   flexibilityCategory: string;
   balanceCategory: string;
@@ -59,6 +61,7 @@ export default function Home()
   const { user, logout } = useAuth();
   const { t } = useI18n();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
   const [selectedFlexibilities, setSelectedFlexibilities] = useState<string[]>([]);
   const [selectedBalances, setSelectedBalances] = useState<string[]>([]);
@@ -100,7 +103,7 @@ export default function Home()
 
   useEffect(() => {
 	setCurrentPage(1)
-  }, [selectedWeights, selectedFlexibilities, selectedBalances, selectedState, selectedDistrict, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy]);
+  }, [selectedCategories, selectedWeights, selectedFlexibilities, selectedBalances, selectedState, selectedDistrict, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy]);
 
 
   //			FETCH PRODUCTS FROM API
@@ -110,6 +113,12 @@ export default function Home()
       try {
         setLoading(true);
         const query = new URLSearchParams();
+        if (selectedCategories.length > 0)
+		{
+			selectedCategories.forEach((cat) => {
+			query.append('category', cat);
+			});
+		}
         if (selectedWeights.length > 0)
 		{
 			selectedWeights.forEach((w) => {
@@ -158,6 +167,7 @@ export default function Home()
           price: parseFloat(p.price),
           originalPrice: p.originalPrice ? parseFloat(p.originalPrice) : undefined,
           image: p.image,
+          category: p.category,
           weightCategory: p.weightCategory,
           flexibilityCategory: p.flexibilityCategory,
 		  balanceCategory: p.balanceCategory,
@@ -182,7 +192,7 @@ export default function Home()
     };
 
     fetchProducts();
-  }, [selectedWeights, selectedFlexibilities, selectedBalances, selectedState, selectedDistrict, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy, currentPage]);
+  }, [selectedCategories, selectedWeights, selectedFlexibilities, selectedBalances, selectedState, selectedDistrict, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy, currentPage]);
 
   return (
     <main className="flex flex-col min-h-screen px-5">
@@ -221,7 +231,27 @@ export default function Home()
             </div>
 
 			<div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
-			  <h3 className="text-sm font-semibold mb-3">Weight</h3>
+			  <h3 className="text-sm font-semibold mb-3">Category</h3>
+			    <div className="grid grid-cols-2 gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
+				  {CATEGORIES.map((category) => (
+					<label key={category}>
+					  <input type="checkbox" value={category} checked={selectedCategories.includes(category)}
+						onChange={(e) => {
+						  const value = e.target.value;
+
+						  setSelectedCategories((prev) =>
+							prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+						  );
+						}}
+						/>
+						{category}
+					</label>
+				  ))}
+				</div>
+			</div>
+
+			<div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
+			  <h3 className="text-sm font-semibold mb-3">Racket Weight</h3>
 			    <div className="grid grid-cols-2 gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
 				  {WEIGHT_CATEGORIES.filter(c => c !== 'All').map((category) => (
 					<label key={category}>
@@ -241,7 +271,7 @@ export default function Home()
 			</div>
 
 			<div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
-				<h3 className="text-sm font-semibold mb-3">Flexibility</h3>
+				<h3 className="text-sm font-semibold mb-3">Racket Flexibility</h3>
 				<div className="flex flex-col gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
 					{FLEXIBILITY_CATEGORIES.filter(c => c !== 'All').map((category) => (
 						<label key={category}>
@@ -261,7 +291,7 @@ export default function Home()
 			</div>
 
 			<div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
-			  <h3 className="text-sm font-semibold mb-3">Balance</h3>
+			  <h3 className="text-sm font-semibold mb-3">Racket Balance</h3>
 			    <div className="flex flex-col gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
 				  {BALANCE_CATEGORIES.filter(c => c !== 'All').map((category) => (
 					<label key={category}>
@@ -318,21 +348,6 @@ export default function Home()
                 </label>
                 <label>
                   <input type="checkbox" defaultChecked /> Used
-                </label>
-              </div>
-            </div>
-
-            <div className="mb-6 pb-4 border-b border-[var(--border)] last:border-b-0">
-              <h3 className="text-sm font-semibold mb-3">Rating</h3>
-              <div className="flex flex-col gap-2 [&_label]:flex [&_label]:items-center [&_label]:cursor-pointer [&_label]:text-[13px] [&_label]:gap-2 [&_input[type=checkbox]]:w-4 [&_input[type=checkbox]]:h-4 [&_input[type=checkbox]]:cursor-pointer">
-                <label>
-                  <input type="checkbox" /> 4.5+ ⭐
-                </label>
-                <label>
-                  <input type="checkbox" /> 4.0+ ⭐
-                </label>
-                <label>
-                  <input type="checkbox" /> 3.5+ ⭐
                 </label>
               </div>
             </div>
@@ -445,6 +460,7 @@ export default function Home()
                   className="btn btn-secondary"
                   onClick={() => {
                     setSearchQuery('');
+                    setSelectedCategories([]);
                     setSelectedWeights([]);
                     setSelectedFlexibilities([]);
 					setSelectedBalances([]);
