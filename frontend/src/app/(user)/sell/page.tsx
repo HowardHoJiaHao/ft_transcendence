@@ -594,8 +594,42 @@ function SellPageInner() {
       setSubmitting(false);
     }
   };
+  // Step 2 is one scrolling form, not four pages, so its four cards are tracked
+  // as a live checklist against the same rules handleSubmit enforces.
+  const trimmedTitle = title.trim();
+  const livePrice = Number.parseFloat(price);
+  const liveStock = Number.parseInt(stockQuantity, 10);
+  const substeps = [
+    {
+      key: "photos",
+      label: t("sell.stepPhotos"),
+      done: existingImages.length + photos.length + (showLegacyImage ? 1 : 0) > 0,
+    },
+    {
+      key: "pricing",
+      label: t("sell.stepPricing"),
+      done:
+        trimmedTitle.length > 0 &&
+        trimmedTitle.length <= LISTING_LIMITS.title &&
+        description.length <= LISTING_LIMITS.description &&
+        Number.isFinite(livePrice) &&
+        livePrice > 0 &&
+        livePrice <= LISTING_LIMITS.price &&
+        Number.isInteger(liveStock) &&
+        liveStock >= 1 &&
+        liveStock <= LISTING_LIMITS.stock &&
+        dealingMethods.length > 0 &&
+        addressComplete,
+    },
+    { key: "contact", label: t("sell.stepContact"), done: Boolean(sellerPhone) },
+    { key: "acknowledgment", label: t("sell.stepAcknowledgment"), done: acknowledged },
+  ];
+  const substepsDone = substeps.filter((sub) => sub.done).length;
+  const allSubstepsDone = substepsDone === substeps.length;
+
   //progress bar
-  const progressPercent = step === 1 ? 33 : step === 2 ? 66 : 100;
+  const progressPercent =
+    step === 1 ? 33 : step === 3 ? 100 : 33 + Math.round((substepsDone / substeps.length) * 60);
 
   if (editLoading) {
     return (
@@ -687,17 +721,31 @@ function SellPageInner() {
                 <span>{t("sell.stepBasic")}</span>
               </li>
               <li
-                className={`flex items-center gap-2.5 text-sm ${step > 2 ? "text-[#22c55e] font-semibold [&>span:first-child]:bg-[#22c55e] [&>span:first-child]:text-white" : step === 2 ? "text-[#222] font-semibold [&>span:first-child]:bg-[#222] [&>span:first-child]:text-white" : "text-[#aaa] font-medium [&>span:first-child]:bg-[#e0e0e0] [&>span:first-child]:text-[#888]"}`}
+                className={`flex items-center gap-2.5 text-sm ${step > 2 || (step === 2 && allSubstepsDone) ? "text-[#22c55e] font-semibold [&>span:first-child]:bg-[#22c55e] [&>span:first-child]:text-white" : step === 2 ? "text-[#222] font-semibold [&>span:first-child]:bg-[#222] [&>span:first-child]:text-white" : "text-[#aaa] font-medium [&>span:first-child]:bg-[#e0e0e0] [&>span:first-child]:text-[#888]"}`}
               >
-                <span className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0 transition-[background-color,color] duration-300">2</span>
+                <span className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0 transition-[background-color,color] duration-300">
+                  {step > 2 || (step === 2 && allSubstepsDone) ? "✓" : "2"}
+                </span>
                 <span>{t("sell.stepDetails")}</span>
+                {step === 2 && (
+                  <span className="ml-auto text-[12px] font-semibold text-[#898781] tabular-nums">
+                    {substepsDone}/{substeps.length}
+                  </span>
+                )}
               </li>
               {step === 2 && (
                 <ul className="list-none mt-1 mx-0 mb-0 pt-0 pr-0 pb-0 pl-[38px] flex flex-col gap-2">
-                  <li className="text-[13px] text-[#555]">{t("sell.stepPhotos")}</li>
-                  <li className="text-[13px] text-[#555]">{t("sell.stepPricing")}</li>
-                  <li className="text-[13px] text-[#555]">{t("sell.stepContact")}</li>
-                  <li className="text-[13px] text-[#555]">{t("sell.stepAcknowledgment")}</li>
+                  {substeps.map((sub) => (
+                    <li
+                      key={sub.key}
+                      className={`flex items-center gap-2 text-[13px] transition-colors duration-200 ${sub.done ? "text-[#22c55e] font-semibold" : "text-[#555]"}`}
+                    >
+                      <span aria-hidden="true" className="w-3.5 shrink-0 text-center">
+                        {sub.done ? "✓" : "○"}
+                      </span>
+                      <span>{sub.label}</span>
+                    </li>
+                  ))}
                 </ul>
               )}
               <li
