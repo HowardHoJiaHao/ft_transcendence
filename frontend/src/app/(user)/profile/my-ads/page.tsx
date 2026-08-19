@@ -1738,9 +1738,9 @@ function MyAdsPageInner() {
                           order state machine matches on status = 'pending'.
                           Linking here just routed the seller to a form that
                           could not be saved. Use View Details for this order. */}
-                      <p className="block text-[15px] font-medium text-[#333] mt-0 mx-0 mb-1 whitespace-nowrap overflow-hidden text-ellipsis" title={order.listingTitle}>
+                      <Link href={`/products/${order.listingId}`} className="block text-[15px] font-medium text-[#333] no-underline mb-1 whitespace-nowrap overflow-hidden text-ellipsis hover:text-[#2563eb] hover:underline" title={order.listingTitle}>
                         {order.listingTitle}
-                      </p>
+                      </Link>
                       <p className="text-[13px] text-[#888] mt-0 mx-0 mb-[3px]">
                         Buyer: {order.buyerUsername || order.buyerEmail || 'Buyer'}
                       </p>
