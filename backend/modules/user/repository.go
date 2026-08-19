@@ -61,9 +61,9 @@ func (r *Repository) GetUserByEmailWithPassword(email string) (*User, error) {
 	// var dob sql.NullTime
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, password_hash, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE email = $1",
+		"SELECT id, username, email, password_hash, first_name, last_name, phone_no, address, postcode, state, district, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE email = $1",
 		email,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.FirstName, &user.LastName, &user.PhoneNo, &user.Address, &user.Postcode, &user.State, &user.District, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
 
 	if err != nil {
 		fmt.Printf("\nFailed to fetch user and password using email\n")
@@ -135,9 +135,9 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 	var avatarMime sql.NullString
 	var avatarData []byte
 	err := r.DB.QueryRow(
-		"SELECT id, username, email, first_name, last_name, phone_no, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE email = $1",
+		"SELECT id, username, email, first_name, last_name, phone_no, address, postcode, state, district, date_of_birth, gender, avatar_url, avatar_data, avatar_mime_type, bio, requires_2fa, role, account_status, oauth_id, oauth_provider, created_at FROM users WHERE email = $1",
 		email,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.FirstName, &user.LastName, &user.PhoneNo, &user.Address, &user.Postcode, &user.State, &user.District, &user.DateOfBirth, &user.Gender, &avatarURL, &avatarData, &avatarMime, &bio, &user.Requires2FA, &user.Role, &user.AccountStatus, &oauthID, &oauthProvider, &user.CreatedAt)
 
 	if err != nil {
 		return nil, err
