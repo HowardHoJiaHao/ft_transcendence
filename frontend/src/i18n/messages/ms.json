@@ -79,7 +79,9 @@
   },
   "product": {
     "sold": "Terjual",
-    "quantity": "Kuantiti: {count}"
+    "quantity": "Kuantiti: {count}",
+    "editLockedSold": "Iklan ini telah terjual dan tidak boleh diedit lagi. Cipta iklan baharu untuk menjual satu lagi.",
+    "editLockedPending": "Iklan ini mempunyai pesanan yang menunggu penghantaran. Selesaikan atau batalkan pesanan sebelum mengedit."
   },
   "productReviews": {
     "title": "Ulasan produk",

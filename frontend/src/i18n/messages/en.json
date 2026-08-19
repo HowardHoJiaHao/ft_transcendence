@@ -79,7 +79,9 @@
   },
   "product": {
     "sold": "Sold",
-    "quantity": "Quantity: {count}"
+    "quantity": "Quantity: {count}",
+    "editLockedSold": "This listing has sold and can no longer be edited. Create a new listing to sell another one.",
+    "editLockedPending": "This listing has an order awaiting delivery. Complete or cancel the order before editing."
   },
   "productReviews": {
     "title": "Product reviews",

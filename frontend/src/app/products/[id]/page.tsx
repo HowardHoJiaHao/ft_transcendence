@@ -274,6 +274,11 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 	const remainingStock = Math.max(0, availableStock - cartQuantity);
 	const isAvailable = product.status === 'active' && availableStock > 0;
 	const isOwnListing = currentUser?.id === product.sellerId;
+	// mirrors the pending/sold guards in loadListingForUpdate, which refuse the save anyway
+	const editLockedKey =
+		product.status === 'sold' ? 'product.editLockedSold'
+		: product.status === 'pending' ? 'product.editLockedPending'
+		: null;
 	// Shown beside the photo. Racket-only fields are dropped for categories that
 	// do not have them, so shoes and bags are not padded with blank rows.
 	const specs = [
@@ -428,12 +433,25 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 				{/* Own listing: buying is impossible, so the slot the cart button
 				    occupies is given to the action that is actually useful. */}
 				{isOwnListing ? (
-					<Link
-						href={`/sell?editId=${product.id}`}
-						className="inline-flex items-center bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline"
-					>
-						✏️ Edit Product Details
-					</Link>
+					editLockedKey ? (
+						<div>
+							<button
+								type="button"
+								disabled
+								className="inline-flex items-center bg-[#9ca3af] text-white border-none px-[25px] py-3 rounded-md cursor-not-allowed text-base"
+							>
+								✏️ Edit Product Details
+							</button>
+							<p className="mt-2 mb-0 text-sm text-[var(--secondary)] max-w-[420px]">{t(editLockedKey)}</p>
+						</div>
+					) : (
+						<Link
+							href={`/sell?editId=${product.id}`}
+							className="inline-flex items-center bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline"
+						>
+							✏️ Edit Product Details
+						</Link>
+					)
 				) : (
 					<button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed" onClick={handleAddToCart} disabled={!canAddToCart}>
 					  {!isAvailable ? 'Unavailable' : alreadyInCart ? 'Already In Cart' : availableStock > 1 ? `🛒 Buy All ${availableStock}` : '🛒 Add to Cart'}
