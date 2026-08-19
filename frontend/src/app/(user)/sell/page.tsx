@@ -290,6 +290,7 @@ function SellPageInner() {
     setTitle("");
     setDescription("");
     setPrice("");
+    setOriginalPrice("");
     setStockQuantity("1");
     setDealingMethods([]);
     setAcknowledged(false);
