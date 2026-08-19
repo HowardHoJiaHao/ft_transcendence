@@ -582,6 +582,8 @@ function SellPageInner() {
         const created = await res.json();
         await uploadPendingFiles(created.id, token);
         showToast(t('toast.listingCreated'), 'success');
+        // home and My Shop are rendered from the server, so drop their cached copies
+        router.refresh();
         setPostedListingId(Number(created.id) || null);
         setStep(3);
       }
