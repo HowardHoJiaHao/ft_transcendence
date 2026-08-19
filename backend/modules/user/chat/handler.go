@@ -37,22 +37,21 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 }
 
 func (h *Handler) WebSocketHandler(c echo.Context) error {
-	userIdStr := c.QueryParam("token")
-	if userIdStr == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "token required as query parameter"})
-	}
+	// Authenticate after the upgrade, in the first WebSocket frame, so the
+	// JWT is never on the HTTP request line (access logs, proxies).
+	return h.Hub.ServeWS(c, h.memberUserIDFromToken)
+}
 
-	claims, err := auth.ValidateToken(userIdStr)
-	if err != nil || claims.Role != "member" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
+func (h *Handler) memberUserIDFromToken(token string) (int, error) {
+	claims, err := auth.ValidateToken(token)
+	if err != nil || claims.Role != "member" || claims.UserId <= 0 {
+		return 0, errInvalidWSToken
 	}
 	u, err := h.Repo.GetUserByID(claims.UserId)
 	if err != nil || u.AccountStatus != "active" {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "account suspended"})
+		return 0, errInactiveWSAccount
 	}
-
-	userId := claims.UserId
-	return h.Hub.ServeWS(c, userId)
+	return claims.UserId, nil
 }
 
 func (h *Handler) SendMessage(c echo.Context) error {

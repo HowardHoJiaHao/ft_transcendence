@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -13,6 +14,19 @@ import (
 	"github.com/labstack/echo/v4"
 	"transcendence/modules/user/notifications"
 )
+
+var (
+	errInvalidWSToken    = errors.New("invalid or expired token")
+	errInactiveWSAccount = errors.New("account suspended")
+	errMissingWSAuth     = errors.New("auth message required")
+)
+
+const wsAuthTimeout = 5 * time.Second
+
+type wsAuthMessage struct {
+	Type  string `json:"type"`
+	Token string `json:"token"`
+}
 
 type OutgoingMessage struct {
 	ToUserId int
@@ -163,12 +177,24 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func (h *Hub) ServeWS(c echo.Context, userId int) error {
+func (h *Hub) ServeWS(c echo.Context, identify func(token string) (int, error)) error {
 	conn, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
 		log.Println("Websocket upgrade error:", err)
 		return err
 	}
+
+	userId, authErr := authenticateWSConn(conn, identify)
+	if authErr != nil {
+		_ = conn.WriteJSON(map[string]string{"type": "auth_error", "error": authErr.Error()})
+		_ = conn.Close()
+		return nil
+	}
+	if err := conn.WriteJSON(map[string]string{"type": "auth_ok"}); err != nil {
+		_ = conn.Close()
+		return nil
+	}
+
 	client := &Client{
 		Hub:    h,
 		Conn:   conn,
@@ -180,6 +206,33 @@ func (h *Hub) ServeWS(c echo.Context, userId int) error {
 	go client.writePump()
 
 	return nil
+}
+
+func authenticateWSConn(conn *websocket.Conn, identify func(token string) (int, error)) (int, error) {
+	if err := conn.SetReadDeadline(time.Now().Add(wsAuthTimeout)); err != nil {
+		return 0, errMissingWSAuth
+	}
+	_, payload, err := conn.ReadMessage()
+	if err != nil {
+		return 0, errMissingWSAuth
+	}
+	token, err := parseWSAuthMessage(payload)
+	if err != nil {
+		return 0, err
+	}
+	return identify(token)
+}
+
+func parseWSAuthMessage(payload []byte) (string, error) {
+	var auth wsAuthMessage
+	if err := json.Unmarshal(payload, &auth); err != nil || auth.Type != "auth" {
+		return "", errMissingWSAuth
+	}
+	token := strings.TrimSpace(auth.Token)
+	if token == "" {
+		return "", errMissingWSAuth
+	}
+	return token, nil
 }
 
 func (c *Client) readPump(h *Hub) {

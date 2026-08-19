@@ -28,13 +28,13 @@ export function useWebSocket(token: string | null)
 				return;
 
 			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-			const endpoint = `${protocol}//${window.location.host}/api/v1/ws?token=${encodeURIComponent(token)}`;
+			const endpoint = `${protocol}//${window.location.host}/api/v1/ws`;
 			const socket = new WebSocket(endpoint);
 			ws = socket;
 
 			socket.onopen = () => {
 				retryDelay = 1000;
-				setIsConnected(true);
+				socket.send(JSON.stringify({ type: 'auth', token }));
 			};
 			socket.onclose = () => {
 				if (ws === socket) ws = null;
@@ -49,8 +49,16 @@ export function useWebSocket(token: string | null)
 			};
 			socket.onmessage = (event) => {
 				try {
-					const data = JSON.parse(event.data) as WebSocketMessage;
-					messageHandlers.forEach((handler) => handler(data));
+					const data = JSON.parse(event.data) as WebSocketMessage | { type: string };
+					if (data.type === 'auth_ok') {
+						setIsConnected(true);
+						return;
+					}
+					if (data.type === 'auth_error') {
+						socket.close();
+						return;
+					}
+					messageHandlers.forEach((handler) => handler(data as WebSocketMessage));
 				} catch (err) {
 					console.error('Failed to parse WebSocket message:', err);
 				}

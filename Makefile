@@ -96,14 +96,14 @@ down: check-docker
 
 logs: check-docker
 	@$(COMPOSE) --profile stripe logs -f | \
-		awk '{ gsub(/whsec_[[:alnum:]]+/, "whsec_[REDACTED]"); print; fflush(); }'
+		awk '{ gsub(/whsec_[[:alnum:]]+/, "whsec_[REDACTED]"); gsub(/token=[^[:space:]&]+/, "token=[REDACTED]"); print; fflush(); }'
 
 logs-waf: check-docker
 	$(COMPOSE) logs -f waf
 
 logs-stripe: check-docker
 	@$(COMPOSE) --profile stripe logs -f stripe-cli | \
-		awk '{ gsub(/whsec_[[:alnum:]]+/, "whsec_[REDACTED]"); print; fflush(); }'
+		awk '{ gsub(/whsec_[[:alnum:]]+/, "whsec_[REDACTED]"); gsub(/token=[^[:space:]&]+/, "token=[REDACTED]"); print; fflush(); }'
 
 test-stripe-setup:
 	@sh scripts/tests/setup-stripe-demo-test.sh
