@@ -822,7 +822,6 @@ function MyAdsPageInner() {
           category: current.category,
           condition: current.condition,
           dealingMethod: current.dealingMethod,
-          phoneNumber: current.phoneNumber,
           title: current.title,
           description: current.description,
           weightCategory: current.weightCategory,
