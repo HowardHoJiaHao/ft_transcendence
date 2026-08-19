@@ -104,10 +104,13 @@ func main() {
 	aiHandler := ai.NewHandler(rawDB)
 
 	// Register api routes for each module, component
-	listingHandler.RegisterRoutes(v1)
-	listingFilesHandler.RegisterRoutes(v1)
-	listingReviewsHandler.RegisterRoutes(v1)
-	listingImportHandler.RegisterRoutes(v1)
+
+	//listing route
+	listingHandler.RegisterRoutes(v1) //product listing
+	listingFilesHandler.RegisterRoutes(v1) //photo and PDFs
+	listingReviewsHandler.RegisterRoutes(v1) //rating, comments
+	listingImportHandler.RegisterRoutes(v1) //csv bulk create
+
 	orderHandler.RegisterRoutes(v1)
 	dashboardHandler.RegisterRoutes(v1)
 	surveyHandler.RegisterRoutes(v1)
@@ -131,20 +134,13 @@ func main() {
 	public.Use(myMiddleware.APIKeyAuth(rawDB))
 	listingHandler.RegisterPublicAPI(public)
 
-	// Register api routes
+	// Register member login authetication
 	authHandler.RegisterRoutes(v1)
-
-	
-	// concatenate for example "/api/v1" + "/product" = "/api/v1/products"
-	protected := e.Group("/api/v1")
-	protected.Use(myMiddleware.JWTAuth(rawDB))
-	protected.POST("/auth/change-password/request", authHandler.RequestPasswordChange)
-	protected.POST("/auth/change-password/confirm", authHandler.ConfirmPasswordChange)
 	profileHandler.RegisterRoutes(v1)
 	friendsHandler.RegisterRoutes(v1)
 	chatHandler.RegisterRoutes(v1)
 	notificationHandler.RegisterRoutes(v1)
-	adminHandler.RegisterRoutes(v1)
+	adminHandler.RegisterRoutes(v1) // admin route
 
 	//start server
 	port := os.Getenv("SERVER_PORT")

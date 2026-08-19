@@ -93,12 +93,12 @@ func (h *Handler) RegisterRoutes(v1 *echo.Group) {
 	admin.PATCH("/users/:id/role", func(c echo.Context) error { return h.updateAdminUserRole(c) })
 	admin.PATCH("/users/:id/status", func(c echo.Context) error { return h.updateAdminUserStatus(c) })
 	admin.DELETE("/users/:id", func(c echo.Context) error { return h.deleteAdminUser(c) })
-	admin.GET("/api-attempts", func(c echo.Context) error { return apikey.GetAPIAttackAttempts(c, h.db) })
+	admin.GET("/api-attempts", func(c echo.Context) error { return apikey.GetAPIAttackAttempts(c, h.db) }) //get security report of failed public api calls
 	admin.GET("/ml/status", func(c echo.Context) error { return ml.GetStatus(c, h.db) })
-	admin.GET("/ml/feedback", func(c echo.Context) error { return ml.ListFeedback(c, h.db) })
-	admin.GET("/ml/runs", func(c echo.Context) error { return ml.ListRuns(c, h.db) })
-	admin.POST("/ml/retrain", func(c echo.Context) error { return ml.CreateRetrainingRun(c, h.db) })
-	admin.GET("/ml/runs/:id", func(c echo.Context) error { return ml.GetRun(c, h.db) })
+	admin.GET("/ml/feedback", func(c echo.Context) error { return ml.ListFeedback(c, h.db) }) // last 25 survey rows
+	admin.GET("/ml/runs", func(c echo.Context) error { return ml.ListRuns(c, h.db) }) // last 20 training jobs
+	admin.POST("/ml/retrain", func(c echo.Context) error { return ml.CreateRetrainingRun(c, h.db) }) // retrain
+	admin.GET("/ml/runs/:id", func(c echo.Context) error { return ml.GetRun(c, h.db) }) //one job by id
 }
 
 func adminLogin(c echo.Context) error {

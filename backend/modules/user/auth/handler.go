@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"transcendence/modules/user"
+	"transcendence/myMiddleware"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -45,6 +46,11 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.GET("/auth/google", h.GoogleLogin)
 	e.GET("/auth/google/callback", h.GoogleCallback)
 	e.POST("/auth/logout", h.Logout)
+
+	protected := e.Group("")
+	protected.Use(myMiddleware.JWTAuth(h.repo.DB))
+	protected.POST("/auth/change-password/request", h.RequestPasswordChange)
+	protected.POST("/auth/change-password/confirm", h.ConfirmPasswordChange)
 }
 
 func (h *Handler) Register(c echo.Context) error {

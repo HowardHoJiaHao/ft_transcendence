@@ -30,7 +30,7 @@ func (h *Handler) RegisterRoutes(v1 *echo.Group) {
 
 	protected := v1.Group("")
 	protected.Use(myMiddleware.JWTAuth(h.rawDB))
-	protected.GET("/products/:id/review-eligibility", h.getListingReviewEligibility)
+	protected.GET("/products/:id/review-eligibility", h.getListingReviewEligibility) //check who is allowed to review
 	protected.POST("/products/:id/reviews", h.createListingReview)
 }
 

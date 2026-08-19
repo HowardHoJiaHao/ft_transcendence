@@ -24,16 +24,17 @@ func NewHandler(gormDB *gorm.DB, rawDB *sql.DB) *Handler {
 	return &Handler{gormDB: gormDB, rawDB: rawDB}
 }
 
+// protected means this route is logged-in only
+// this is to create new products, will be concatenate with the /api/v1/ as suffix
+// when a post request to /api/v1/products reach echo
+// then it will call this createProduct handler
 func (h *Handler) RegisterRoutes(v1 *echo.Group) {
 	v1.GET("/products", h.getProducts)
 	v1.GET("/products/:id", h.getProductByID)
 
 	protected := v1.Group("")
 	protected.Use(myMiddleware.JWTAuth(h.rawDB))
-	// protected means this route is logged-in only
-	// this is to create new products, will be concatenate with the /api/v1/ as suffix
-	// when a post request to /api/v1/products reach echo
-	// then it will call this createProduct handler
+
 	protected.POST("/products", h.createProduct)
 	protected.PUT("/products/:id", h.updateProduct)
 	protected.DELETE("/products/:id", h.deleteProduct)

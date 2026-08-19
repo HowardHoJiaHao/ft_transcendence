@@ -26,12 +26,12 @@ func NewHandler(gormDB *gorm.DB, rawDB *sql.DB, notifications *notifications.Ser
 func (h *Handler) RegisterRoutes(v1 *echo.Group) {
 	protected := v1.Group("")
 	protected.Use(myMiddleware.JWTAuth(h.rawDB))
-	protected.POST("/orders", h.createOrdersWithServices)
-	protected.GET("/orders", h.getOrders) // howai AI maybe. merge residue 21 june
-	protected.PUT("/orders/:id/complete", h.completeOrderWithNotifications)
-	protected.PUT("/orders/:id/cancel", h.cancelOrder)
-	protected.GET("/orders/:id", h.getOrderByID) //howai AI maybe. merge residue 21 june
-	protected.GET("/seller/orders", h.getSellerOrders)
+	protected.POST("/orders", h.createOrdersWithServices) //checkout (meetup or stripe)
+	protected.GET("/orders", h.getOrders) //purchases
+	protected.PUT("/orders/:id/complete", h.completeOrderWithNotifications) //myshop, seller marks meetup/sales done
+	protected.PUT("/orders/:id/cancel", h.cancelOrder) // my shop - seller/buyer candel pending
+	protected.GET("/orders/:id", h.getOrderByID)
+	protected.GET("/seller/orders", h.getSellerOrders) // my shop, profile/my-ads
 }
 
 type Order struct {
@@ -80,6 +80,7 @@ type CreateOrdersResponse struct {
 	CheckoutURL string  `json:"checkoutUrl,omitempty"`
 }
 
+// unused function
 func createOrders(c echo.Context, gormDB *gorm.DB) error {
 	h := &Handler{gormDB: gormDB}
 	return h.createOrdersWithServices(c)
@@ -90,6 +91,7 @@ type pendingNotification struct {
 	notificationID int64
 }
 
+// unused function
 func createOrdersWithNotifications(
 	c echo.Context,
 	gormDB *gorm.DB,
