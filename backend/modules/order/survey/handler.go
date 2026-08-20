@@ -23,7 +23,7 @@ func NewHandler(gormDB *gorm.DB, rawDB *sql.DB) *Handler {
 func (h *Handler) RegisterRoutes(v1 *echo.Group) {
 	protected := v1.Group("")
 	protected.Use(myMiddleware.JWTAuth(h.rawDB))
-	protected.GET("/orders/:id/recommendation-survey", h.getRecommendationSurvey) //
+	protected.GET("/orders/:id/recommendation-survey", h.getRecommendationSurvey)
 	protected.POST("/orders/:id/recommendation-survey", h.createRecommendationSurvey)
 }
 

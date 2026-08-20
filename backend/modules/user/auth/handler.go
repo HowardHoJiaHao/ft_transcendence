@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"transcendence/modules/user"
+	"transcendence/modules/user/authjwt"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -101,7 +102,7 @@ func (h *Handler) Login(c echo.Context) error {
 	}
 
 	if !u.Requires2FA {
-		token, err := GenerateToken(u.ID)
+		token, err := authjwt.GenerateToken(u.ID)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
 		}
@@ -221,7 +222,7 @@ func (h *Handler) Verify2FA(c echo.Context) error {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "Account suspended"})
 	}
 
-	token, err := GenerateToken(u.ID)
+	token, err := authjwt.GenerateToken(u.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
 	}
@@ -333,7 +334,7 @@ func (h *Handler) GoogleCallback(c echo.Context) error {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "Account suspended"})
 	}
 
-	jwtToken, err := GenerateToken(u.ID)
+	jwtToken, err := authjwt.GenerateToken(u.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
 	}

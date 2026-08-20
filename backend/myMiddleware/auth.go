@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
-	auth "transcendence/modules/user/auth"
+	"transcendence/modules/user/authjwt"
 )
 
 func JWTAuth(db *sql.DB) echo.MiddlewareFunc {
@@ -23,7 +23,7 @@ func JWTAuth(db *sql.DB) echo.MiddlewareFunc {
 				}
 				tokenStr = cookie.Value
 			}
-			claims, err := auth.ValidateToken(tokenStr)
+			claims, err := authjwt.ValidateToken(tokenStr)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
 			}
@@ -54,7 +54,7 @@ func AdminAuth(db *sql.DB) echo.MiddlewareFunc {
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
 			}
-			claims, err := auth.ValidateToken(strings.TrimPrefix(authHeader, "Bearer "))
+			claims, err := authjwt.ValidateToken(strings.TrimPrefix(authHeader, "Bearer "))
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
 			}

@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v4/middleware" //middleware parts
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"transcendence/allowedorigin"
 	"transcendence/modules/admin"
 	"transcendence/modules/ai"
 	"transcendence/modules/apikey"
@@ -21,6 +22,7 @@ import (
 	"transcendence/modules/order/survey"
 	"transcendence/modules/user"
 	"transcendence/modules/user/auth"
+	"transcendence/modules/user/authjwt"
 	"transcendence/modules/user/chat"
 	"transcendence/modules/user/friends"
 	"transcendence/modules/user/notifications"
@@ -29,7 +31,7 @@ import (
 )
 
 func main() {
-	if err := auth.ConfigureJWTSecretFromEnv(); err != nil {
+	if err := authjwt.ConfigureJWTSecretFromEnv(); err != nil {
 		log.Fatalf("Invalid auth configuration: %v", err)
 	}
 
@@ -48,14 +50,15 @@ func main() {
 	e.Use(middleware.Logger())  //log every incoming process
 	e.Use(middleware.Recover()) //recover will prevent panick to affect all healthy threads. it only panick current threads
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"http://localhost:3000", "http://localhost", "https://localhost"}, //only allow from these origins
-		AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"},       //only allow from these methods
+		AllowOrigins: allowedorigin.List(),
+		AllowMethods: []string{"GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"},
 	}))
 
 	//routes
 	e.GET("/health", func(c echo.Context) error { return healthCheckHandler(c, rawDB) })
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 	v1 := e.Group("/api/v1")
+	v1.GET("/status", func(c echo.Context) error { return healthCheckHandler(c, rawDB) })
 
 	// this block is about to build object/ or create a struct, preparation for later register router
 	// Shared user, real-time, and notification services. Notifications reuse
@@ -87,7 +90,7 @@ func main() {
 	v1.POST("/webhooks/stripe", func(c echo.Context) error {
 		return order.HandleStripeWebhook(c, stripeWebhooks)
 	})
-	go chatHub.Run()  // hub is for websocket
+	go chatHub.Run() // hub is for websocket
 	chatHandler := chat.NewHandler(chatHub, chatRepo, authService)
 	chatHandler.Notifications = notificationService
 	friendsHandler.Notifications = notificationService
@@ -103,13 +106,10 @@ func main() {
 	adminHandler := admin.NewHandler(rawDB)
 	aiHandler := ai.NewHandler(rawDB)
 
-	// Register api routes for each module, component
-
-	//listing route
-	listingHandler.RegisterRoutes(v1) //product listing
-	listingFilesHandler.RegisterRoutes(v1) //photo and PDFs
-	listingReviewsHandler.RegisterRoutes(v1) //rating, comments
-	listingImportHandler.RegisterRoutes(v1) //csv bulk create
+	listingHandler.RegisterRoutes(v1)       // product listing
+	listingFilesHandler.RegisterRoutes(v1)  // photos and PDFs
+	listingReviewsHandler.RegisterRoutes(v1) // ratings, comments
+	listingImportHandler.RegisterRoutes(v1) // CSV bulk create
 
 	orderHandler.RegisterRoutes(v1)
 	dashboardHandler.RegisterRoutes(v1)

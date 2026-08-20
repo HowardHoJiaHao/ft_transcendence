@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -6,7 +7,7 @@ import re
 from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -168,9 +169,21 @@ def health_check():
         "agent": "native_tool_calling_v3",
     }
 
-# this is the entry point for the chat endpoint, it will receive the request from the frontend, and send it to the agent to get the response, then stream the response back to the frontend
+def _verify_proxy(header_value: str) -> None:
+    expected = os.getenv("AI_INTERNAL_SECRET", "").strip()
+    if not expected:
+        return
+    provided = header_value or ""
+    if not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
 @app.post("/chat")
-async def chat_endpoint(req: ChatRequest):
+async def chat_endpoint(
+    req: ChatRequest,
+    x_racketbot_proxy: str = Header(default=""),
+):
+    _verify_proxy(x_racketbot_proxy)
     # limit last 10 chat history to avoid sending too much data to the agent
     history = [
         {"role": message.role, "content": message.content}

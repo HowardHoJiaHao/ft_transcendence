@@ -61,8 +61,10 @@ test_chat_history()
 		--data '{"message":"Reply with a short greeting.","history":[{"role":"user","content":"History message 1."},{"role":"assistant","content":"History message 2."},{"role":"user","content":"History message 3."},{"role":"assistant","content":"History message 4."},{"role":"user","content":"History message 5."},{"role":"assistant","content":"History message 6."},{"role":"user","content":"History message 7."},{"role":"assistant","content":"History message 8."},{"role":"user","content":"History message 9."},{"role":"assistant","content":"History message 10."}]}' \
 		"$BASE_URL/api/v1/ai/chat") || chat_status=000
 
-	printf '%-35s expected=200 actual=%s\n' "Chat request with history" "$chat_status"
-	[ "$chat_status" = "200" ] && grep -q 'data: \[DONE\]' "$chat_body"
+	printf '%-35s expected=401 actual=%s\n' "Chat history not blocked by WAF" "$chat_status"
+	# RacketBot is login-only (401). This probe only checks CRS did not 403
+	# the JSON history field names.
+	[ "$chat_status" = "401" ]
 }
 
 wait_for_waf || exit 1

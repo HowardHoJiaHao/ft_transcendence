@@ -8,10 +8,8 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"time"
 
 	brevo "github.com/getbrevo/brevo-go/lib"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"transcendence/modules/user"
@@ -21,90 +19,11 @@ type Service struct {
 	repo *user.Repository
 }
 
+// GenerateToken / ValidateToken live in authjwt (see that package). They
+// used to sit here and created the Docker "import cycle not allowed" build.
+
 func NewService(repo *user.Repository) *Service {
 	return &Service{repo: repo}
-}
-
-const minJWTSecretLength = 32
-
-var jwtSecret []byte //declare a global package scope variable
-
-func ConfigureJWTSecretFromEnv() error {
-	secret := strings.TrimSpace(os.Getenv("JWT_SECRET"))
-	if secret == "" {
-		return fmt.Errorf("JWT_SECRET is required")
-	}
-	if len(secret) < minJWTSecretLength {
-		return fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLength)
-	}
-	jwtSecret = []byte(secret)
-	return nil
-}
-
-func ensureJWTSecretConfigured() error {
-	if len(jwtSecret) == 0 {
-		if err := ConfigureJWTSecretFromEnv(); err != nil {
-			return err
-		}
-	}
-	if len(jwtSecret) < minJWTSecretLength {
-		return fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLength)
-	}
-	return nil
-}
-
-func GenerateToken(userID int) (string, error) {
-	if err := ensureJWTSecretConfigured(); err != nil {
-		return "", err
-	}
-	claims := Claims{
-		UserId: userID,
-		Role:   "member",
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
-}
-
-func GenerateAdminToken() (string, error) {
-	if err := ensureJWTSecretConfigured(); err != nil {
-		return "", err
-	}
-	claims := Claims{
-		Role: "admin",
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(8 * time.Hour)),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
-}
-
-var keyFunc = func(token *jwt.Token) (interface{}, error) {
-	if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-		return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-	}
-	if err := ensureJWTSecretConfigured(); err != nil {
-		return nil, err
-	}
-	return jwtSecret, nil
-}
-
-func ValidateToken(tokenStr string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, keyFunc)
-
-	if err != nil {
-		return nil, fmt.Errorf("invalid token: %w", err)
-	}
-
-	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
-		return nil, fmt.Errorf("invalid claims")
-	}
-
-	return claims, nil
 }
 
 func (s *Service) GenerateAndSendOTP(email string) (string, error) {

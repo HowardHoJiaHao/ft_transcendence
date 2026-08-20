@@ -95,6 +95,7 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      AI_INTERNAL_SECRET: ${AI_INTERNAL_SECRET:-${JWT_SECRET}}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-wongdakfat}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
       BREVO_API_KEY: ${BREVO_API_KEY:-}
@@ -190,6 +191,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
       BACKEND_URL: http://backend:8080
+      AI_INTERNAL_SECRET: ${AI_INTERNAL_SECRET:-${JWT_SECRET}}
       RACKET_RECOMMENDER_MODEL_DIR: /app/ml_models
       RACKET_RECOMMENDER_BASELINE_DATASET: /app/model_seed/dummy_racket_recommendation_data.csv
       RACKET_RECOMMENDER_SEED_DIR: /app/model_seed

@@ -8,6 +8,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"transcendence/modules/user/auth"
+	"transcendence/modules/user/authjwt"
 	"transcendence/modules/user/notifications"
 	"transcendence/myMiddleware"
 )
@@ -43,7 +44,7 @@ func (h *Handler) WebSocketHandler(c echo.Context) error {
 }
 
 func (h *Handler) memberUserIDFromToken(token string) (int, error) {
-	claims, err := auth.ValidateToken(token)
+	claims, err := authjwt.ValidateToken(token)
 	if err != nil || claims.Role != "member" || claims.UserId <= 0 {
 		return 0, errInvalidWSToken
 	}

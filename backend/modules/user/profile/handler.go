@@ -11,7 +11,7 @@ import (
 	"database/sql"
 	"github.com/labstack/echo/v4"
 	"transcendence/modules/user"
-	"transcendence/modules/user/auth"
+	"transcendence/modules/user/authjwt"
 	"transcendence/myMiddleware"
 )
 
@@ -79,7 +79,7 @@ func (h *Handler) requesterIsAuthenticated(c echo.Context) bool {
 	} else if cookie, err := c.Cookie("oauth_token"); err == nil {
 		token = cookie.Value
 	}
-	claims, err := auth.ValidateToken(token)
+	claims, err := authjwt.ValidateToken(token)
 	if err != nil || claims.Role != "member" || claims.UserId <= 0 {
 		return false
 	}

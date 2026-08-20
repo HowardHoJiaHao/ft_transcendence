@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"transcendence/modules/admin/ml"
 	"transcendence/modules/apikey"
-	"transcendence/modules/user/auth"
+	"transcendence/modules/user/authjwt"
 	"transcendence/myMiddleware"
 )
 
@@ -80,25 +80,25 @@ type adminSummary struct {
 	CompletedRevenue float64 `json:"completedRevenue"`
 }
 
-// admin routes are registered under /api/v1/admin, and require a valid admin JWT token for access. The login route is available at /api/v1/admin/auth/login for initial authentication.
+// /admin/* needs AdminAuth. Login is public so the bootstrap admin can get a token first.
 func (h *Handler) RegisterRoutes(v1 *echo.Group) {
-	v1.POST("/admin/auth/login", adminLogin) // this one is for the bootstrap login
+	v1.POST("/admin/auth/login", adminLogin) // env bootstrap admin, not a users-table row
 	admin := v1.Group("/admin")
 	admin.Use(myMiddleware.AdminAuth(h.db))
-	admin.GET("/summary", func(c echo.Context) error { return h.getAdminSummary(c) }) // first load
-	admin.GET("/users", func(c echo.Context) error { return h.listAdminUsers(c) })    // first load
+	admin.GET("/summary", func(c echo.Context) error { return h.getAdminSummary(c) })
+	admin.GET("/users", func(c echo.Context) error { return h.listAdminUsers(c) })
 	admin.GET("/users/:id", func(c echo.Context) error { return h.getAdminUser(c) })
 	admin.POST("/users", func(c echo.Context) error { return h.createAdminUser(c) })
 	admin.PATCH("/users/:id", func(c echo.Context) error { return h.updateAdminUser(c) })
 	admin.PATCH("/users/:id/role", func(c echo.Context) error { return h.updateAdminUserRole(c) })
 	admin.PATCH("/users/:id/status", func(c echo.Context) error { return h.updateAdminUserStatus(c) })
 	admin.DELETE("/users/:id", func(c echo.Context) error { return h.deleteAdminUser(c) })
-	admin.GET("/api-attempts", func(c echo.Context) error { return apikey.GetAPIAttackAttempts(c, h.db) }) //get security report of failed public api calls
+	admin.GET("/api-attempts", func(c echo.Context) error { return apikey.GetAPIAttackAttempts(c, h.db) }) // failed public API key attempts
 	admin.GET("/ml/status", func(c echo.Context) error { return ml.GetStatus(c, h.db) })
-	admin.GET("/ml/feedback", func(c echo.Context) error { return ml.ListFeedback(c, h.db) }) // last 25 survey rows
-	admin.GET("/ml/runs", func(c echo.Context) error { return ml.ListRuns(c, h.db) }) // last 20 training jobs
-	admin.POST("/ml/retrain", func(c echo.Context) error { return ml.CreateRetrainingRun(c, h.db) }) // retrain
-	admin.GET("/ml/runs/:id", func(c echo.Context) error { return ml.GetRun(c, h.db) }) //one job by id
+	admin.GET("/ml/feedback", func(c echo.Context) error { return ml.ListFeedback(c, h.db) })
+	admin.GET("/ml/runs", func(c echo.Context) error { return ml.ListRuns(c, h.db) })
+	admin.POST("/ml/retrain", func(c echo.Context) error { return ml.CreateRetrainingRun(c, h.db) })
+	admin.GET("/ml/runs/:id", func(c echo.Context) error { return ml.GetRun(c, h.db) })
 }
 
 func adminLogin(c echo.Context) error {
@@ -125,7 +125,7 @@ func adminLogin(c echo.Context) error {
 	if !usernameMatches || !passwordMatches {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid administrator credentials"})
 	}
-	token, err := auth.GenerateAdminToken()
+	token, err := authjwt.GenerateAdminToken()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to generate token"})
 	}

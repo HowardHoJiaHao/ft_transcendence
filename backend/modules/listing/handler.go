@@ -24,10 +24,8 @@ func NewHandler(gormDB *gorm.DB, rawDB *sql.DB) *Handler {
 	return &Handler{gormDB: gormDB, rawDB: rawDB}
 }
 
-// protected means this route is logged-in only
-// this is to create new products, will be concatenate with the /api/v1/ as suffix
-// when a post request to /api/v1/products reach echo
-// then it will call this createProduct handler
+// GET /products is public browse. POST/PUT/DELETE sit on the JWT group
+// (protected): only a logged-in member can create or edit a listing.
 func (h *Handler) RegisterRoutes(v1 *echo.Group) {
 	v1.GET("/products", h.getProducts)
 	v1.GET("/products/:id", h.getProductByID)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
+	"transcendence/allowedorigin"
 	"transcendence/modules/user/notifications"
 )
 
@@ -45,7 +46,7 @@ type Hub struct {
 	Send          chan OutgoingMessage
 	Broadcast     chan []byte
 	Register      chan *Client
-	Unregister    chan int
+	Unregister    chan *Client
 	Snapshots     chan chan []int
 	Repo          *Repository
 	Notifications *notifications.Service
@@ -57,7 +58,7 @@ func NewHub(repo *Repository) *Hub {
 		Send:       make(chan OutgoingMessage, 256),
 		Broadcast:  make(chan []byte, 256),
 		Register:   make(chan *Client, 256),
-		Unregister: make(chan int, 256),
+		Unregister: make(chan *Client, 256),
 		Snapshots:  make(chan chan []int),
 		Repo:       repo,
 	}
@@ -67,6 +68,14 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.Register:
+			// One live socket per user. Close the previous tab/reconnect
+			// without unregistering by userId (that would delete *this* client).
+			if prev, ok := h.Clients[client.UserId]; ok && prev != client {
+				close(prev.Send)
+				if prev.Conn != nil {
+					_ = prev.Conn.Close()
+				}
+			}
 			h.Clients[client.UserId] = client
 			log.Printf("✓ User %d connected(%d online)", client.UserId, len(h.Clients))
 			//				GIVE EXISTING ONLINE LIST TO NEW CLIENT
@@ -101,15 +110,19 @@ func (h *Hub) Run() {
 				}
 			}
 
-		case userId := <-h.Unregister:
-			if Client, ok := h.Clients[userId]; ok {
-				Client.Conn.Close()
-				delete(h.Clients, userId)
-				log.Printf("✗ User %d disconnected(%d online)", userId, len(h.Clients))
+		case client := <-h.Unregister:
+			current, ok := h.Clients[client.UserId]
+			if !ok || current != client {
+				continue // stale socket after a reconnect; keep the new one
 			}
+			if client.Conn != nil {
+				_ = client.Conn.Close()
+			}
+			delete(h.Clients, client.UserId)
+			log.Printf("✗ User %d disconnected(%d online)", client.UserId, len(h.Clients))
 			offlineMsg := OnlineStatusMessage{
 				Type:   "user_offline",
-				UserId: userId,
+				UserId: client.UserId,
 			}
 			payload, _ := json.Marshal(offlineMsg)
 			for _, c := range h.Clients {
@@ -172,8 +185,7 @@ func (h *Hub) SendPrivateMessage(toUserId int, data []byte) {
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		//implement validation
-		return true
+		return allowedorigin.Check(r.Header.Get("Origin")) // same allow-list as Echo CORS
 	},
 }
 
@@ -208,7 +220,12 @@ func (h *Hub) ServeWS(c echo.Context, identify func(token string) (int, error)) 
 	return nil
 }
 
+const wsAuthReadLimit = 8 * 1024
+const wsMessageReadLimit = 512 * 1024
+
 func authenticateWSConn(conn *websocket.Conn, identify func(token string) (int, error)) (int, error) {
+	// Cap the unauthenticated first frame. readPump's larger limit is applied only after auth_ok.
+	conn.SetReadLimit(wsAuthReadLimit)
 	if err := conn.SetReadDeadline(time.Now().Add(wsAuthTimeout)); err != nil {
 		return 0, errMissingWSAuth
 	}
@@ -219,6 +236,9 @@ func authenticateWSConn(conn *websocket.Conn, identify func(token string) (int, 
 	token, err := parseWSAuthMessage(payload)
 	if err != nil {
 		return 0, err
+	}
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		return 0, errMissingWSAuth
 	}
 	return identify(token)
 }
@@ -237,11 +257,11 @@ func parseWSAuthMessage(payload []byte) (string, error) {
 
 func (c *Client) readPump(h *Hub) {
 	defer func() {
-		h.Unregister <- c.UserId
+		h.Unregister <- c
 		c.Conn.Close()
 	}()
 
-	c.Conn.SetReadLimit(512 * 1024)                          //set limit 5KB. prevent user from sending too big data. it can crash the server
+	c.Conn.SetReadLimit(wsMessageReadLimit) // 512 KiB after auth; auth frame is 8 KiB
 	c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second)) //handle request takes more than 60 sec
 	c.Conn.SetPongHandler(func(string) error {
 		c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))

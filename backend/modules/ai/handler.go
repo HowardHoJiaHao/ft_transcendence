@@ -43,16 +43,16 @@ func NewHandler(rawDB *sql.DB) *Handler {
 func (h *Handler) RegisterRoutes(v1 *echo.Group) {
 	protected := v1.Group("")
 	protected.Use(myMiddleware.JWTAuth(h.rawDB))
-	// ai chat route, this is a logged-in only route. RacketBot answers order,
-	// profile and account questions through user-scoped tools, so there is no
-	// useful guest mode: JWTAuth resolves the member first, and handleAIChat
-	// forwards that userId and token on to the AI chat service.
+	// Logged-in members only. Guest chat is not useful: order/profile tools
+	// need a member JWT, and the floating chat UI is hidden until login.
+	// JWTAuth rejects anonymous callers, expired tokens, and non-member
+	// (admin) tokens before Chat runs.
 	protected.POST("/ai/chat", h.Chat)
 }
 
-// this is the function that handles the AI chat request, it will send the request to the python fastapi service, and stream the response back to the frontend
-// registered on the protected group, so JWTAuth has already turned away
-// anonymous callers, expired tokens and non-active accounts before we get here
+const racketbotProxyHeader = "X-Racketbot-Proxy"
+
+// Chat proxies the browser request to FastAPI (ai:8000) and streams SSE back.
 func (h *Handler) Chat(c echo.Context) error {
 	// read the chat, browser sends in json body
 	// declare empty go struct
@@ -66,12 +66,8 @@ func (h *Handler) Chat(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
 	}
 
-	// 1. Read the identity JWTAuth already resolved. Login is required, so
-	// every request that reaches here carries an active member.
-	// the userId and authToken are passed on to the AI chat service, which
-	// needs them to call the user-scoped tools (my orders, my profile, ...)
-	// the check below is belt and braces: it keeps RacketBot shut if this
-	// route is ever moved back onto a group without the auth middleware
+	// JWTAuth already set these. Re-check so Chat never forwards an empty
+	// identity if this handler is moved off the protected group.
 	userID, _ := c.Get("userId").(int)
 	authToken, _ := c.Get("token").(string)
 	if userID <= 0 || authToken == "" {
@@ -105,6 +101,10 @@ func (h *Handler) Chat(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed creating backend request"})
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Shared secret so only this Go proxy can call FastAPI /chat on the compose network.
+	if secret := os.Getenv("AI_INTERNAL_SECRET"); secret != "" {
+		req.Header.Set(racketbotProxyHeader, secret)
+	}
 
 	// Keep a small margin above the AI service's default 60-second total
 	// request budget so a broken downstream connection cannot hang forever.
