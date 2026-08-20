@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 
 interface Message {
@@ -414,15 +415,15 @@ export default function AIFloatingChat() {
         )}
         
         {postAdMatch && (
-          <a href="/sell" className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-2 bg-[linear-gradient(135deg,#059669_0%,#10b981_100%)] text-white border-none rounded-lg text-[11px] font-semibold cursor-pointer transition-all duration-200 no-underline hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]">
+          <Link href="/sell" className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-2 bg-[linear-gradient(135deg,#059669_0%,#10b981_100%)] text-white border-none rounded-lg text-[11px] font-semibold cursor-pointer transition-all duration-200 no-underline hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]">
             ➕ Post an Ad Now →
-          </a>
+          </Link>
         )}
 
         {content.toLowerCase().includes("browse") && (
-          <a href="/products" className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-2 bg-[linear-gradient(135deg,#059669_0%,#10b981_100%)] text-white border-none rounded-lg text-[11px] font-semibold cursor-pointer transition-all duration-200 no-underline hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]">
+          <Link href="/products" className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-2 bg-[linear-gradient(135deg,#059669_0%,#10b981_100%)] text-white border-none rounded-lg text-[11px] font-semibold cursor-pointer transition-all duration-200 no-underline hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]">
             🔎 Browse Marketplace →
-          </a>
+          </Link>
         )}
       </div>
     );
@@ -492,7 +493,7 @@ export default function AIFloatingChat() {
                     className="bg-[rgba(30,41,59,0.6)] border border-white/[0.05] rounded-xl px-3.5 py-2.5 text-[#e2e8f0] text-[12.5px] cursor-pointer text-left transition-all duration-200 hover:bg-[rgba(79,172,254,0.15)] hover:border-[rgba(0,242,254,0.3)] hover:text-[#00f2fe] hover:translate-x-1"
                     onClick={() => handleSendMessage(prompt)}
                   >
-                    💡 "{prompt}"
+                    {`💡 "${prompt}"`}
                   </button>
                 ))}
               </div>
