@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"transcendence/modules/user"
-	"transcendence/myMiddleware"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -38,7 +37,7 @@ func NewHandler(repo *user.Repository, service *Service) *Handler {
 	return &Handler{repo: repo, service: service}
 }
 
-func (h *Handler) RegisterRoutes(e *echo.Group) {
+func (h *Handler) RegisterRoutes(e *echo.Group, jwtAuth echo.MiddlewareFunc) {
 	e.POST("/auth/register", h.Register)
 	e.POST("/auth/login", h.Login)
 	e.POST("/auth/verify-otp", h.Verify2FA)
@@ -48,7 +47,7 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	e.POST("/auth/logout", h.Logout)
 
 	protected := e.Group("")
-	protected.Use(myMiddleware.JWTAuth(h.repo.DB))
+	protected.Use(jwtAuth)
 	protected.POST("/auth/change-password/request", h.RequestPasswordChange)
 	protected.POST("/auth/change-password/confirm", h.ConfirmPasswordChange)
 }

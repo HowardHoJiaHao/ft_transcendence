@@ -135,7 +135,7 @@ func main() {
 	listingHandler.RegisterPublicAPI(public)
 
 	// Register member login authetication
-	authHandler.RegisterRoutes(v1)
+	authHandler.RegisterRoutes(v1, myMiddleware.JWTAuth(rawDB))
 	profileHandler.RegisterRoutes(v1)
 	friendsHandler.RegisterRoutes(v1)
 	chatHandler.RegisterRoutes(v1)
