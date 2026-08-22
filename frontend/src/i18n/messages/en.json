@@ -56,7 +56,8 @@
     "networkError": "Network error. Please try again.",
     "accountSuspended": "{name} has been suspended",
     "accountRestored": "{name} has been restored",
-    "accountUpdateFailed": "Unable to update account status"
+    "accountUpdateFailed": "Unable to update account status",
+    "sessionReplaced": "You've been logged in on another browser or device"
   },
   "validation": {
     "emailRequired": "Please enter a new email",

@@ -56,7 +56,8 @@
     "networkError": "Ralat rangkaian. Sila cuba lagi.",
     "accountSuspended": "{name} telah digantung",
     "accountRestored": "{name} telah dipulihkan",
-    "accountUpdateFailed": "Tidak dapat mengemas kini status akaun"
+    "accountUpdateFailed": "Tidak dapat mengemas kini status akaun",
+    "sessionReplaced": "Anda telah log masuk di pelayar atau peranti lain"
   },
   "validation": {
     "emailRequired": "Sila masukkan e-mel baharu",

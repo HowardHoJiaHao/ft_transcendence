@@ -68,22 +68,24 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.Register:
-			// One live socket per user. Close the previous tab/reconnect
-			// without unregistering by userId (that would delete *this* client).
+			// One live socket per user. Close the previous tab/reconnect w/o unregistering by userId
 			if prev, ok := h.Clients[client.UserId]; ok && prev != client {
-				close(prev.Send)
-				if prev.Conn != nil {
-					_ = prev.Conn.Close()
+				// Tell the old socket why it's closed, so FE notify user another login to skip auto-reconnect.
+				replacedMsg, _ := json.Marshal(map[string]string{"type": "session_replaced"})
+				select {
+				case prev.Send <- replacedMsg:
+				default:
 				}
+				close(prev.Send)
 			}
 			h.Clients[client.UserId] = client
 			log.Printf("✓ User %d connected(%d online)", client.UserId, len(h.Clients))
 			//				GIVE EXISTING ONLINE LIST TO NEW CLIENT
 			userIds := make([]int, 0, len(h.Clients))
 			for userId := range h.Clients {
-				// if userId == client.UserId {
-				// 	continue
-				// }
+				if userId == client.UserId {
+					continue
+				}
 				userIds = append(userIds, userId)
 			}
 			initialMsg := OnlineUsersMessage{
@@ -271,9 +273,11 @@ func (c *Client) readPump(h *Hub) {
 	for {
 		_, message, err := c.Conn.ReadMessage() //sort of like poll. wait user gives message
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("WebSocket error (user %d): %v", c.UserId, err)
-			}
+			// TEMP DEBUG: log every close reason, including the ones
+			// IsUnexpectedCloseError would normally treat as routine
+			// (CloseGoingAway, CloseAbnormalClosure/1006), to chase the
+			// intermittent connect/disconnect flicker. Remove once diagnosed.
+			log.Printf("WebSocket closed (user %d): %v", c.UserId, err)
 			break
 		}
 
@@ -345,17 +349,20 @@ func (c *Client) writePump() {
 
 			w, err := c.Conn.NextWriter(websocket.TextMessage)
 			if err != nil {
+				log.Printf("WebSocket write error (user %d): %v", c.UserId, err) // TEMP DEBUG
 				return
 			}
 			w.Write(message)
 
 			if err := w.Close(); err != nil {
+				log.Printf("WebSocket write-close error (user %d): %v", c.UserId, err) // TEMP DEBUG
 				return
 			}
 
 		case <-ticker.C:
 			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				log.Printf("WebSocket ping failed (user %d): %v", c.UserId, err) // TEMP DEBUG
 				return
 			}
 		}

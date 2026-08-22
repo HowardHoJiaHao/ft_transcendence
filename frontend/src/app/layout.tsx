@@ -9,6 +9,7 @@ import { NotificationProvider } from "@/context/NotificationContext";
 import Footer from "@/components/Footer/Footer";
 import FloatingChat from "@/components/FloatingChat/FloatingChat";
 import AIFloatingChat from "@/components/AIFloatingChat/AIFloatingChat";
+import SessionReplacedNotice from "@/components/SessionReplacedNotice/SessionReplacedNotice";
 
 export const metadata: Metadata = {
   title: "Transcendence Marketplace",
@@ -29,8 +30,9 @@ export default function RootLayout({
               <NotificationProvider>
                 <CartProvider>
                   <ToastProvider>
+                      <SessionReplacedNotice />
                       {children}
-                  </ToastProvider> 
+                  </ToastProvider>
                   <FloatingChat />
                   <AIFloatingChat />
                 <Footer />

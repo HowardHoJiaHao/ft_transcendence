@@ -22,6 +22,11 @@ export function useWebSocket(token: string | null)
 		let stopped = false;
 		let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 		let retryDelay = 1000;
+		// Set when the server tells us this socket is being replaced by a
+		// login elsewhere (same account, another tab/browser). Without this,
+		// the kicked side auto-reconnects, kicks the new one back, and the
+		// two sockets ping-pong connect/disconnect forever.
+		let sessionReplaced = false;
 
 		const connect = () => {
 			if (stopped || ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING)
@@ -34,18 +39,26 @@ export function useWebSocket(token: string | null)
 
 			socket.onopen = () => {
 				retryDelay = 1000;
+				console.log('WS open'); // TEMP DEBUG
 				socket.send(JSON.stringify({ type: 'auth', token }));
 			};
-			socket.onclose = () => {
+			socket.onclose = (event) => {
+				// TEMP DEBUG: chasing the intermittent connect/disconnect
+				// flicker. code/reason tell us whether this is a real network
+				// drop (1006), a server-initiated close (auth_error, hub
+				// kicking a stale socket), or a clean shutdown. Remove once
+				// diagnosed.
+				console.log('WS close', { code: event.code, reason: event.reason, wasClean: event.wasClean });
 				if (ws === socket) ws = null;
 				setIsConnected(false);
-				if (!stopped) {
+				if (!stopped && !sessionReplaced) {
 					reconnectTimer = setTimeout(connect, retryDelay);
 					retryDelay = Math.min(retryDelay * 2, 30000);
 				}
 			};
-			socket.onerror = () => {
+			socket.onerror = (event) => {
 				// onclose schedules the retry and owns connection state.
+				console.log('WS error', event); // TEMP DEBUG
 			};
 			socket.onmessage = (event) => {
 				try {
@@ -57,6 +70,9 @@ export function useWebSocket(token: string | null)
 					if (data.type === 'auth_error') {
 						socket.close();
 						return;
+					}
+					if (data.type === 'session_replaced') {
+						sessionReplaced = true;
 					}
 					messageHandlers.forEach((handler) => handler(data as WebSocketMessage));
 				} catch (err) {

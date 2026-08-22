@@ -54,8 +54,16 @@ export interface WSNotificationUpsert {
 	unread_count: number;
 }
 
+// Sent by the hub to a socket it's about to close because the same account
+// logged in elsewhere and took over the single-session slot. Lets the
+// frontend tell this apart from a network drop and skip auto-reconnect.
+export interface SessionReplacedMessage {
+	type: 'session_replaced';
+}
+
 export type WSMessage =
 	| WSPrivateMessage
 	| OnlineStatusMessage
 	| OnlineUsersMessage
-	| WSNotificationUpsert;
+	| WSNotificationUpsert
+	| SessionReplacedMessage;

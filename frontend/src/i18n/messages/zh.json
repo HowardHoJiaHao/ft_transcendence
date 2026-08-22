@@ -56,7 +56,8 @@
     "networkError": "网络错误，请重试。",
     "accountSuspended": "{name} 已被停用",
     "accountRestored": "{name} 已恢复",
-    "accountUpdateFailed": "无法更新账户状态"
+    "accountUpdateFailed": "无法更新账户状态",
+    "sessionReplaced": "您已在其他浏览器或设备上登录"
   },
   "validation": {
     "emailRequired": "请输入新的电子邮件地址",
