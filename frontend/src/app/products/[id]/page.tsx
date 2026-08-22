@@ -476,8 +476,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 				<div className="mb-2 text-[var(--dark)] font-semibold">{product.sellerName}</div>
 				<div className="mb-2 text-[var(--secondary)] text-sm">{product.sellerId !== undefined && <OnlineStatus userId={product.sellerId} />}</div>
 				<div className="flex gap-2.5 mt-2">
-					<button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed" onClick={openChat} disabled={chatLoading || !currentUser?.id}>
-						{chatLoading ? 'Loading...' : 'Chat Seller'}
+					<button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed" onClick={openChat} disabled={chatLoading || !currentUser?.id || isOwnListing} title={isOwnListing ? 'This is your own listing' : undefined}>
+						{chatLoading ? 'Loading...' : isOwnListing ? 'Your Listing' : 'Chat Seller'}
 					</button>
 				  	<Link href={`/user/${product.sellerId}`} className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 no-underline hover:bg-[var(--primary-dark)] hover:no-underline disabled:bg-[#9ca3af] disabled:cursor-not-allowed">View Shop</Link>
 				</div>
