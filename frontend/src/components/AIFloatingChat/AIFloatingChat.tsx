@@ -149,6 +149,12 @@ export default function AIFloatingChat() {
     "How do I post an ad?"
   ];
 
+  // the frontend will pass three things to the backend endpoint: the user message, the last 10 messages as context, and an optional recommendation profile in json
+  // 1. URL — /api/v1/ai/chat
+  // 2. Method — POST
+  // 3. Headers — Content-Type + Authorization: Bearer <JWT>
+  // 4. Body — the JSON string (requestBody)
+  
   const streamChatResponse = async (
     requestMessage: string,
     visibleHistory: Message[],

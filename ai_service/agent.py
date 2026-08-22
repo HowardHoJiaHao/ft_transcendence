@@ -255,9 +255,9 @@ class RacketBotAgent:
     """A stateless wrapper around a compiled LangChain/LangGraph agent."""
 
     def __init__(self, *, graph: Any = None, llm: Optional[ChatOpenAI] = None):
-        self.llm = llm or create_llm()
+        self.llm = llm or create_llm() #attach the model client deepseek
         self.graph = graph or create_langchain_agent(
-            model=self.llm,
+            model=self.llm, #attach the model client to the agent, so that the agent can call the model to generate answers. attach tools, system prompt, and middleware to the agent, so that the agent can use the tools and follow the system prompt and middleware rules
             tools=all_tools,
             system_prompt=SYSTEM_PROMPT,
             middleware=[
@@ -277,7 +277,7 @@ class RacketBotAgent:
             ],
             name="racketbot",
         )
-
+    #run every chat, for _run_and_validate in main.py
     async def run(
         self,
         *,
@@ -289,14 +289,14 @@ class RacketBotAgent:
             history,
             message,
             recommendation_profile,
-        )
-        result = await self.graph.ainvoke(
+        ) #prepare the input messages for the agent, including the history, the current message, and the recommendation profile if present
+        result = await self.graph.ainvoke( #this is langgraph iteration, call tools, iteration again
             {"messages": input_messages},
             # Middleware limits count model/tool calls. LangGraph's recursion
             # counter includes additional internal nodes, so leave enough room
             # for those deterministic budgets to stop the run gracefully.
             config={"recursion_limit": 64},
-        )
+        ) #the agent is build and ready, and it is capable to process the input msg form user to chatbox
         result_messages = result.get("messages", [])
         # LangGraph returns the input messages followed by messages generated in
         # this run. Never select an old assistant question from the input as the
@@ -335,7 +335,7 @@ class RacketBotAgent:
             tool_calls,
             limit_reached,
             list(tools_called),
-        )
+        ) #python class
         return AgentRunResult(
             answer=final_answer,
             tools_called=tools_called,
@@ -362,7 +362,7 @@ class RacketBotAgent:
 def create_agent() -> RacketBotAgent:
     """Construct the process-wide stateless agent wrapper."""
 
-    return RacketBotAgent()
+    return RacketBotAgent() #this call to build agent, then __init__ will be called, which will create the llm and graph, and return the agent instance
 
 
 def validate_answer(answer: str, *, authenticated: bool) -> Tuple[bool, str]:

@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 agent_instance: Optional[RacketBotAgent] = None
 agent_creation_lock = asyncio.Lock()
 
-
+# if no agent, create one, otherwise, reuse existing one. This is a singleton pattern to avoid creating multiple agents and consuming too much memory and resources.
 async def _get_agent() -> RacketBotAgent:
     global agent_instance
     if agent_instance is not None:
@@ -178,39 +178,41 @@ def _verify_proxy(header_value: str) -> None:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
+# endpoint for chat requests 
 @app.post("/chat")
 async def chat_endpoint(
     req: ChatRequest,
     x_racketbot_proxy: str = Header(default=""),
-):
-    _verify_proxy(x_racketbot_proxy)
+): # chatRequest is the request body, x_racketbot_proxy is the header that is used to verify that the request is coming from the go proxy, not from the user directly
+    _verify_proxy(x_racketbot_proxy) #check secret header to verify that the request is coming from the go proxy, not from the user directly
     # limit last 10 chat history to avoid sending too much data to the agent
     history = [
         {"role": message.role, "content": message.content}
         for message in req.history[-10:]
     ]
 
+    # create a generator function to stream the response back to the client, in SSE chunk
     async def response_generator():
-        user_token = user_id_var.set(req.userId)
+        user_token = user_id_var.set(req.userId) #store id and auth token in context variable, so that the agent can access it later
         auth_token = auth_token_var.set(req.authToken)
         try:
-            agent = await _get_agent()
+            agent = await _get_agent() #agent is create here, it is a singleton, so that the agent can maintain its state across requests, build one and reused it
             timeout = float(os.getenv("RACKETBOT_REQUEST_TIMEOUT_SECONDS", "60"))
             answer = await asyncio.wait_for(
-                _run_and_validate(agent, req, history),
+                _run_and_validate(agent, req, history), #the main engine of the agent, it will run the agent and validate the answer, if the answer is not valid, it will rewrite the answer and validate again, if still not valid, it will return a fallback answer
                 timeout=timeout,
             )
         except Exception as exc:
             logger.error("RacketBot request failed: %s", type(exc).__name__)
             answer = PROVIDER_FALLBACK
-        finally:
+        finally: #clear content so that the next request will not use the previous request's context
             auth_token_var.reset(auth_token)
             user_id_var.reset(user_token)
-
+        #split the finished answer to chunks and yield each chunk as a SSE event, with a small sleep to allow the event loop to process other tasks
         for chunk in _sse_chunks(answer):
             yield chunk
             await asyncio.sleep(0)
-
+    #return response like a streaming response, with media type text/event-stream, and headers to disable caching and keep the connection alive
     return StreamingResponse(
         response_generator(),
         media_type="text/event-stream",

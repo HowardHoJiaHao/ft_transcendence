@@ -47,7 +47,7 @@ func (h *Handler) RegisterRoutes(v1 *echo.Group) {
 	// need a member JWT, and the floating chat UI is hidden until login.
 	// JWTAuth rejects anonymous callers, expired tokens, and non-member
 	// (admin) tokens before Chat runs.
-	protected.POST("/ai/chat", h.Chat)
+	protected.POST("/ai/chat", h.Chat) // the main chat endpoint, proxies to FastAPI and streams SSE back
 }
 
 const racketbotProxyHeader = "X-Racketbot-Proxy"
@@ -75,6 +75,7 @@ func (h *Handler) Chat(c echo.Context) error {
 	}
 
 	// 2. Prepare payload to Python AI Service, by build another struct
+	// with current existing message, history, recommendation + userId and authToken
 	aiReq := AIChatRequest{
 		Message:               userReq.Message,
 		History:               userReq.History,
@@ -82,11 +83,13 @@ func (h *Handler) Chat(c echo.Context) error {
 		AuthToken:             authToken,
 		RecommendationProfile: userReq.RecommendationProfile,
 	}
-	// convert the struct to json
+	// convert the struct to bytes, so we can send to python fastapi
 	jsonData, err := json.Marshal(aiReq)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed parsing request"})
 	}
+
+	// AI SERVICE URL  is environment variable outside of the code
 	// send to ai service, the url is in the environment variable AI_SERVICE_URL, if not set, default to http://ai:8000
 	aiServiceURL := os.Getenv("AI_SERVICE_URL")
 	if aiServiceURL == "" {
@@ -94,27 +97,29 @@ func (h *Handler) Chat(c echo.Context) error {
 	}
 
 	// 3. Request the streaming response from Python FastAPI
-
+	
+	// build outbound http request to the AI service, with the json data as body, which is the message, history, recommendation + userId and authToken to send to the ai service
 	// create the link to later to call api
 	req, err := http.NewRequest("POST", aiServiceURL+"/chat", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed creating backend request"})
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// Shared secret so only this Go proxy can call FastAPI /chat on the compose network.
+	// Shared secret so only this Go proxy can call FastAPI /chat on the compose network, for safety, fast api can reject caller that is not this go proxy, that is not user jwt
 	if secret := os.Getenv("AI_INTERNAL_SECRET"); secret != "" {
 		req.Header.Set(racketbotProxyHeader, secret)
 	}
 
+		
+	// calling the api to ai service is here  <=  the actual calling start here, the previous code is just preparing the request to send to the ai service
 	// Keep a small margin above the AI service's default 60-second total
 	// request budget so a broken downstream connection cannot hang forever.
-	// calling the api to ai service is here
 	resp, err := aiHTTPClient.Do(req)
 	if err != nil {
 		log.Printf("Error contacting AI service: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "AI Customer Service is temporarily unavailable"})
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() // ensure the response body is closed after reading, so that the connection is not leaked
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("AI service returned error HTTP %d", resp.StatusCode)
@@ -127,6 +132,7 @@ func (h *Handler) Chat(c echo.Context) error {
 	c.Response().Header().Set("Connection", "keep-alive")
 	c.Response().WriteHeader(http.StatusOK)
 
+	// read the python stream in 512 byte chunks, write each chunk to the browser, and flush, stop at EOF or error.
 	buf := make([]byte, 512)
 	for {
 		n, err := resp.Body.Read(buf)
