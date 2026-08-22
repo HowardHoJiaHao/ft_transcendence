@@ -15,7 +15,7 @@ from embeddings import get_embeddings
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
-FAQ_DIR = BASE_DIR / "faq_docs"
+FAQ_DIR = BASE_DIR / "faq_docs" # Directory containing FAQ documents
 RETRIEVAL_VERSION = "v2-hybrid"
 
 DOCUMENT_METADATA: Dict[str, Dict[str, str]] = {
@@ -199,7 +199,7 @@ def _parse_markdown_sections(content: str) -> Tuple[str, List[Tuple[str, str]]]:
     flush()
     return document_title, sections
 
-
+# turn those markdown faq into chunking
 def build_knowledge_chunks(faq_dir: Path = FAQ_DIR) -> List[Dict[str, Any]]:
     chunks: List[Dict[str, Any]] = []
     if not faq_dir.exists():
@@ -315,19 +315,20 @@ def _embed_documents_batched(embedding_client: Any, texts: Sequence[str]) -> Lis
         vectors.extend(embedding_client.embed_documents(list(texts[start : start + batch_size])))
     return vectors
 
-
+# take the knowledge chunk and embed it into the vector database
+# write to postgresql database with the embedding vector
 def ingest_knowledge(
     *,
-    embedding_factory: Callable[[], Any] = get_embeddings,
+    embedding_factory: Callable[[], Any] = get_embeddings, #openrouter embedding client
     connection_factory: Callable[[], Any] = get_db_connection,
 ) -> Dict[str, Any]:
     """Safely build a new knowledge version without deleting the active one."""
 
-    chunks = build_knowledge_chunks()
+    chunks = build_knowledge_chunks() #md > text chunks
     if not chunks:
         return {"ok": False, "error": "No knowledge documents were found"}
 
-    embedding_client = embedding_factory()
+    embedding_client = embedding_factory() #this one is to use embedding client(open router), create client only, not yet embed
     model_id = _embedding_model_id(embedding_client)
     conn = connection_factory()
     try:
@@ -384,7 +385,7 @@ def ingest_knowledge(
                 f"{chunk['document_title']}\n{chunk['section_title']}\n{chunk['content']}"
                 for chunk in missing_chunks
             ]
-            generated = _embed_documents_batched(embedding_client, texts)
+            generated = _embed_documents_batched(embedding_client, texts) #real embedding action happens here
             if len(generated) != len(missing_chunks):
                 raise ValueError("Embedding provider returned an unexpected batch size")
             for chunk, vector in zip(missing_chunks, generated):
@@ -531,7 +532,7 @@ def _retrieve_local_knowledge(
         },
     }
 
-
+# this is where the rag is used in chat,
 def retrieve_knowledge_chunks(
     query: str,
     categories: Optional[Sequence[str]] = None,
@@ -550,7 +551,7 @@ def retrieve_knowledge_chunks(
 
     try:
         embedding_client = embedding_factory()
-        query_vector = _as_list(embedding_client.embed_query(clean_query))
+        query_vector = _as_list(embedding_client.embed_query(clean_query)) #this is to turn user question into vector
         if not query_vector:
             raise ValueError("Embedding provider returned an empty query vector")
 
@@ -564,7 +565,7 @@ def retrieve_knowledge_chunks(
                 where += " AND category = ANY(%s)"
                 params.append(clean_categories)
             params.append(safe_top_k)
-            with conn.cursor() as cursor:
+            with conn.cursor() as cursor: #this is to retrieve the knowledge chunk from pgvector by using sql
                 cursor.execute(
                     f"""
                     SELECT
@@ -650,7 +651,7 @@ def retrieve_knowledge_chunks(
         )
         return _retrieve_local_knowledge(clean_query, clean_categories, safe_top_k)
 
-
+# this is to call the retrieval and joins the chunks into a string. for langGraph agent to use
 def retrieve_faq_context(query: str) -> str:
     """Compatibility adapter for code outside the new agentic path."""
 

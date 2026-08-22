@@ -6,7 +6,7 @@ from sklearn.multioutput import MultiOutputClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
-
+#input features for the racketbot model
 FEATURE_COLUMNS = [
     "age_group",
     "gender",
@@ -14,7 +14,7 @@ FEATURE_COLUMNS = [
     "play_style",
     "budget_range",
 ]
-
+#expected output columns
 TARGET_COLUMNS = [
     "weightCategory",
     "flexibilityCategory",
@@ -48,3 +48,6 @@ def build_pipeline() -> Pipeline:
             ("model", model),
         ]
     )
+
+# this file is the random forest tree definition for the racketbot trainning.
+# this does not train or predict, only name column and later build sklearn pipeline
