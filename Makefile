@@ -168,7 +168,7 @@ infisical-auth-clear:
 
 clean: check-docker
 	@echo "⚠️  Removing containers and the PostgreSQL data volume. This deletes local database data."
-	$(COMPOSE) down -v --rmi local
+	$(COMPOSE) --profile stripe down -v --rmi local
 
 prune: check-docker
 	@echo "⚠️  Stopping and removing EVERY Docker container on this machine,"
@@ -179,7 +179,7 @@ prune: check-docker
 
 reset: check-tools check-infisical-project
 	@echo "⚠️  Removing containers and the PostgreSQL data volume. This deletes local database data."
-	@$(WITH_INFISICAL) $(WITH_DOCKER_LOG_PATHS) sh -c 'docker compose --env-file .env.infisical down -v --rmi local && docker compose --env-file .env.infisical up -d --build --wait --wait-timeout 180'
+	@$(WITH_INFISICAL) $(WITH_DOCKER_LOG_PATHS) sh -c 'docker compose --env-file .env.infisical --profile stripe down -v --rmi local && docker compose --env-file .env.infisical up -d --build --wait --wait-timeout 180'
 
 # Legacy aliases now use the secure full-stack workflow so they cannot start a
 # dependency chain without the required injected secrets.
