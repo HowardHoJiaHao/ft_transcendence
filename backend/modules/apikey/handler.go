@@ -385,3 +385,80 @@ func GetAPIAttackAttempts(c echo.Context, db *sql.DB) error {
 	}
 	return c.JSON(200, map[string]interface{}{"windowHours": hours, "attempts": attempts})
 }
+
+// ─── HOW A REQUEST REACHES EACH OUTCOME ─────────────────────────────────────
+//
+// A request arrives carrying X-API-Key. The middleware hashes what it was given
+// and looks the row up by that hash — the plaintext is never compared against
+// anything, because nothing stored is plaintext. 
+//
+//	read X-API-Key
+//	     │
+//	     ├──── absent ──────────────────► 401  missing_key   nothing was sent, so
+//	     │                                                   there is nothing to
+//	     │                                                   hash: no fingerprint
+//	     ▼
+//	SHA-256 it, SELECT … WHERE key_hash = $1
+//	     │
+//	     ├──── no row ──────────────────► 401  invalid_key   hashable but not
+//	     │                                                   attributable, so a
+//	     │                                                   fingerprint and no ids
+//	     ▼
+//	is_active
+//	     ├──── false ───────────────────► 403  revoked_key
+//	     ▼
+//	expires_at
+//	     ├──── in the past ─────────────► 401  expired_key
+//	     ▼
+//	rate limit for this key
+//	     ├──── over ────────────────────► 429  rate_limited
+//	     ▼
+//	c.Set("userId"), touch last_used_at, run the handler
+//	     └──────────────────────────────► success
+//
+// Everything from is_active downward already knows which key and which user,
+// which is why those four rows in the matrix below are fully populated. The two
+// above it are the only rejections that happen before an identity exists.
+
+// ─── WHICH LOG COLUMNS GET FILLED, AND WHEN ─────────────────────────────────
+//
+// Eight of the eleven columns are written on every row. Three vary, and they
+// vary together: how much a row knows depends on how far the request got
+// before myMiddleware/apikey.go turned it away.
+//
+//	id               SERIAL PK     always
+//	method           VARCHAR(10)   always
+//	path             VARCHAR(255)  always — URL.Path only, never the query string
+//	status           INT           always
+//	ip_address       VARCHAR(64)   always
+//	outcome          VARCHAR(32)   always, CHECK-constrained to the six values
+//	user_agent       VARCHAR(255)  always, truncated to 255 before the insert
+//	created_at       TIMESTAMP     always
+//	api_key_id       INT           only once the key has been identified
+//	user_id          INT           only once the key has been identified
+//	key_fingerprint  VARCHAR(16)   only when a key was actually presented
+//
+// The last column below is api_keys.last_used_at, not a log column — it is here
+// because it is the one other thing a request can write.
+//
+//	outcome         api_key_id  user_id  key_fingerprint  last_used_at
+//	--------------  ----------  -------  ---------------  ------------
+//	missing_key     NULL        NULL     NULL             untouched
+//	invalid_key     NULL        NULL     set              untouched
+//	revoked_key     set         set      set              untouched
+//	expired_key     set         set      set              untouched
+//	rate_limited    set         set      set              untouched
+//	success         set         set      set              UPDATED
+//
+// The NULLs are information rather than gaps. A NULL api_key_id beside a
+// non-NULL key_fingerprint means somebody presented a credential that was never
+// issued, which is what a brute-force run looks like. missing_key has no
+// fingerprint at all because no header arrived, so there was nothing to hash.
+//
+// last_used_at only moves on success because step 7 sits past every rejection —
+// a key that is rate-limited a thousand times still shows its old timestamp.
+//
+// Anything that INNER JOINs logs to keys silently drops the attack rows. Use a
+// LEFT JOIN, or filter on outcome and read key_fingerprint instead.
+
+// docker exec -it transcendence-postgres psql -U transcendence -d transcendence
