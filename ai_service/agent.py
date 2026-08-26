@@ -174,7 +174,8 @@ def create_llm() -> ChatOpenAI:
         use_responses_api=False,
     )
 
-
+# if ai message.content is a list of pieces, then join those pieces, 
+# one message : [hello , boss] -> hello \nBoss
 def _message_text(message: Any) -> str:
     content = getattr(message, "content", message)
     if isinstance(content, str):
@@ -253,7 +254,7 @@ def _summarize_run(messages: Iterable[Any]) -> Tuple[Tuple[str, ...], int, int]:
 
 class RacketBotAgent:
     """A stateless wrapper around a compiled LangChain/LangGraph agent."""
-
+	#this is the class, thats defining what is agent, with two variable, llm and graph, 2 method, run, rewrite_answer
     def __init__(self, *, graph: Any = None, llm: Optional[ChatOpenAI] = None):
         self.llm = llm or create_llm() #attach the model client deepseek
         self.graph = graph or create_langchain_agent(
