@@ -652,6 +652,7 @@ def retrieve_knowledge_chunks(
         return _retrieve_local_knowledge(clean_query, clean_categories, safe_top_k)
 
 # this is to call the retrieval and joins the chunks into a string. for langGraph agent to use
+# this is unused anymore, the langchain tools will call this retrieve_knowledge_chunks
 def retrieve_faq_context(query: str) -> str:
     """Compatibility adapter for code outside the new agentic path."""
 
