@@ -211,10 +211,17 @@ def _evaluate(
     metrics["exact_match_accuracy"] = round(float(exact_match), 4)
     return metrics
 
-
+#core functions
+# load the baseline csv and survey row from postgres
+# concatenate them to one snapshot
+# build model pipeline and train it on the snapshot
+# score the model on a test split and record metrics
+# refits on all rows and saves the model artifact and metadata to a temporary directory
+# write the joblib + metadata and activate the version
 def run_training_job(run_id: int) -> None:
     temporary_dir: Optional[Path] = None
     try:
+        #read the dataset and check if all required columns are present
         baseline = pd.read_csv(BASELINE_DATASET_PATH)
         required = FEATURE_COLUMNS + TARGET_COLUMNS
         missing = [column for column in required if column not in baseline.columns]
@@ -226,13 +233,15 @@ def run_training_job(run_id: int) -> None:
             f"synthetic:{index}" for index in range(1, len(baseline) + 1)
         ]
 
+        #load live surver labels from postgres and combine with baseline to create a snapshot for training
         _update_stage(run_id, 25, "Loading transaction surveys")
-        feedback = _load_feedback()
+        feedback = _load_feedback() #extra labeled row from postgrest, retrianing is baseline csv + survey feedback
         combined = pd.concat(
             [baseline[SNAPSHOT_COLUMNS], feedback[SNAPSHOT_COLUMNS]],
             ignore_index=True,
         )
 
+        #give it a version and save the snapshot file
         _update_stage(run_id, 40, "Building combined snapshot")
         version = (
             f"model-{run_id}-"
@@ -247,6 +256,8 @@ def run_training_job(run_id: int) -> None:
         combined.to_csv(snapshot_path, index=False)
         dataset_sha256 = _sha256(snapshot_path)
 
+        #train on 80 percent of the snapshot and evaluate on 20 percent, 
+        #then refit on all rows and save the model artifact and metadata
         _update_stage(run_id, 55, "Training random forest")
         pipeline = build_pipeline()
         x = combined[FEATURE_COLUMNS]
@@ -259,14 +270,17 @@ def run_training_job(run_id: int) -> None:
         )
         pipeline.fit(x_train, y_train)
 
+        #score, then refit on everything and save the model artifact and metadata
         _update_stage(run_id, 75, "Evaluating candidate")
-        metrics = _evaluate(pipeline, x_test, y_test)
+        metrics = _evaluate(pipeline, x_test, y_test) #evaluate is how success is mesaure
         # Evaluation trains the candidate on the training split. Refit on every
         # available row before exporting the production demonstration artifact.
         pipeline.fit(combined[FEATURE_COLUMNS], combined[TARGET_COLUMNS])
 
         _update_stage(run_id, 90, "Saving and validating joblib")
         model_path = temporary_dir / "racket_recommender.joblib"
+
+        #save joblib + sanity check that the model can predict on a single row and returns three outputs
         joblib.dump(pipeline, model_path)
         artifact_sha256 = _sha256(model_path)
         loaded = joblib.load(model_path)
@@ -276,6 +290,7 @@ def run_training_job(run_id: int) -> None:
         ):
             raise ValueError("Candidate model failed the three-output contract")
 
+        #this is to describe the model version, the features, the outputs, the metrics, and the sha256 of the dataset and artifact
         metadata = {
             "model_name": "racket_recommender",
             "model_type": "MultiOutput Random Forest Classifier",
@@ -299,12 +314,14 @@ def run_training_job(run_id: int) -> None:
         }
         _write_json(temporary_dir / "model_metadata.json", metadata)
 
+        #promote the temporary directory to a final versioned directory and activate it
         final_dir = versions_dir / version
         os.replace(temporary_dir, final_dir)
         temporary_dir = None
-        _activate_manifest(version)
+        _activate_manifest(version) #show which is the active model version, this is the one that will be used for inference
         clear_model_cache()
 
+        #mark the db run succeeded and record the metrics, sha256s, and version
         with db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
