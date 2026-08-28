@@ -186,7 +186,8 @@ def _safe_model_path(relative_path: str) -> str:
         raise ValueError("Model manifest path escapes the model directory")
     return candidate
 
-
+# define a class, so that can create object around loading and keeping joblib file
+# oop wrapper for "load this joblib once and reuse it"
 class _ModelManager:
     def __init__(self):
         self._lock = threading.RLock()
@@ -263,7 +264,7 @@ def _confidence_by_output(model: Any, feature_frame: Any) -> Optional[Dict[str, 
     if not hasattr(model, "predict_proba"):
         return None
     try:
-        probability_outputs = model.predict_proba(feature_frame)
+        probability_outputs = model.predict_proba(feature_frame) #return the probabilities for each possible class
         if not isinstance(probability_outputs, (list, tuple)):
             return None
         result: Dict[str, float] = {}
@@ -277,14 +278,15 @@ def _confidence_by_output(model: Any, feature_frame: Any) -> Optional[Dict[str, 
     except Exception:
         return None
 
-
+#this is agent tools
+#take a player profile, validate , run ml model, return the categories
 def predict_racket_specs(profile: Dict[str, Any]) -> Dict[str, Any]:
     clean_profile = validate_profile(profile)
     model = load_model()
-    feature_frame = _as_feature_frame(clean_profile)
+    feature_frame = _as_feature_frame(clean_profile) #formatting
 
     try:
-        prediction_row = _first_prediction_row(model.predict(feature_frame))
+        prediction_row = _first_prediction_row(model.predict(feature_frame)) #this is a normalizer, turn messy predict output to one list of 3 label, and predict method (library, it is actually pass the input to the model)
     except ModelPredictionError:
         raise
     except Exception as exc:
@@ -295,6 +297,7 @@ def predict_racket_specs(profile: Dict[str, Any]) -> Dict[str, Any]:
             f"Model returned {len(prediction_row)} output(s), expected {len(OUTPUT_FIELDS)}"
         )
 
+	#this is about to give name to the result, because model.predict will return index only
     predictions = {
         field: str(prediction_row[index])
         for index, field in enumerate(OUTPUT_FIELDS)
@@ -302,7 +305,8 @@ def predict_racket_specs(profile: Dict[str, Any]) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "predictions": predictions,
         "model": load_model_metadata(),
-    }
+    } #attach the predictionn to the result from above
+
     confidence = _confidence_by_output(model, feature_frame)
     if confidence:
         result["confidence_by_output"] = confidence
