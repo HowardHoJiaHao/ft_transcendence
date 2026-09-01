@@ -533,6 +533,8 @@ def _retrieve_local_knowledge(
     }
 
 # this is where the rag is used in chat,
+
+# then it will take the top 5 chunks from  the knowledge chunks that pass the cutoff, the rest will drop
 def retrieve_knowledge_chunks(
     query: str,
     categories: Optional[Sequence[str]] = None,
@@ -565,7 +567,7 @@ def retrieve_knowledge_chunks(
                 where += " AND category = ANY(%s)"
                 params.append(clean_categories)
             params.append(safe_top_k)
-            with conn.cursor() as cursor: #this is to retrieve the knowledge chunk from pgvector by using sql
+            with conn.cursor() as cursor: #this is to retrieve the knowledge chunk from pgvector by using sql, compare the vector to pgvector rows
                 cursor.execute(
                     f"""
                     SELECT
@@ -614,7 +616,7 @@ def retrieve_knowledge_chunks(
             ) = row
             combined = (0.75 * float(semantic_score or 0)) + (
                 0.25 * min(1.0, float(lexical_score or 0))
-            )
+            ) #most important cutoff score for cosine similiarities, which is 0.15
             if combined < min_relevance:
                 continue
             public_chunks.append(
