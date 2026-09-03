@@ -106,6 +106,9 @@ func main() {
 	adminHandler := admin.NewHandler(rawDB)
 	aiHandler := ai.NewHandler(rawDB)
 
+	//  NewXXX() are mainly build the object
+	// below only start to register route
+
 	listingHandler.RegisterRoutes(v1)       // product listing
 	listingFilesHandler.RegisterRoutes(v1)  // photos and PDFs
 	listingReviewsHandler.RegisterRoutes(v1) // ratings, comments
@@ -172,3 +175,11 @@ func healthCheckHandler(c echo.Context, rawDB *sql.DB) error {
 		"db":     "connected",
 	})
 }
+
+// basically, the main shape main idea of go backend is this : build object -> register route -> run handler
+// build objects - repositories(database), services(logic), handlers, chat hub
+// register routes - "this URL + GET/POST/... runs this function." this is each RegisterRoutes
+// write handlers - this function(getProducts , createProducts). they read the request, run SQL, return json
+
+// middleware on some route before reach handler
+// repository/ service = extra object the handler uses so sql is not all copied into the route function
