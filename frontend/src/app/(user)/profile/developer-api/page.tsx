@@ -542,7 +542,8 @@ export default function DeveloperApiPage() {
                     <input
                       className="flex-[1_1_320px] min-w-[220px] border border-[#ddd] rounded-lg px-3 py-[9px] text-sm bg-white text-[#333] focus:outline-none focus:border-[#888]"
                       value={newKeyName}
-                      onChange={(e) => setNewKeyName(e.target.value)}
+                      onChange={(e) => setNewKeyName(e.target.value.slice(0, 255))}
+                      maxLength={255}
                       placeholder="Key name, e.g. My Inventory Bot"
                     />
                     <button className="border-none rounded-[20px] bg-[#111] text-white text-sm font-semibold px-5 py-[9px] cursor-pointer transition-colors duration-150 hover:bg-[#333] disabled:opacity-55 disabled:cursor-not-allowed" type="submit" disabled={creating}>

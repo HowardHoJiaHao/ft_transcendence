@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast/ToastContext";
 import { useI18n } from "@/context/LanguageContext";
+import { PROFILE_LIMITS } from "@/lib/profileValidation";
 
 type UserRole = "user" | "moderator" | "admin";
 type AccountStatus = "active" | "suspended" | "deleted";
@@ -474,11 +475,11 @@ export default function AdminUsersPage() {
 
       {isAdmin && showCreate && (
         <form onSubmit={createUser} className="max-w-[1250px] mx-auto mb-5 p-5 bg-white rounded-[10px] shadow-[var(--shadow)] grid grid-cols-3 gap-3 max-[800px]:grid-cols-1">
-          <input className={inputClass} required placeholder={t("admin.username")} value={createForm.username} onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })} />
-          <input className={inputClass} required type="email" placeholder={t("admin.email")} value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} />
-          <input className={inputClass} required minLength={8} type="password" placeholder={t("admin.temporaryPassword")} value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} />
-          <input className={inputClass} placeholder={t("admin.firstName")} value={createForm.firstName} onChange={(e) => setCreateForm({ ...createForm, firstName: e.target.value })} />
-          <input className={inputClass} placeholder={t("admin.lastName")} value={createForm.lastName} onChange={(e) => setCreateForm({ ...createForm, lastName: e.target.value })} />
+          <input className={inputClass} required placeholder={t("admin.username")} value={createForm.username} maxLength={PROFILE_LIMITS.username} onChange={(e) => setCreateForm({ ...createForm, username: e.target.value.slice(0, PROFILE_LIMITS.username) })} />
+          <input className={inputClass} required type="email" placeholder={t("admin.email")} value={createForm.email} maxLength={PROFILE_LIMITS.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value.slice(0, PROFILE_LIMITS.email) })} />
+          <input className={inputClass} required minLength={8} maxLength={PROFILE_LIMITS.password} type="password" placeholder={t("admin.temporaryPassword")} value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value.slice(0, PROFILE_LIMITS.password) })} />
+          <input className={inputClass} placeholder={t("admin.firstName")} value={createForm.firstName} maxLength={PROFILE_LIMITS.name} onChange={(e) => setCreateForm({ ...createForm, firstName: e.target.value.slice(0, PROFILE_LIMITS.name) })} />
+          <input className={inputClass} placeholder={t("admin.lastName")} value={createForm.lastName} maxLength={PROFILE_LIMITS.name} onChange={(e) => setCreateForm({ ...createForm, lastName: e.target.value.slice(0, PROFILE_LIMITS.name) })} />
           <select className={inputClass} value={createForm.role} onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as UserRole })}>
             <option value="user">{t("admin.roleUser")}</option>
             <option value="moderator">{t("admin.roleModerator")}</option>
@@ -489,7 +490,7 @@ export default function AdminUsersPage() {
       )}
 
       <section className="max-w-[1250px] mx-auto mb-4 flex gap-3 max-[700px]:flex-col">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("admin.searchPlaceholder")} aria-label={t("admin.searchPlaceholder")} className="flex-1 px-3 py-[10px] border border-[#ccc] rounded-md" />
+        <input value={search} maxLength={PROFILE_LIMITS.search} onChange={(e) => setSearch(e.target.value.slice(0, PROFILE_LIMITS.search))} placeholder={t("admin.searchPlaceholder")} aria-label={t("admin.searchPlaceholder")} className="flex-1 px-3 py-[10px] border border-[#ccc] rounded-md" />
         <select value={role} onChange={(e) => setRole(e.target.value as "" | UserRole)} aria-label={t("admin.filterRole")} className="px-3 py-[10px] border border-[#ccc] rounded-md">
           <option value="">{t("admin.allRoles")}</option>
           <option value="user">{t("admin.roleUser")}</option>
@@ -525,11 +526,11 @@ export default function AdminUsersPage() {
               return (
                 <tr key={user.id}>
                   <td className={cellClass}>{user.id}</td>
-                  <td className={cellClass}>{editing ? <input className={inputClass} value={editForm.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })} /> : user.username}</td>
-                  <td className={cellClass}>{editing ? <input className={inputClass} type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /> : (user.email || "—")}</td>
+                  <td className={cellClass}>{editing ? <input className={inputClass} value={editForm.username} maxLength={PROFILE_LIMITS.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value.slice(0, PROFILE_LIMITS.username) })} /> : user.username}</td>
+                  <td className={cellClass}>{editing ? <input className={inputClass} type="email" value={editForm.email} maxLength={PROFILE_LIMITS.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value.slice(0, PROFILE_LIMITS.email) })} /> : (user.email || "—")}</td>
                   <td className={cellClass}>
                     {editing
-                      ? <div className="flex gap-2"><input className={inputClass} value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })} /><input className={inputClass} value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })} /></div>
+                      ? <div className="flex gap-2"><input className={inputClass} value={editForm.firstName} maxLength={PROFILE_LIMITS.name} onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value.slice(0, PROFILE_LIMITS.name) })} /><input className={inputClass} value={editForm.lastName} maxLength={PROFILE_LIMITS.name} onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value.slice(0, PROFILE_LIMITS.name) })} /></div>
                       : ([user.firstName, user.lastName].filter(Boolean).join(" ") || "—")}
                   </td>
                   <td className={cellClass}>

@@ -45,8 +45,9 @@ export default function PasswordField({
         type={show ? "text" : "password"}
         placeholder={placeholder}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange(event.target.value.slice(0, 72))}
         required={required}
+        maxLength={72}
         className={className}
         autoComplete={autoComplete}
       />

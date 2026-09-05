@@ -53,6 +53,7 @@ import (
 	"log"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
@@ -138,6 +139,9 @@ func (h *Handler) createAPIKey(c echo.Context) error {
 	_ = c.Bind(&req)
 	if req.Name == "" {
 		req.Name = "API Key"
+	}
+	if utf8.RuneCountInString(req.Name) > 255 {
+		return c.JSON(400, map[string]string{"error": "Key name must be 255 characters or fewer"})
 	}
 
 	// generate random number for key 256 bits
@@ -390,7 +394,7 @@ func GetAPIAttackAttempts(c echo.Context, db *sql.DB) error {
 //
 // A request arrives carrying X-API-Key. The middleware hashes what it was given
 // and looks the row up by that hash — the plaintext is never compared against
-// anything, because nothing stored is plaintext. 
+// anything, because nothing stored is plaintext.
 //
 //	read X-API-Key
 //	     │

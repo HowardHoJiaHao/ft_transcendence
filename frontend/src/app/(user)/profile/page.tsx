@@ -412,7 +412,8 @@ export default function ProfilePage() {
               autoComplete="one-time-code"
               placeholder={t("profile.otpPlaceholder")}
               value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value)}
+              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, PROFILE_LIMITS.otp))}
+              maxLength={PROFILE_LIMITS.otp}
               required
               className="w-full border border-[#ddd] rounded-lg px-3.5 py-2.5 text-lg tracking-[0.35em] text-center text-[#222] bg-white transition-colors duration-150 focus:border-[#2a78d6] focus:outline-none"
             />

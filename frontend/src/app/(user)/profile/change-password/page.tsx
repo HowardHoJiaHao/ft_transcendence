@@ -129,7 +129,7 @@ export default function ChangePasswordPage() {
         ) : (
           <>
             <p>{t("changePassword.otpPrompt")}</p>
-            <input inputMode="numeric" placeholder={t("changePassword.otpPlaceholder")} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} required className="w-full p-3 border border-[#ccc] rounded-md text-base" />
+            <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder={t("changePassword.otpPlaceholder")} value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} required className="w-full p-3 border border-[#ccc] rounded-md text-base" />
             <button disabled={loading} className={buttonClass}>{loading ? t("changePassword.changing") : t("changePassword.submit")}</button>
           </>
         )}

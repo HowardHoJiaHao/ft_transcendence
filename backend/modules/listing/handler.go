@@ -7,6 +7,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
@@ -77,6 +78,9 @@ func (h *Handler) getProducts(c echo.Context) error {
 	offsetInt, err := strconv.Atoi(offset)
 	if err != nil || offsetInt < 0 {
 		offsetInt = 0
+	}
+	if utf8.RuneCountInString(search) > 255 {
+		return c.JSON(400, map[string]string{"error": "search must be 255 characters or fewer"})
 	}
 
 	query := "SELECT " + listingSelectCols + listingFromClause

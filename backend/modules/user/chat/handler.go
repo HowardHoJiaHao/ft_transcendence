@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
 	"github.com/labstack/echo/v4"
 	"transcendence/modules/user/auth"
@@ -72,6 +73,10 @@ func (h *Handler) SendMessage(c echo.Context) error {
 
 	if req.ReceiverId == senderId {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot send message to yourself"})
+	}
+
+	if utf8.RuneCountInString(req.Content) > MaxMessageLen {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "message must be 2000 characters or fewer"})
 	}
 
 	msg, notificationID, err := h.Repo.CreateMessageWithNotification(senderId, req.ReceiverId, req.Content)
@@ -170,7 +175,12 @@ func (h *Handler) GetPeople(c echo.Context) error {
 		offset = parsed
 	}
 
-	people, err := h.Repo.SearchDirectoryUsers(currentUserID, c.QueryParam("q"), role, limit, offset)
+	query := c.QueryParam("q")
+	if utf8.RuneCountInString(query) > 255 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "search must be 255 characters or fewer"})
+	}
+
+	people, err := h.Repo.SearchDirectoryUsers(currentUserID, query, role, limit, offset)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to fetch people"})
 	}

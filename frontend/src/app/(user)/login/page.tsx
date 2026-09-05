@@ -130,7 +130,7 @@ export default function LoginPage ()
 					body: JSON.stringify(
 						isRegister
 						? {
-							username, email, password, firstName: username, lastName: '',
+							username, email, password, firstName: username.trim().slice(0, PROFILE_LIMITS.name), lastName: '',
 							phoneNo: phoneNo.trim(),
 							address: address.trim(),
 							postcode: postcode.trim(),
@@ -190,9 +190,12 @@ export default function LoginPage ()
 					<h2 className="text-center mb-4 text-[#333]">Enter OTP Code</h2>
 					<input
 						type="text"
+						inputMode="numeric"
+						autoComplete="one-time-code"
 						placeholder="6-digit OTP"
 						value={otpCode}
-						onChange={(e) => setOtpCode(e.target.value)}
+						onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, PROFILE_LIMITS.otp))}
+						maxLength={PROFILE_LIMITS.otp}
 						required
 						className="p-3 border border-[#ccc] rounded text-base self-center text-center w-[200px]"
 					/>
@@ -213,7 +216,8 @@ export default function LoginPage ()
 						type="text"
 						placeholder="Username" //the text appear before typing
 						value={username} //telling that value (what inputted) must be the same with username (stored username)
-						onChange={(e) => setUsername(e.target.value)} //(e) event object. => points to code we want to run. e.target pointer to input box. e.pointer.value the current string inside the box
+						onChange={(e) => setUsername(e.target.value.slice(0, PROFILE_LIMITS.username))} //(e) event object. => points to code we want to run. e.target pointer to input box. e.pointer.value the current string inside the box
+						maxLength={PROFILE_LIMITS.username}
 						required
 						className={inputClass}
 					/>
@@ -222,7 +226,8 @@ export default function LoginPage ()
 					type="email"
 					placeholder = "Email"
 					value={email}
-					onChange={(e) => setEmail(e.target.value)}
+					onChange={(e) => setEmail(e.target.value.slice(0, PROFILE_LIMITS.email))}
+					maxLength={PROFILE_LIMITS.email}
 					required
 					className={inputClass}
 				/>

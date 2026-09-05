@@ -1,6 +1,7 @@
 'use client';
 
 import { useI18n } from '@/context/LanguageContext';
+import { PROFILE_LIMITS } from '@/lib/profileValidation';
 
 export default function SearchBar( { //taking variables to destructure them. so later can call these variables directly instead of props.
   value,
@@ -21,7 +22,8 @@ export default function SearchBar( { //taking variables to destructure them. so 
           placeholder={t('header.searchPlaceholder')}
           aria-label={t('header.searchPlaceholder')}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          maxLength={PROFILE_LIMITS.search}
+          onChange={(event) => onChange(event.target.value.slice(0, PROFILE_LIMITS.search))}
           onKeyDown={(event) => {
             // Enter should search — the button is not inside a <form>.
             if (event.key === 'Enter') onSubmit();

@@ -8,7 +8,7 @@ import Header from '@/components/Header/Header';
 import ListingImage from '@/components/ListingImage/ListingImage';
 import Link from 'next/link';
 import { MALAYSIA_STATES, districtsOf, formatLocation } from '@/lib/malaysia';
-import { CATEGORIES } from '@/lib/productOptions';
+import { CATEGORIES, LISTING_LIMITS } from '@/lib/productOptions';
 
 interface Product
 {
@@ -229,20 +229,26 @@ function HomeInner()
               <h3 className="text-sm font-semibold mb-3">Price Range</h3>
 			  	<div className="flex justify-between text-xs mt-2 text-[var(--secondary)] gap-4">
 				  <div className="flex items-center gap-2">
-					<input className="placeholder:text-[11px]" type="number" id="minPrice" placeholder="Min" min="0"
+					<input className="placeholder:text-[11px]" type="number" id="minPrice" placeholder="Min" min="0" max={LISTING_LIMITS.price}
 					  value={minPriceInput}
 					  onChange={(e) => setMinPriceInput(e.target.value)}
 					/>
 					<span className="text-base flex items-center justify-center">-</span>
-					<input className="placeholder:text-[11px]" type="number" id="maxPrice" placeholder="Max" min="0"
+					<input className="placeholder:text-[11px]" type="number" id="maxPrice" placeholder="Max" min="0" max={LISTING_LIMITS.price}
 					  value={maxPriceInput}
 					  onChange={(e) => setMaxPriceInput(e.target.value)}
 					/>
 				  </div>
                   <button className="px-2.5 py-1"
 					onClick={() => {
-					  setAppliedMinPrice(minPriceInput);
-					  setAppliedMaxPrice(maxPriceInput);
+					  const clampPrice = (raw: string) => {
+					    if (!raw.trim()) return '';
+					    const n = Number(raw);
+					    if (!Number.isFinite(n) || n < 0) return '';
+					    return String(Math.min(n, LISTING_LIMITS.price));
+					  };
+					  setAppliedMinPrice(clampPrice(minPriceInput));
+					  setAppliedMaxPrice(clampPrice(maxPriceInput));
 					}}
 				  >Apply</button>
 				</div>

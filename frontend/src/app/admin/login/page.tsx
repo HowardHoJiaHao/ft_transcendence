@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/context/LanguageContext";
+import { PROFILE_LIMITS } from "@/lib/profileValidation";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -46,8 +47,8 @@ export default function AdminLoginPage() {
       >
         <h1>{t("adminLogin.title")}</h1>
         {error && <p className="text-[#b42318] max-w-[1100px] mx-auto mb-4">{error}</p>}
-        <input placeholder={t("adminLogin.username")} value={username} onChange={(e) => setUsername(e.target.value)} required className="p-3 border border-[#ccc] rounded-md text-base" />
-        <input type="password" placeholder={t("adminLogin.password")} value={password} onChange={(e) => setPassword(e.target.value)} required className="p-3 border border-[#ccc] rounded-md text-base" />
+        <input placeholder={t("adminLogin.username")} value={username} maxLength={PROFILE_LIMITS.username} onChange={(e) => setUsername(e.target.value.slice(0, PROFILE_LIMITS.username))} required className="p-3 border border-[#ccc] rounded-md text-base" />
+        <input type="password" placeholder={t("adminLogin.password")} value={password} maxLength={PROFILE_LIMITS.password} onChange={(e) => setPassword(e.target.value.slice(0, PROFILE_LIMITS.password))} required className="p-3 border border-[#ccc] rounded-md text-base" />
         <button disabled={loading} className="px-4 py-[10px] border-0 rounded-md bg-[#d32f2f] text-white cursor-pointer">
           {loading ? t("adminLogin.signingIn") : t("adminLogin.signIn")}
         </button>

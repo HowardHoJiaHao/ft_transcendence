@@ -92,12 +92,12 @@ app = FastAPI(title="RacketDiction AI Service", lifespan=lifespan)
 
 class ChatMessage(BaseModel):
     role: str
-    content: str
+    content: str = Field(default="", max_length=2000)
 
 
 class ChatRequest(BaseModel):
-    message: str
-    history: List[ChatMessage] = Field(default_factory=list)
+    message: str = Field(..., max_length=2000)
+    history: List[ChatMessage] = Field(default_factory=list, max_length=10)
     userId: int = 0
     authToken: str = ""
     recommendationProfile: Optional[Dict[str, str]] = None

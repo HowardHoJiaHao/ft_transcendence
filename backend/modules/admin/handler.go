@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
@@ -193,6 +194,9 @@ func (h *Handler) listAdminUsers(c echo.Context) error {
 		args = append(args, role)
 	}
 	if search := strings.TrimSpace(c.QueryParam("search")); search != "" {
+		if utf8.RuneCountInString(search) > 255 {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "search must be 255 characters or fewer"})
+		}
 		position := strconv.Itoa(len(args) + 1)
 		query += " AND (username ILIKE $" + position + " OR email ILIKE $" + position + ")"
 		args = append(args, "%"+search+"%")

@@ -251,7 +251,7 @@ export default function ChatPage() {
 					<div className="p-4 border-b border-[#eee]">
 						<h2 id="people-heading" className="text-xl font-semibold m-0">{t('chat.people')}</h2>
 						<label htmlFor="people-search" className="sr-only">{t('chat.searchPeople')}</label>
-						<input id="people-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('chat.searchPeoplePlaceholder')} className="w-full mt-3 px-3 py-2 border border-[#d1d5db] rounded-lg text-sm outline-none focus:border-[var(--primary)]" />
+						<input id="people-search" value={search} maxLength={255} onChange={(event) => setSearch(event.target.value.slice(0, 255))} placeholder={t('chat.searchPeoplePlaceholder')} className="w-full mt-3 px-3 py-2 border border-[#d1d5db] rounded-lg text-sm outline-none focus:border-[var(--primary)]" />
 						<div className="flex gap-2 mt-3" role="group" aria-label={t('chat.peopleFilters')}>
 							{([{ value: '', label: t('chat.allPeople') }, { value: 'seller', label: t('chat.sellers') }, { value: 'buyer', label: t('chat.buyers') }] as const).map((filter) => (
 								<button key={filter.value || 'all'} onClick={() => setRole(filter.value)} className={`text-sm px-3 py-1.5 rounded-full border ${role === filter.value ? 'bg-[var(--primary)] text-white border-[var(--primary)]' : 'bg-white border-[#d1d5db] text-[#444] hover:bg-[#f5f5f5]'}`}>

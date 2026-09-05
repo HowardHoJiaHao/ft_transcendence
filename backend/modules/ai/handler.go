@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"unicode/utf8"
 
 	"github.com/labstack/echo/v4"
 	"transcendence/myMiddleware"
@@ -52,6 +53,11 @@ func (h *Handler) RegisterRoutes(v1 *echo.Group) {
 
 const racketbotProxyHeader = "X-Racketbot-Proxy"
 
+// Same ceiling as in-app chat. A huge paste can trip the WAF or the model
+// context; the browser also caps the box at this length.
+const maxRacketBotMessageRunes = 2000
+const maxRacketBotHistoryItems = 10
+
 // Chat proxies the browser request to FastAPI (ai:8000) and streams SSE back.
 func (h *Handler) Chat(c echo.Context) error {
 	// read the chat, browser sends in json body
@@ -72,6 +78,18 @@ func (h *Handler) Chat(c echo.Context) error {
 	authToken, _ := c.Get("token").(string)
 	if userID <= 0 || authToken == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Please log in to chat with RacketBot"})
+	}
+
+	if utf8.RuneCountInString(userReq.Message) > maxRacketBotMessageRunes {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Message must be 2000 characters or fewer"})
+	}
+	if len(userReq.History) > maxRacketBotHistoryItems {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "History must be 10 messages or fewer"})
+	}
+	for _, item := range userReq.History {
+		if utf8.RuneCountInString(item.Content) > maxRacketBotMessageRunes {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "History messages must be 2000 characters or fewer"})
+		}
 	}
 
 	// 2. Prepare payload to Python AI Service, by build another struct
@@ -97,7 +115,7 @@ func (h *Handler) Chat(c echo.Context) error {
 	}
 
 	// 3. Request the streaming response from Python FastAPI
-	
+
 	// build outbound http request to the AI service, with the json data as body, which is the message, history, recommendation + userId and authToken to send to the ai service
 	// create the link to later to call api
 	req, err := http.NewRequest("POST", aiServiceURL+"/chat", bytes.NewBuffer(jsonData))
@@ -110,7 +128,6 @@ func (h *Handler) Chat(c echo.Context) error {
 		req.Header.Set(racketbotProxyHeader, secret)
 	}
 
-		
 	// calling the api to ai service is here  <=  the actual calling start here, the previous code is just preparing the request to send to the ai service
 	// Keep a small margin above the AI service's default 60-second total
 	// request budget so a broken downstream connection cannot hang forever.

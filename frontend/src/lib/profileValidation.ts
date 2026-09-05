@@ -6,11 +6,16 @@ import { isValidStateDistrict } from '@/lib/malaysia';
 
 export const PROFILE_LIMITS = {
   email: 255,
+  username: 255,
   phoneRaw: 30,
   name: 50,
   address: 255,
   postcode: 5,
   bio: 500,
+  otp: 6,
+  password: 72,
+  search: 255,
+  apiKeyName: 255,
 } as const;
 
 const PHONE_SEPARATORS = /[\s\-().]/g;
