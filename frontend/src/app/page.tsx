@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react'; //std react hook for managing local state & side effects
+import { useState, useEffect, Suspense } from 'react'; //std react hook for managing local state & side effects
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';; //import hook to access global authentication data
 import { useI18n } from '@/context/LanguageContext';
 import Header from '@/components/Header/Header';
@@ -56,10 +57,13 @@ const BALANCE_CATEGORIES = [
   'Head Light',
 ];
 
-export default function Home()
+function HomeInner()
 {
   const { user, logout } = useAuth();
   const { t } = useI18n();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlSearch = (searchParams.get('search') ?? '').trim();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
@@ -71,8 +75,10 @@ export default function Home()
   const [maxPriceInput, setMaxPriceInput] = useState('');
   const [appliedMinPrice, setAppliedMinPrice] = useState('');
   const [appliedMaxPrice, setAppliedMaxPrice] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  // Seed from the URL so a search from another page (e.g. /products/93) does
+  // not first fetch the unfiltered catalogue and then race the real query.
+  const [searchInput, setSearchInput] = useState(urlSearch);
+  const [searchQuery, setSearchQuery] = useState(urlSearch);
   const [sortBy, setSortBy] = useState('featured');
   const [products, setProducts] = useState<Product[]>([]); //declare a product array. declare the array is empty
   const [loading, setLoading] = useState(true);
@@ -82,15 +88,12 @@ export default function Home()
   // 12 fills the 4-column grid exactly (3 full rows); 10 left a ragged last row.
   const itemsPerPage = 12;
 
-  //			SEARH INITIALIZATION (FROM OTHER PAGE SEARCH)
+  // Keep the box and the applied query aligned when arriving via ?search=
+  // or when the query string changes (logo click, back/forward).
   useEffect(() => {
-	const urlSearch = new URLSearchParams(window.location.search).get('search');
-	if (urlSearch)
-	{
-		setSearchInput(urlSearch);
-		setSearchQuery(urlSearch);
-	}
-  }, [])
+    setSearchInput(urlSearch);
+    setSearchQuery(urlSearch);
+  }, [urlSearch]);
 
   //			TYPE SEARCH TRIGGER CD
   useEffect(() => {
@@ -109,6 +112,7 @@ export default function Home()
   //			FETCH PRODUCTS FROM API
   useEffect(() =>
 	{
+    const controller = new AbortController();
     const fetchProducts = async () => {
       try {
         setLoading(true);
@@ -153,15 +157,19 @@ export default function Home()
 		query.append('limit', itemsPerPage.toString())
 		query.append('offset', offset.toString());
 
-        const res = await fetch(`${apiBaseUrl}/api/v1/products?${query}`);
+        const res = await fetch(`${apiBaseUrl}/api/v1/products?${query}`, {
+          signal: controller.signal,
+        });
 
         if (!res.ok)
           throw new Error('Failed to fetch products');
 
         const data = await res.json();
+        if (controller.signal.aborted)
+          return;
         const totalCount = data.total;
 		setTotalPages(Math.ceil(totalCount/ itemsPerPage));
-        const mappedProducts = data.products.map((p: any) => ({ //for every single data call everything for a while then take the p and turn it into object below
+        const mappedProducts = (data.products ?? []).map((p: any) => ({ //for every single data call everything for a while then take the p and turn it into object below
           id: p.id,
           title: p.title,
           price: parseFloat(p.price),
@@ -184,14 +192,18 @@ export default function Home()
         setProducts(mappedProducts);
         setError(null);
       } catch (err) {
+        if (controller.signal.aborted || (err instanceof DOMException && err.name === 'AbortError'))
+          return;
         setError(err instanceof Error ? err.message : 'An error occurred');
         setProducts([]);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted)
+          setLoading(false);
       }
     };
 
     fetchProducts();
+    return () => controller.abort();
   }, [selectedCategories, selectedWeights, selectedFlexibilities, selectedBalances, selectedState, selectedDistrict, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy, currentPage]);
 
   return (
@@ -200,7 +212,13 @@ export default function Home()
       <Header
         searchValue={searchInput}
         onSearchChange={setSearchInput}
-		onSearchSubmit={() => setSearchQuery(searchInput.trim())}
+		onSearchSubmit={() => {
+		  const q = searchInput.trim();
+		  setSearchQuery(q);
+		  const next = q ? `/?search=${encodeURIComponent(q)}` : '/';
+		  if (`${window.location.pathname}${window.location.search}` !== next)
+		    router.push(next);
+		}}
       />
 
         {/* Main Content */}
@@ -496,5 +514,19 @@ export default function Home()
 			)}
         </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <main className="flex flex-col min-h-screen px-5">
+        <div className="text-center px-5 py-[60px] bg-white rounded-lg">
+          <p className="text-base mb-5">Loading products...</p>
+        </div>
+      </main>
+    }>
+      <HomeInner />
+    </Suspense>
   );
 }

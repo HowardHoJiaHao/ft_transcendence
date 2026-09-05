@@ -40,11 +40,11 @@ export default function Header({
   const { user, logout } = useAuth();
   const { itemCount } = useCart();
   const { t, lang, setLang } = useI18n(); // connection to the useI18n and pull these functions
-  const { searchQuery, setSearchQuery, handleSearch } = useSearch();
+  const { searchQuery, setSearchQuery, handleSearchFromInput } = useSearch();
   const { closePanel: closeNotifications } = useNotifications();
   const activeSearchValue = searchValue ?? searchQuery;
   const handleSearchChange = onSearchChange ?? setSearchQuery;
-  const submitSearch = onSearchSubmit ?? handleSearch;
+  const submitSearch = onSearchSubmit ?? (() => handleSearchFromInput(activeSearchValue));
 
   // Account menu behind the avatar, the language menu next to it, and the
   // logout confirmation the account menu opens.
