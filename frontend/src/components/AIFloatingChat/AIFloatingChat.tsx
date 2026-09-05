@@ -7,6 +7,39 @@ import { useAuth } from '@/context/AuthContext';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  // WAF-blocked turns stay on screen but must not be resent in later POSTs.
+  excludeFromHistory?: boolean;
+}
+
+const CONNECT_ERROR_MESSAGE =
+  'Sorry Boss, something went wrong trying to connect. Please make sure the AI service is running and try again lah.';
+const SECURITY_BLOCKED_MESSAGE =
+  'Sorry Boss, that message was blocked by our security filter. Please rephrase it and try again.';
+
+function historyForRequest(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: string }> {
+  return messages
+    .filter((message) => !message.excludeFromHistory)
+    .slice(-10)
+    .map(({ role, content }) => ({ role, content }));
+}
+
+function markLastTurnExcluded(prev: Message[], assistantContent: string): Message[] {
+  const next = [...prev];
+  if (next.length === 0) {
+    return next;
+  }
+  next[next.length - 1] = {
+    role: 'assistant',
+    content: assistantContent,
+    excludeFromHistory: true,
+  };
+  if (next.length >= 2 && next[next.length - 2].role === 'user') {
+    next[next.length - 2] = {
+      ...next[next.length - 2],
+      excludeFromHistory: true,
+    };
+  }
+  return next;
 }
 
 type RecommendationProfile = {
@@ -27,6 +60,8 @@ type AssessmentStep = {
 };
 
 const RECOMMENDATION_COMPLETE_MESSAGE = '__recommendation_assessment_complete__';
+const MAX_RACKETBOT_MESSAGE_LENGTH = 2000;
+const COUNTER_VISIBLE_FROM = MAX_RACKETBOT_MESSAGE_LENGTH - 400;
 
 type ProductLink = {
   linkText?: string;
@@ -167,8 +202,8 @@ export default function AIFloatingChat() {
       
       const requestBody = JSON.stringify({
         message: requestMessage,
-        // Send last 10 messages as history context (windowing)
-        history: visibleHistory.slice(-10),
+        // Prior allowed turns only — never the current message, never WAF-blocked text.
+        history: historyForRequest(visibleHistory),
         ...(profile ? { recommendationProfile: profile } : {})
       });
       const sendRequest = (authToken: string) => fetch(
@@ -189,6 +224,13 @@ export default function AIFloatingChat() {
         // Clear the stale browser auth state; the logout drops `user`, which
         // unmounts this panel and leaves the visitor on the logged-out site.
         logout();
+        return;
+      }
+
+      if (response.status === 403) {
+        // ModSecurity rejected this payload. Keep the bubble visible, but drop
+        // the turn from later history so the next message is not blocked too.
+        setMessages((prev) => markLastTurnExcluded(prev, SECURITY_BLOCKED_MESSAGE));
         return;
       }
 
@@ -235,6 +277,7 @@ export default function AIFloatingChat() {
               const newMsgs = [...prev];
               if (newMsgs.length > 0) {
                 newMsgs[newMsgs.length - 1] = {
+                  ...newMsgs[newMsgs.length - 1],
                   role: 'assistant',
                   content: aiResponseText
                 };
@@ -255,8 +298,9 @@ export default function AIFloatingChat() {
         const newMsgs = [...prev];
         if (newMsgs.length > 0) {
           newMsgs[newMsgs.length - 1] = {
+            ...newMsgs[newMsgs.length - 1],
             role: 'assistant',
-            content: "Sorry Boss, something went wrong trying to connect. Please make sure the AI service is running and try again lah."
+            content: CONNECT_ERROR_MESSAGE
           };
         }
         return newMsgs;
@@ -269,12 +313,13 @@ export default function AIFloatingChat() {
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || isLoading || assessmentStepIndex !== null) return;
 
-    const updatedMessages: Message[] = [...messages, { role: 'user', content: text }];
-    setMessages([...updatedMessages, { role: 'assistant', content: '' }]);
+    const message = text.trim().slice(0, MAX_RACKETBOT_MESSAGE_LENGTH);
+    const priorHistory = messages.filter((entry) => !entry.excludeFromHistory);
+    setMessages([...messages, { role: 'user', content: message }, { role: 'assistant', content: '' }]);
     setInputValue('');
     setIsLoading(true);
 
-    await streamChatResponse(text, updatedMessages);
+    await streamChatResponse(message, priorHistory);
   };
 
   const startAssessment = () => {
@@ -322,7 +367,11 @@ export default function AIFloatingChat() {
     ]);
     setIsLoading(true);
 
-    await streamChatResponse(RECOMMENDATION_COMPLETE_MESSAGE, withAnswer, nextProfile);
+    await streamChatResponse(
+      RECOMMENDATION_COMPLETE_MESSAGE,
+      withAnswer.filter((message) => !message.excludeFromHistory),
+      nextProfile
+    );
   };
 
   const handleFormSubmit = (e: React.FormEvent) => {
@@ -575,8 +624,9 @@ export default function AIFloatingChat() {
               type="text" 
               className="flex-1 bg-transparent border-none text-white text-[13px] outline-none py-2 placeholder:text-[#64748b]"
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => setInputValue(e.target.value.slice(0, MAX_RACKETBOT_MESSAGE_LENGTH))}
               placeholder={assessmentStepIndex === null ? 'Ask RacketBot anything, Boss...' : 'Choose an assessment option above...'}
+              maxLength={MAX_RACKETBOT_MESSAGE_LENGTH}
               disabled={isLoading || assessmentStepIndex !== null}
             />
             <button 
@@ -587,6 +637,11 @@ export default function AIFloatingChat() {
               🚀
             </button>
           </form>
+          {inputValue.length >= COUNTER_VISIBLE_FROM && (
+            <p className={`m-0 mt-1.5 text-right text-[11px] ${inputValue.length >= MAX_RACKETBOT_MESSAGE_LENGTH ? 'text-[#fca5a5] font-semibold' : 'text-[#64748b]'}`}>
+              {MAX_RACKETBOT_MESSAGE_LENGTH - inputValue.length} characters left
+            </p>
+          )}
         </div>
 
       </div>
