@@ -14,6 +14,11 @@
     "logoutConfirmBody": "Anda perlu log masuk semula untuk mengurus senarai, sembang dan pesanan anda.",
     "logoutConfirmYes": "Ya, log keluar"
   },
+  "footer": {
+    "terms": "Terma & Syarat",
+    "privacy": "Dasar Privasi",
+    "copyright": "© {year} RacketDiction. Hak cipta terpelihara."
+  },
   "language": {
     "label": "Bahasa",
     "en": "English",
@@ -853,7 +858,7 @@
     "sharing": {
       "title": "Bila kami berkongsi data",
       "p1": "Kami tidak menjual data peribadi anda. Ia dikongsi hanya dalam keadaan berikut:",
-      "b1": "Dengan pengguna lain — nama pengguna, avatar, senarai produk dan ulasan anda boleh dilihat orang lain. Alamat e-mel dan nombor telefon anda tidak dipaparkan secara awam.",
+      "b1": "Dengan pengguna lain — nama pengguna, avatar, senarai produk dan ulasan anda boleh dilihat orang lain. Nombor telefon anda mungkin didedahkan kepada pembeli apabila anda menjual sesuatu, supaya mereka boleh menghubungi anda. Alamat e-mel anda tidak dipaparkan secara awam.",
       "b2": "Dengan penyedia perkhidmatan — pemproses yang disenaraikan di bahagian seterusnya, semata-mata untuk menyediakan ciri yang mereka sokong.",
       "b3": "Apabila undang-undang menghendakinya — untuk memenuhi kewajipan undang-undang, atau melindungi hak dan keselamatan pengguna kami."
     },

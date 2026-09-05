@@ -39,16 +39,9 @@ export function useWebSocket(token: string | null)
 
 			socket.onopen = () => {
 				retryDelay = 1000;
-				console.log('WS open'); // TEMP DEBUG
 				socket.send(JSON.stringify({ type: 'auth', token }));
 			};
 			socket.onclose = (event) => {
-				// TEMP DEBUG: chasing the intermittent connect/disconnect
-				// flicker. code/reason tell us whether this is a real network
-				// drop (1006), a server-initiated close (auth_error, hub
-				// kicking a stale socket), or a clean shutdown. Remove once
-				// diagnosed.
-				console.log('WS close', { code: event.code, reason: event.reason, wasClean: event.wasClean });
 				if (ws === socket) ws = null;
 				setIsConnected(false);
 				if (!stopped && !sessionReplaced) {
@@ -58,7 +51,6 @@ export function useWebSocket(token: string | null)
 			};
 			socket.onerror = (event) => {
 				// onclose schedules the retry and owns connection state.
-				console.log('WS error', event); // TEMP DEBUG
 			};
 			socket.onmessage = (event) => {
 				try {

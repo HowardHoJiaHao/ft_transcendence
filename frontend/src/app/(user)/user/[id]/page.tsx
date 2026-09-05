@@ -241,9 +241,6 @@ export default function UserPage()
 			<div className="mb-2 text-[var(--secondary)] text-sm">
 			  {seller?.id !== undefined && <OnlineStatus userId={seller.id} />}
 			</div>
-			{seller?.phoneNo && (
-			  <div className="mb-2 text-[var(--dark)] text-sm">📞 {seller.phoneNo}</div>
-			)}
 			<div className="flex gap-2.5 mt-2">
 			  <button className="bg-[var(--primary)] text-white border-none px-[25px] py-3 rounded-md cursor-pointer text-base transition-colors duration-300 hover:bg-[var(--primary-dark)]" onClick={openChat} disabled={chatLoading || !currentUser?.id}>
 			    {chatLoading ? t('userProfile.chatLoading') : t('userProfile.chatSeller')}

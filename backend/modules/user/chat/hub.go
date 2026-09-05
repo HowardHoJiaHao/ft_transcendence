@@ -273,11 +273,6 @@ func (c *Client) readPump(h *Hub) {
 	for {
 		_, message, err := c.Conn.ReadMessage() //sort of like poll. wait user gives message
 		if err != nil {
-			// TEMP DEBUG: log every close reason, including the ones
-			// IsUnexpectedCloseError would normally treat as routine
-			// (CloseGoingAway, CloseAbnormalClosure/1006), to chase the
-			// intermittent connect/disconnect flicker. Remove once diagnosed.
-			log.Printf("WebSocket closed (user %d): %v", c.UserId, err)
 			break
 		}
 
@@ -349,20 +344,17 @@ func (c *Client) writePump() {
 
 			w, err := c.Conn.NextWriter(websocket.TextMessage)
 			if err != nil {
-				log.Printf("WebSocket write error (user %d): %v", c.UserId, err) // TEMP DEBUG
 				return
 			}
 			w.Write(message)
 
 			if err := w.Close(); err != nil {
-				log.Printf("WebSocket write-close error (user %d): %v", c.UserId, err) // TEMP DEBUG
 				return
 			}
 
 		case <-ticker.C:
 			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				log.Printf("WebSocket ping failed (user %d): %v", c.UserId, err) // TEMP DEBUG
 				return
 			}
 		}

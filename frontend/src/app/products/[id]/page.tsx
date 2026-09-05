@@ -289,7 +289,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string}>
 		{ label: 'Balance', value: product.balanceCategory },
 		{ label: 'Dealing method', value: product.dealingMethod },
 		{ label: 'Location', value: formatLocation(product.location, product.state) },
-		{ label: 'Contact', value: product.phoneNumber },
 	].filter((spec) => spec.value && spec.value.trim() !== '');
 	// A listing is one indivisible lot, so it is either already in the cart or
 	// can be added whole -- there is no partial quantity to choose.

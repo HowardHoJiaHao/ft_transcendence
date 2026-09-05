@@ -14,6 +14,11 @@
     "logoutConfirmBody": "You'll need to sign in again to manage your listings, chats and orders.",
     "logoutConfirmYes": "Yes, log out"
   },
+  "footer": {
+    "terms": "Terms & Conditions",
+    "privacy": "Privacy Policy",
+    "copyright": "© {year} RacketDiction. All rights reserved."
+  },
   "language": {
     "label": "Language",
     "en": "English",
@@ -853,7 +858,7 @@
     "sharing": {
       "title": "When we share it",
       "p1": "We do not sell your personal data. It is shared only in these situations:",
-      "b1": "With other users — your username, avatar, listings and reviews are visible to others. Your email address and phone number are not shown publicly.",
+      "b1": "With other users — your username, avatar, listings and reviews are visible to others. Your phone number may be exposed to a buyer when you sell an item, so they can contact you about it. Your email address is not shown publicly.",
       "b2": "With service providers — the processors listed in the next section, strictly so they can provide the feature they support.",
       "b3": "Where the law requires it — to meet a legal obligation, or to protect the rights and safety of our users."
     },
