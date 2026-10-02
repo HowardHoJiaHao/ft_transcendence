@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react'; //std react hook for managing local state & side effects
+import { useState, useEffect, useRef, Suspense } from 'react'; //std react hook for managing local state & side effects
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';; //import hook to access global authentication data
 import { useI18n } from '@/context/LanguageContext';
+import { clearStagedListingSearch, peekStagedListingSearch } from '@/hooks/useSearch';
 import Header from '@/components/Header/Header';
 import ListingImage from '@/components/ListingImage/ListingImage';
 import Link from 'next/link';
@@ -79,6 +80,15 @@ function HomeInner()
   // not first fetch the unfiltered catalogue and then race the real query.
   const [searchInput, setSearchInput] = useState(urlSearch);
   const [searchQuery, setSearchQuery] = useState(urlSearch);
+  const [searchBlocked, setSearchBlocked] = useState(false);
+  // True only after Search is pressed, or after a search handed over from another page.
+  // A refused search must not be written into the address.
+  const commitSearchToUrl = useRef(false);
+  const allowedSearch = useRef<string | null>(null);
+  const blockedSearch = useRef<string | null>(null);
+  // Wait until a search handed over from another page is copied into state.
+  // Otherwise the first request runs with an empty search and can clear that handover.
+  const [searchReady, setSearchReady] = useState(false);
   const [sortBy, setSortBy] = useState('featured');
   const [products, setProducts] = useState<Product[]>([]); //declare a product array. declare the array is empty
   const [loading, setLoading] = useState(true);
@@ -90,9 +100,21 @@ function HomeInner()
 
   // Keep the box and the applied query aligned when arriving via ?search=
   // or when the query string changes (logo click, back/forward).
+  // A search started on another page is applied first and is not wiped by the empty address.
   useEffect(() => {
+    const pending = peekStagedListingSearch();
+    if (pending) {
+      setSearchInput(pending);
+      setSearchQuery(pending);
+      commitSearchToUrl.current = true;
+      setSearchBlocked(false);
+      setSearchReady(true);
+      return;
+    }
     setSearchInput(urlSearch);
     setSearchQuery(urlSearch);
+    setSearchBlocked(false);
+    setSearchReady(true);
   }, [urlSearch]);
 
   //			TYPE SEARCH TRIGGER CD
@@ -112,7 +134,10 @@ function HomeInner()
   //			FETCH PRODUCTS FROM API
   useEffect(() =>
 	{
+    if (!searchReady)
+      return;
     const controller = new AbortController();
+    const queryText = searchQuery.trim();
     const fetchProducts = async () => {
       try {
         setLoading(true);
@@ -149,8 +174,8 @@ function HomeInner()
 			query.append('minPrice', appliedMinPrice.trim());
 		if (appliedMaxPrice.trim())
 			query.append('maxPrice', appliedMaxPrice.trim());
-        if (searchQuery.trim())
-          query.append('search', searchQuery.trim());
+        if (queryText)
+          query.append('search', queryText);
         query.append('sort', sortBy);
 
 		const offset = (currentPage - 1) * itemsPerPage;
@@ -160,6 +185,23 @@ function HomeInner()
         const res = await fetch(`${apiBaseUrl}/api/v1/products?${query}`, {
           signal: controller.signal,
         });
+
+        if (controller.signal.aborted)
+          return;
+
+        if (res.status === 403) {
+          // The security filter refused this query. Stay on the shop page.
+          commitSearchToUrl.current = false;
+          clearStagedListingSearch();
+          if (allowedSearch.current === queryText)
+            allowedSearch.current = null;
+          blockedSearch.current = queryText;
+          setSearchBlocked(true);
+          setProducts([]);
+          setTotalPages(1);
+          setError(null);
+          return;
+        }
 
         if (!res.ok)
           throw new Error('Failed to fetch products');
@@ -191,6 +233,16 @@ function HomeInner()
 
         setProducts(mappedProducts);
         setError(null);
+        setSearchBlocked(false);
+        blockedSearch.current = null;
+        allowedSearch.current = queryText;
+        clearStagedListingSearch();
+        if (commitSearchToUrl.current) {
+          commitSearchToUrl.current = false;
+          const next = queryText ? `/?search=${encodeURIComponent(queryText)}` : '/';
+          if (`${window.location.pathname}${window.location.search}` !== next)
+            router.replace(next);
+        }
       } catch (err) {
         if (controller.signal.aborted || (err instanceof DOMException && err.name === 'AbortError'))
           return;
@@ -204,7 +256,7 @@ function HomeInner()
 
     fetchProducts();
     return () => controller.abort();
-  }, [selectedCategories, selectedWeights, selectedFlexibilities, selectedBalances, selectedState, selectedDistrict, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy, currentPage]);
+  }, [searchReady, selectedCategories, selectedWeights, selectedFlexibilities, selectedBalances, selectedState, selectedDistrict, appliedMinPrice, appliedMaxPrice, searchQuery, sortBy, currentPage, router]);
 
   return (
     <main className="flex flex-col min-h-screen px-5">
@@ -214,10 +266,31 @@ function HomeInner()
         onSearchChange={setSearchInput}
 		onSearchSubmit={() => {
 		  const q = searchInput.trim();
+		  setSearchBlocked(false);
+		  if (!q) {
+		    commitSearchToUrl.current = false;
+		    clearStagedListingSearch();
+		    setSearchQuery('');
+		    if (`${window.location.pathname}${window.location.search}` !== '/')
+		      router.replace('/');
+		    return;
+		  }
+		  commitSearchToUrl.current = true;
+		  // Same refused text, already fetched. Keep the shop message. Do not put it in the address.
+		  if (blockedSearch.current === q && searchQuery.trim() === q) {
+		    commitSearchToUrl.current = false;
+		    setSearchBlocked(true);
+		    return;
+		  }
+		  // The box already fetched this exact text. Write the address now.
+		  if (allowedSearch.current === q && searchQuery.trim() === q) {
+		    commitSearchToUrl.current = false;
+		    const next = `/?search=${encodeURIComponent(q)}`;
+		    if (`${window.location.pathname}${window.location.search}` !== next)
+		      router.replace(next);
+		    return;
+		  }
 		  setSearchQuery(q);
-		  const next = q ? `/?search=${encodeURIComponent(q)}` : '/';
-		  if (`${window.location.pathname}${window.location.search}` !== next)
-		    router.push(next);
 		}}
       />
 
@@ -479,7 +552,8 @@ function HomeInner()
               </div>
             ) : (
               <div className="text-center px-5 py-[60px] bg-white rounded-lg">
-                <p className="text-base mb-5">No products found matching your criteria</p>
+                <p className="text-base mb-5">{searchBlocked ? t('header.searchBlocked') : 'No products found matching your criteria'}</p>
+                {!searchBlocked && (
                 <button
                   className="btn btn-secondary"
                   onClick={() => {
@@ -492,6 +566,7 @@ function HomeInner()
                 >
                   Clear Filters
                 </button>
+                )}
               </div>
             )}
           </div>

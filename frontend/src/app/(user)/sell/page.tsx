@@ -30,6 +30,7 @@ import {
   BALANCE_CATEGORIES,
   LISTING_LIMITS,
 } from "@/lib/productOptions";
+import { clearStagedListingSearch, stageListingSearch } from "@/hooks/useSearch";
 
 type Condition = (typeof CONDITIONS)[number]; // treat conditions like this is enum, but string union type
 
@@ -269,11 +270,14 @@ function SellPageInner() {
 
 /* possible unused / redundance code*/
   const handleSearch = () => {
-    if (!searchInput.trim()) {
+    const trimmed = searchInput.trim();
+    if (!trimmed) {
+      clearStagedListingSearch();
       router.push("/");
       return;
     }
-    router.push(`/?search=${encodeURIComponent(searchInput.trim())}`);
+    stageListingSearch(trimmed);
+    router.push("/");
   };
   /* possible unused / redundance code*/
 

@@ -9,6 +9,7 @@
     "myProfile": "我的资料",
     "searchPlaceholder": "搜索商品、物品或卖家…",
     "searchButton": "搜索",
+    "searchBlocked": "该搜索已被安全过滤拦截。请改写后再试。",
     "cancel": "取消",
     "logoutConfirmTitle": "确定退出登录？",
     "logoutConfirmBody": "退出后需要重新登录才能管理您的商品、聊天和订单。",

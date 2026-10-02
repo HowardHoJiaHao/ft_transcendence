@@ -400,6 +400,9 @@ services:
     volumes:
       # Loaded before CRS rules. Keep application-specific exclusions narrow.
       - ./waf/racketbot-before.conf:/opt/owasp-crs/plugins/racketbot-before.conf:ro
+      # Rendered into the server blocks at startup. Shop API 403 responses are not intercepted.
+      - ./waf/location_common.conf.template:/etc/nginx/templates/includes/location_common.conf.template:ro
+      - ./waf/blocked.html:/usr/share/nginx/html/waf-blocked.html:ro
     depends_on:
       nginx:
         condition: service_healthy

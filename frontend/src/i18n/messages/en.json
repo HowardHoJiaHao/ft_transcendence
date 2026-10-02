@@ -9,6 +9,7 @@
     "myProfile": "My Profile",
     "searchPlaceholder": "Search listings, items, sellers…",
     "searchButton": "Search",
+    "searchBlocked": "That search was blocked by our security filter. Please rephrase it and try again.",
     "cancel": "Cancel",
     "logoutConfirmTitle": "Log out?",
     "logoutConfirmBody": "You'll need to sign in again to manage your listings, chats and orders.",
