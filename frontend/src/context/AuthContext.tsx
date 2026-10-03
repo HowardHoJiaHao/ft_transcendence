@@ -66,9 +66,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) //by p
 		setLoading(false);
 	}, []); //run the code exactly
 
+	const logout = useCallback(() =>
+	{
+		void fetch('/api/v1/auth/logout', {
+			method: 'POST',
+			credentials: 'include',
+		});
+		setUser(null);
+		localStorage.removeItem('user'); //removes saved user from website storage
+		localStorage.removeItem('token');
+	}, []);
+
 	// The cached copy above is whatever was true at login, so it goes stale the
 	// moment the profile changes in another tab or session. Re-read the row once
-	// on mount and keep the cache on failure, so a blip never logs anyone out.
+	// on mount. A 401 means this login is rejected, so clear it. Any other
+	// failure, such as the server being unreachable, keeps the cache.
 	useEffect(() => {
 		const token = localStorage.getItem('token');
 		if (!token) return;
@@ -78,7 +90,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) //by p
 				const res = await fetch('/api/v1/me', {
 					headers: { Authorization: `Bearer ${token}` },
 				});
-				if (!res.ok || cancelled) return;
+				if (cancelled) return;
+				if (res.status === 401) {
+					logout();
+					return;
+				}
+				if (!res.ok) return;
 				// /me answers with { token, user }, not a bare user.
 				const fresh = (await res.json())?.user;
 				if (typeof fresh?.id !== 'number') return;
@@ -92,23 +109,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) //by p
 			}
 		})();
 		return () => { cancelled = true; };
-	}, []);
+	}, [logout]);
 
 	const login = useCallback((userData: User) =>
 	{
 		setUser(userData); //put user data in state variable
 		localStorage.setItem('user', JSON.stringify(userData)); //store in local storage. label user and text in json format instead of typescript object
-	}, []);
-
-	const logout = useCallback(() =>
-	{
-		void fetch('/api/v1/auth/logout', {
-			method: 'POST',
-			credentials: 'include',
-		});
-		setUser(null);
-		localStorage.removeItem('user'); //removes saved user from website storage
-		localStorage.removeItem('token');
 	}, []);
 
 	const updateUser = useCallback((updates: Partial<User>) => {

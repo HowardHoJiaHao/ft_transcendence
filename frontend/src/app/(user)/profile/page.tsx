@@ -60,7 +60,7 @@ const toDateInput = (value?: string) => (value ? value.slice(0, 10) : '');
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user: ctxUser, loading: authLoading, updateUser } = useRequireAuth('/');
+  const { user: ctxUser, loading: authLoading, updateUser, logout } = useRequireAuth('/');
   const { showToast } = useToast();
   const { t } = useI18n();
   const [user, setUser] = useState<UserProfile | null>(ctxUser ?? null);
@@ -196,6 +196,7 @@ export default function ProfilePage() {
 
         if (res.status === 401) //unauthorized/expired/invalid
         {
+          logout();
           router.push("/login");
           return;
         }
@@ -217,7 +218,7 @@ export default function ProfilePage() {
     };
 
     fetchMe();
-  }, [router, t]);
+  }, [logout, router, t]);
 
   useEffect(() => {
     if (user) {

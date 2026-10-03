@@ -268,7 +268,7 @@ func (h *Handler) GoogleLogin(c echo.Context) error {
 		Secure:   useSecureCookies(c),
 		SameSite: http.SameSiteLaxMode,
 	})
-	url := googleOAuthConfig.AuthCodeURL(state)
+	url := googleOAuthConfig.AuthCodeURL(state, oauth2.SetAuthURLParam("prompt", "select_account"))
 	return c.Redirect(http.StatusTemporaryRedirect, url)
 }
 
