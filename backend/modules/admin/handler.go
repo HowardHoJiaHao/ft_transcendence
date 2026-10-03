@@ -17,6 +17,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"transcendence/modules/admin/ml"
 	"transcendence/modules/apikey"
+	"transcendence/modules/user/auth"
 	"transcendence/modules/user/authjwt"
 	"transcendence/myMiddleware"
 )
@@ -278,8 +279,11 @@ func (h *Handler) createAdminUser(c echo.Context) error {
 	if req.Role == "" {
 		req.Role = "user"
 	}
-	if req.Username == "" || req.Email == "" || len(req.Password) < 8 || !isValidRole(req.Role) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "username, valid email, password of at least 8 characters, and valid role are required"})
+	if req.Username == "" || req.Email == "" || !isValidRole(req.Role) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "username, valid email, and valid role are required"})
+	}
+	if err := auth.ValidateNewPassword(req.Password, req.Username); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	if _, err := mail.ParseAddress(req.Email); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid email"})

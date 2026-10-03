@@ -82,7 +82,16 @@
     "bioTooLong": "Bio is too long (max 500 characters)",
     "dateOfBirthFuture": "Date of birth cannot be in the future",
     "dateOfBirthInvalid": "Please enter a valid date of birth",
-    "addressRequired": "Please enter your address"
+    "addressRequired": "Please enter your address",
+    "passwordCharset": "Password may only contain letters, digits, and !@#$%^&*()_+",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "passwordTooLong": "Password must be at most 72 characters",
+    "passwordUpper": "Password must contain an uppercase letter",
+    "passwordLower": "Password must contain a lowercase letter",
+    "passwordSpecial": "Password must contain one of !@#$%^&*()_+",
+    "passwordUsername": "Password must not contain your username",
+    "passwordRules": "Use at least 8 characters, with an uppercase letter, a lowercase letter, and one of !@#$%^&*()_+. Other symbols are not allowed.",
+    "passwordBlocked": "That password was blocked by the security filter. Use only letters, digits, and !@#$%^&*()_+."
   },
   "product": {
     "sold": "Sold",

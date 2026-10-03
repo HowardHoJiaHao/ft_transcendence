@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast/ToastContext";
 import { useI18n } from "@/context/LanguageContext";
-import { PROFILE_LIMITS } from "@/lib/profileValidation";
+import { PROFILE_LIMITS, validateNewPassword } from "@/lib/profileValidation";
 
 type UserRole = "user" | "moderator" | "admin";
 type AccountStatus = "active" | "suspended" | "deleted";
@@ -299,14 +299,20 @@ export default function AdminUsersPage() {
 
   const createUser = async (event: FormEvent) => {
     event.preventDefault();
+    const passwordProblem = validateNewPassword(createForm.password, createForm.username);
+    if (passwordProblem) {
+      showToast(t(passwordProblem), "error");
+      return;
+    }
     setBusyID(0);
     try {
       const response = await adminFetch("/api/v1/admin/users", {
         method: "POST",
         body: JSON.stringify(createForm),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? t("admin.createFailed"));
+      const data = await response.json().catch(() => null);
+      if (response.status === 403 && !data) throw new Error(t("validation.passwordBlocked"));
+      if (!response.ok) throw new Error(data?.error ?? t("admin.createFailed"));
       setCreateForm(emptyCreateForm);
       setShowCreate(false);
       showToast(t("admin.userCreated"), "success");
@@ -478,6 +484,7 @@ export default function AdminUsersPage() {
           <input className={inputClass} required placeholder={t("admin.username")} value={createForm.username} maxLength={PROFILE_LIMITS.username} onChange={(e) => setCreateForm({ ...createForm, username: e.target.value.slice(0, PROFILE_LIMITS.username) })} />
           <input className={inputClass} required type="email" placeholder={t("admin.email")} value={createForm.email} maxLength={PROFILE_LIMITS.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value.slice(0, PROFILE_LIMITS.email) })} />
           <input className={inputClass} required minLength={8} maxLength={PROFILE_LIMITS.password} type="password" placeholder={t("admin.temporaryPassword")} value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value.slice(0, PROFILE_LIMITS.password) })} />
+          <p className="col-span-3 max-[800px]:col-span-1 text-sm text-[#666] m-0">{t("validation.passwordRules")}</p>
           <input className={inputClass} placeholder={t("admin.firstName")} value={createForm.firstName} maxLength={PROFILE_LIMITS.name} onChange={(e) => setCreateForm({ ...createForm, firstName: e.target.value.slice(0, PROFILE_LIMITS.name) })} />
           <input className={inputClass} placeholder={t("admin.lastName")} value={createForm.lastName} maxLength={PROFILE_LIMITS.name} onChange={(e) => setCreateForm({ ...createForm, lastName: e.target.value.slice(0, PROFILE_LIMITS.name) })} />
           <select className={inputClass} value={createForm.role} onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as UserRole })}>

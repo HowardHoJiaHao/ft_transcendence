@@ -82,7 +82,16 @@
     "bioTooLong": "Bio terlalu panjang (maksimum 500 aksara)",
     "dateOfBirthFuture": "Tarikh lahir tidak boleh pada masa hadapan",
     "dateOfBirthInvalid": "Sila masukkan tarikh lahir yang sah",
-    "addressRequired": "Sila masukkan alamat anda"
+    "addressRequired": "Sila masukkan alamat anda",
+    "passwordCharset": "Kata laluan hanya boleh mengandungi huruf, digit, dan !@#$%^&*()_+",
+    "passwordTooShort": "Kata laluan mestilah sekurang-kurangnya 8 aksara",
+    "passwordTooLong": "Kata laluan mestilah tidak lebih daripada 72 aksara",
+    "passwordUpper": "Kata laluan mesti mengandungi huruf besar",
+    "passwordLower": "Kata laluan mesti mengandungi huruf kecil",
+    "passwordSpecial": "Kata laluan mesti mengandungi salah satu daripada !@#$%^&*()_+",
+    "passwordUsername": "Kata laluan tidak boleh mengandungi nama pengguna anda",
+    "passwordRules": "Gunakan sekurang-kurangnya 8 aksara, dengan huruf besar, huruf kecil, dan salah satu daripada !@#$%^&*()_+. Simbol lain tidak dibenarkan.",
+    "passwordBlocked": "Kata laluan itu disekat oleh penapis keselamatan. Gunakan hanya huruf, digit, dan !@#$%^&*()_+."
   },
   "product": {
     "sold": "Terjual",

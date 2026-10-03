@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/Toast/ToastContext";
 import { useI18n } from "@/context/LanguageContext";
 import PasswordField from "@/components/PasswordField/PasswordField";
+import { validateNewPassword } from "@/lib/profileValidation";
 
 const passwordInputClass = "w-full p-3 pr-12 border border-[#ccc] rounded-md text-base";
 const buttonClass =
@@ -41,6 +42,11 @@ export default function ChangePasswordPage() {
       showToast(t("changePassword.sameAsCurrent"), "error");
       return;
     }
+    const passwordProblem = validateNewPassword(newPassword);
+    if (passwordProblem) {
+      showToast(t(passwordProblem), "error");
+      return;
+    }
     setLoading(true);
     try {
       const response = await fetch("/api/v1/auth/change-password/request", {
@@ -48,8 +54,9 @@ export default function ChangePasswordPage() {
         headers: authHeaders(),
         body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? t("changePassword.otpFailed"));
+      const data = await response.json().catch(() => null);
+      if (response.status === 403 && !data) throw new Error(t("validation.passwordBlocked"));
+      if (!response.ok) throw new Error(data?.error ?? t("changePassword.otpFailed"));
       setTempToken(String(data.tempToken ?? "").trim());
       showToast(t("changePassword.otpSent"), "success");
     } catch (error) {
@@ -73,9 +80,10 @@ export default function ChangePasswordPage() {
           confirmPassword,
         }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? t("changePassword.changeFailed"));
-      showToast(data.message ?? t("changePassword.changed"), "success");
+      const data = await response.json().catch(() => null);
+      if (response.status === 403 && !data) throw new Error(t("validation.passwordBlocked"));
+      if (!response.ok) throw new Error(data?.error ?? t("changePassword.changeFailed"));
+      showToast(data?.message ?? t("changePassword.changed"), "success");
       logout();
       router.push("/login");
     } catch (error) {
@@ -124,6 +132,7 @@ export default function ChangePasswordPage() {
               hideLabel={t("changePassword.hidePassword")}
               className={passwordInputClass}
             />
+            <p className="text-sm text-[#666] m-0">{t("validation.passwordRules")}</p>
             <button disabled={loading} className={buttonClass}>{loading ? t("changePassword.sending") : t("changePassword.sendOtp")}</button>
           </>
         ) : (

@@ -6,7 +6,7 @@ import { useToast } from '@/components/Toast/ToastContext';
 import { useI18n } from '@/context/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { MALAYSIA_STATES, districtsOf } from '@/lib/malaysia';
-import { PROFILE_LIMITS, validatePhone, validatePostcode } from '@/lib/profileValidation';
+import { PROFILE_LIMITS, validateNewPassword, validatePhone, validatePostcode } from '@/lib/profileValidation';
 import PasswordField from '@/components/PasswordField/PasswordField';
 
 const inputClass = "p-3 border border-[#ccc] rounded text-base";
@@ -102,6 +102,8 @@ export default function LoginPage ()
 				return;
 			}
 			if (!signupState || !district) { showToast(t('validation.stateRequired'), 'error'); return; }
+			const passwordProblem = validateNewPassword(password, username);
+			if (passwordProblem) { showToast(t(passwordProblem), 'error'); return; }
 		}
 
 		try
@@ -142,7 +144,11 @@ export default function LoginPage ()
 				}); //use fetch to get response from fetch sending http request. wait for server reply
 			}
 
-			const data = await res.json(); //read and parse the response body. wait for body parsing
+			const data = await res.json().catch(() => null); //read and parse the response body. wait for body parsing
+			if (res.status === 403 && !data) {
+				showToast(t('validation.passwordBlocked'), 'error');
+				return;
+			}
 			if (res.ok) //means status code between 200 and 299
 			{
 				if (data?.needOtp)
@@ -169,7 +175,7 @@ export default function LoginPage ()
 			}
 			else
 			{
-				showToast(data.error, 'error'); //shows a popup error returned by backend
+				showToast(data?.error ?? 'Network error', 'error'); //shows a popup error returned by backend
 				if (showOtp)
 					setOtpCode('');
 			}
@@ -243,6 +249,7 @@ export default function LoginPage ()
 					className={passwordInputClass}
 					autoComplete={isRegister ? 'new-password' : 'current-password'}
 				/>
+				{isRegister && <p className="text-sm text-[#666] m-0">{t('validation.passwordRules')}</p>}
 
 				{isRegister && (
 					<>

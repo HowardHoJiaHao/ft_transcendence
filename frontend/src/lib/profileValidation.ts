@@ -19,6 +19,23 @@ export const PROFILE_LIMITS = {
 } as const;
 
 const PHONE_SEPARATORS = /[\s\-().]/g;
+const NEW_PASSWORD_SHAPE = /^[A-Za-z0-9!@#$%^&*()_+]+$/;
+const NEW_PASSWORD_SPECIAL = /[!@#$%^&*()_+]/;
+
+// Same allowlist as backend ValidateNewPassword. Login is not checked here,
+// because an older password may contain other characters.
+export const validateNewPassword = (password: string, username = ''): string | null => {
+  if (password.length < 8) return 'validation.passwordTooShort';
+  if (password.length > PROFILE_LIMITS.password) return 'validation.passwordTooLong';
+  if (!NEW_PASSWORD_SHAPE.test(password)) return 'validation.passwordCharset';
+  if (!/[A-Z]/.test(password)) return 'validation.passwordUpper';
+  if (!/[a-z]/.test(password)) return 'validation.passwordLower';
+  if (!NEW_PASSWORD_SPECIAL.test(password)) return 'validation.passwordSpecial';
+  const name = username.trim().toLowerCase();
+  if (name && password.toLowerCase().includes(name)) return 'validation.passwordUsername';
+  return null;
+};
+
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const POSTCODE_SHAPE = /^[0-9]{5}$/;
 

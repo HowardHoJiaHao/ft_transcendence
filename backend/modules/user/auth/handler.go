@@ -147,6 +147,9 @@ func (h *Handler) RequestPasswordChange(c echo.Context) error {
 	if err != nil || bcrypt.CompareHashAndPassword([]byte(withPassword.PasswordHash), []byte(req.CurrentPassword)) != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Current password is incorrect"})
 	}
+	if err := ValidateNewPassword(req.NewPassword, u.Username); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
 	tempToken, err := h.service.GenerateAndSendOTP(u.Email)
 	if err != nil {
 		log.Printf("Error sending password-change OTP: %v", err)

@@ -82,7 +82,16 @@
     "bioTooLong": "个人简介过长（最多 500 个字符）",
     "dateOfBirthFuture": "出生日期不能是未来的日期",
     "dateOfBirthInvalid": "请输入有效的出生日期",
-    "addressRequired": "请输入您的地址"
+    "addressRequired": "请输入您的地址",
+    "passwordCharset": "密码只能包含字母、数字和 !@#$%^&*()_+",
+    "passwordTooShort": "密码至少需要 8 个字符",
+    "passwordTooLong": "密码最多 72 个字符",
+    "passwordUpper": "密码必须包含一个大写字母",
+    "passwordLower": "密码必须包含一个小写字母",
+    "passwordSpecial": "密码必须包含 !@#$%^&*()_+ 中的一个字符",
+    "passwordUsername": "密码不能包含您的用户名",
+    "passwordRules": "请使用至少 8 个字符，并包含大写字母、小写字母，以及 !@#$%^&*()_+ 中的一个字符。其他符号不允许使用。",
+    "passwordBlocked": "该密码被安全过滤拦截。请只使用字母、数字和 !@#$%^&*()_+。"
   },
   "product": {
     "sold": "已售出",

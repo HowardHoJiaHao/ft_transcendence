@@ -78,16 +78,13 @@ func SendEmail(receiverEmail, subject, htmlContent string) error {
 	return nil
 }
 
+// Letters, digits, and !@#$%^&*()_+ only. Other symbols are rejected so a
+// new password cannot resemble a script or SQL fragment.
+var allowedPasswordPattern = regexp.MustCompile(`^[A-Za-z0-9!@#$%^&*()_+]+$`)
+
 func (s *Service) CheckAndHashNewPassword(req *user.RegisterRequest) error {
-	//does password follow the upper letter/min_letters/non-username and contain special char check
-	if req.Password == "" {
-		return fmt.Errorf("no password given")
-	}
-
-	checker := NewPasswordChecker()
-
-	if errors := checker.Check(req.Password, req.Username); len(errors) > 0 {
-		return fmt.Errorf("password validation failed: %s", strings.Join(errors, "; "))
+	if err := ValidateNewPassword(req.Password, req.Username); err != nil {
+		return err
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -99,6 +96,16 @@ func (s *Service) CheckAndHashNewPassword(req *user.RegisterRequest) error {
 	return nil
 }
 
+func ValidateNewPassword(password, username string) error {
+	if password == "" {
+		return fmt.Errorf("no password given")
+	}
+	if problems := NewPasswordChecker().Check(password, username); len(problems) > 0 {
+		return fmt.Errorf("password validation failed: %s", strings.Join(problems, "; "))
+	}
+	return nil
+}
+
 func NewPasswordChecker() *PasswordChecker {
 	return &PasswordChecker{
 		MinLength:     8,
@@ -106,7 +113,7 @@ func NewPasswordChecker() *PasswordChecker {
 		Rules: []PasswordRule{
 			{regexp.MustCompile(`[A-Z]`), "must contain uppercase letter"},
 			{regexp.MustCompile(`[a-z]`), "must contain lowercase letter"},
-			{regexp.MustCompile(`[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]`), "must contain special character"},
+			{regexp.MustCompile(`[!@#$%^&*()_+]`), "must contain one of !@#$%^&*()_+"},
 		},
 	}
 }
@@ -115,11 +122,15 @@ func (v *PasswordChecker) Check(password, username string) []string {
 	var errors []string
 
 	if len(password) < v.MinLength {
-		errors = append(errors, "must be at least  8 characters")
+		errors = append(errors, "must be at least 8 characters")
 	}
 
-	if v.CheckUsername && strings.Contains(strings.ToLower(password), strings.ToLower(username)) {
+	if v.CheckUsername && username != "" && strings.Contains(strings.ToLower(password), strings.ToLower(username)) {
 		errors = append(errors, "must not contain your username")
+	}
+
+	if password != "" && !allowedPasswordPattern.MatchString(password) {
+		errors = append(errors, "may only contain letters, digits, and !@#$%^&*()_+")
 	}
 
 	for _, rule := range v.Rules {
