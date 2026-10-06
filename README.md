@@ -3,9 +3,9 @@ mbani-ya, hho-jia-, muhabin-, abin-moh.*
 
 # Racketdiction Marketplace
 
-> 42 Common Core · Rank 06 · Team project with hwai-keo, mbani-ya, muhabin- and abin-moh
+> 42 Common Core · Rank 06 · Team project with [Ho Wai Keong](https://github.com/waikeong008), [Leo Muhammad](https://github.com/muhamadd99), Muhammad Bani Yamin, [Ahmad Muzzammil](https://github.com/sumeal) and [Fadhlul Hadi](https://github.com/lolhadi)
 >
-> Personal copy of the team repository, with full commit history. My part: the marketplace frontend (listings, product pages, chat panel, translations) and the backend API-key system (30-day key expiry and per-request audit logging).
+> Personal copy of the team repository [muhamadd99/ft_transcendence](https://github.com/muhamadd99/ft_transcendence), with full commit history. My part: the marketplace frontend (listings, product pages, chat panel, translations) and the backend API-key system (30-day key expiry and per-request audit logging).
 
 A full-stack badminton and racket marketplace built with Next.js, Go Echo,
 FastAPI, PostgreSQL with pgvector, and Docker Compose.
