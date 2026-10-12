@@ -1,8 +1,9 @@
-.PHONY: help check-docker check-curl check-tools check-infisical-project check-secrets check-stripe-secrets test-stripe-setup build up down restart logs logs-waf logs-stripe logs-backend logs-frontend logs-db ps clean prune reset shell-backend shell-frontend shell-db db-connect db-migrate health-check test-waf infisical-auth-init infisical-auth-check infisical-auth-clear setup setup-backend setup-frontend build-up
+.PHONY: help check-docker check-curl check-tools check-infisical-project check-secrets check-stripe-secrets test-stripe-setup build up down restart logs logs-waf logs-stripe logs-backend logs-frontend logs-db ps clean prune reset shell-backend shell-frontend shell-db db-connect db-migrate health-check test-waf infisical-auth-init infisical-auth-check infisical-auth-clear env-backup setup setup-backend setup-frontend build-up
 
 INFISICAL_ENV ?= dev
 INFISICAL_PATH ?= /
 INFISICAL_CLI_IMAGE ?= infisical/cli:0.43.113
+SECRETS ?= infisical
 REQUIRE_BREVO ?= 0
 REQUIRE_STRIPE ?= 0
 REQUIRE_STRIPE_CLI ?= 0
@@ -11,7 +12,7 @@ DB_NAME ?= transcendence
 
 WITH_DOCKER_LOG_PATHS := ./scripts/with-docker-log-paths.sh
 COMPOSE := $(WITH_DOCKER_LOG_PATHS) docker compose
-INFISICAL_SETTINGS := INFISICAL_CLI_IMAGE="$(INFISICAL_CLI_IMAGE)" INFISICAL_ENV="$(INFISICAL_ENV)" INFISICAL_PATH="$(INFISICAL_PATH)"
+INFISICAL_SETTINGS := INFISICAL_CLI_IMAGE="$(INFISICAL_CLI_IMAGE)" INFISICAL_ENV="$(INFISICAL_ENV)" INFISICAL_PATH="$(INFISICAL_PATH)" SECRETS="$(SECRETS)"
 WITH_INFISICAL := $(INFISICAL_SETTINGS) REQUIRE_BREVO="$(REQUIRE_BREVO)" REQUIRE_STRIPE="$(REQUIRE_STRIPE)" REQUIRE_STRIPE_CLI="$(REQUIRE_STRIPE_CLI)" ./scripts/with-infisical-env.sh
 
 help:
@@ -37,6 +38,8 @@ help:
 	@echo "make infisical-auth-init  - Create the local Infisical token file"
 	@echo "make infisical-auth-check - Validate the local Infisical token file"
 	@echo "make infisical-auth-clear - Delete only the local Infisical token file"
+	@echo "make env-backup       - Save the Infisical secrets to .env (used if Infisical is unavailable)"
+	@echo "make setup SECRETS=env - Start with secrets from .env only, skipping Infisical"
 	@echo "make db-connect       - Open psql inside the PostgreSQL container"
 	@echo "make db-migrate       - Apply db/init.sql to the running database"
 	@echo "make clean            - DESTRUCTIVE: remove this project's containers and database volume"
@@ -58,8 +61,8 @@ check-curl:
 check-tools: check-docker
 
 check-infisical-project:
-	@test -f .infisical.json || \
-		{ echo "❌ This clone is not linked to Infisical. Restore the team .infisical.json file."; exit 1; }
+	@test -f .infisical.json || test -f .env || \
+		{ echo "❌ This clone is not linked to Infisical and has no .env. Restore the team .infisical.json file or create .env from .env.example."; exit 1; }
 
 check-secrets: check-tools check-infisical-project
 	@$(WITH_INFISICAL) true
@@ -165,6 +168,16 @@ infisical-auth-check:
 infisical-auth-clear:
 	@rm -f .env.infisical-auth
 	@echo "✅ Removed only .env.infisical-auth."
+
+env-backup: check-tools
+	@if [ -e .env ]; then \
+		echo "❌ .env already exists; it was not overwritten."; \
+		exit 1; \
+	fi
+	@$(INFISICAL_SETTINGS) ./scripts/infisical-export.sh && \
+		mv -f .env.infisical .env && \
+		chmod 600 .env && \
+		echo "✅ Saved the Infisical secrets to .env with mode 600. Never commit or share it."
 
 clean: check-docker
 	@echo "⚠️  Removing containers and the PostgreSQL data volume. This deletes local database data."
